@@ -168,6 +168,10 @@ def download_project(url: str, browser: Optional[str] = None) -> ProjectContext:
     ensure_ffmpeg_on_path()
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cookie_file = _cookie_file()
+    if cookie_file:
+        _validate_cookies(cookie_file)
+    else:
+        console.warning("No YouTube cookies file found")
     attempts = [
         (["android", "ios"], "bv*+ba/b"),
         (["ios"], "best"),
