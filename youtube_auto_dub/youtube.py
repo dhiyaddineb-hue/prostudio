@@ -194,6 +194,21 @@ def _validate_cookies(path: str) -> None:
         )
 
 
+def _ytdlp_js_opts() -> dict:
+    opts: dict = {"remote_components": ["ejs:github"]}
+    deno = shutil.which("deno")
+    node = shutil.which("node")
+    if deno:
+        opts["js_runtimes"] = {"deno": {"path": deno}}
+        console.step(f"JS runtime=deno ({deno})")
+    elif node:
+        opts["js_runtimes"] = {"node": {"path": node}}
+        console.step(f"JS runtime=node ({node})")
+    else:
+        console.warning("No JS runtime (node/deno) found; YouTube may reject the download")
+    return opts
+
+
 def download_project(url: str, browser: Optional[str] = None) -> ProjectContext:
     ensure_ffmpeg_on_path()
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
