@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ProStudio — دبلجة يوتيوب الآلية</title>
+  <meta name="description" content="دبلجة وترجمة أي فيديو يوتيوب آلياً: تفريغ، ترجمة، صوت عصبي، ومزامنة زمنية." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="grain"></div>
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+
+  <header class="top">
+    <div class="brand">
+      <span class="mark">PS</span>
+      <div>
+        <strong>ProStudio</strong>
+        <small>YouTube Auto Dub</small>
+      </div>
+    </div>
+    <nav>
+      <span class="pill live"><i></i> جاهز للتشغيل</span>
+      <button type="button" id="langToggle" class="ghost">EN</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow" data-ar="خط أنابيب الدبلجة العصبية" data-en="Neural dubbing pipeline">خط أنابيب الدبلجة العصبية</p>
+      <h1 data-ar="دبلِج أي فيديو يوتيوب إلى العربية في سبع خطوات." data-en="Dub any YouTube video into Arabic in seven steps.">دبلِج أي فيديو يوتيوب إلى العربية في سبع خطوات.</h1>
+      <p class="lede" data-ar="تنزيل، تفريغ بـ Whisper، تقسيم ذكي، ترجمة سياقية، صوت Edge-TTS، مزامنة atempo، ثم تصدير MP4 جاهز." data-en="Download, Whisper + VAD, natural chunking, translation, Edge-TTS, tempo-aligned mix, then a finished MP4.">تنزيل، تفريغ بـ Whisper، تقسيم ذكي، ترجمة سياقية، صوت Edge-TTS، مزامنة atempo، ثم تصدير MP4 جاهز.</p>
+    </section>
+
+    <section class="studio">
+      <form id="dubForm" class="panel form">
+        <div class="panel-head">
+          <h2 data-ar="مصدر الفيديو" data-en="Video source">مصدر الفيديو</h2>
+          <span class="hint" data-ar="رابط يوتيوب أو ملف محلي" data-en="YouTube URL or local file">رابط يوتيوب أو ملف محلي</span>
+        </div>
+
+        <label class="field">
+          <span data-ar="رابط يوتيوب" data-en="YouTube URL">رابط يوتيوب</span>
+          <input id="url" name="url" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" />
+        </label>
+
+        <label class="drop" id="dropzone">
+          <input id="file" name="file" type="file" accept="video/*,.mp4,.mkv,.webm,.mov" hidden />
+          <strong data-ar="أو اسحب الفيديو هنا" data-en="Or drop a video here">أو اسحب الفيديو هنا</strong>
+          <em id="fileName" data-ar="MP4 / MKV / WEBM حتى 400MB" data-en="MP4 / MKV / WEBM up to 400MB">MP4 / MKV / WEBM حتى 400MB</em>
+        </label>
+
+        <div class="grid">
+          <label class="field">
+            <span data-ar="لغة الدوبلاج" data-en="Target language">لغة الدوبلاج</span>
+            <select id="lang" name="lang"></select>
+          </label>
+          <label class="field">
+            <span data-ar="وضع العمل" data-en="Mode">وضع العمل</span>
+            <select id="mode" name="mode">
+              <option value="both" selected>دبلجة + ترجمة</option>
+              <option value="dub">دبلجة فقط</option>
+              <option value="sub">ترجمة فقط</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-ar="جنس الصوت" data-en="Voice gender">جنس الصوت</span>
+            <select id="gender" name="gender">
+              <option value="male" selected>رجالي — حامد</option>
+              <option value="female">نسائي — سلمى</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-ar="الصوت العصبي" data-en="Neural voice">الصوت العصبي</span>
+            <select id="voice" name="voice"></select>
+          </label>
+          <label class="field">
+            <span data-ar="نموذج Whisper" data-en="Whisper model">نموذج Whisper</span>
+            <select id="model" name="model">
+              <option value="tiny" selected>tiny — أسرع</option>
+              <option value="base">base — متوازن</option>
+              <option value="small">small — أدق</option>
+            </select>
+          </label>
+          <label class="toggle">
+            <input id="bg_music" name="bg_music" type="checkbox" checked />
+            <span data-ar="الاحتفاظ بموسيقى الخلفية" data-en="Keep background music">الاحتفاظ بموسيقى الخلفية</span>
+          </label>
+        </div>
+
+        <button type="submit" id="startBtn" class="primary">
+          <span data-ar="ابدأ الدبلجة الآن" data-en="Start dubbing now">ابدأ الدبلجة الآن</span>
+        </button>
+      </form>
+
+      <aside class="panel progress">
+        <div class="panel-head">
+          <h2 data-ar="مراحل الخط الأنبوبي" data-en="Pipeline stages">مراحل الخط الأنبوبي</h2>
+          <span id="percent">0%</span>
+        </div>
+        <ol id="stages" class="stages"></ol>
+        <p id="statusLine" class="status">في انتظار المهمة الأولى</p>
+        <div class="log" id="log"></div>
+      </aside>
+    </section>
+
+    <section class="result panel hidden" id="result">
+      <div class="panel-head">
+        <h2 data-ar="النتيجة" data-en="Result">النتيجة</h2>
+        <div class="actions">
+          <a id="downloadBtn" class="primary slim" href="#" download>تحميل MP4</a>
+          <a id="srtBtn" class="ghost slim hidden" href="#" download>SRT</a>
+        </div>
+      </div>
+      <video id="player" controls playsinline></video>
+    </section>
+  </main>
+
+  <footer>
+    <p>مبني على مشروع <a href="https://github.com/mangodxd/youtube-auto-dub" target="_blank" rel="noreferrer">youtube-auto-dub</a> · MIT</p>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

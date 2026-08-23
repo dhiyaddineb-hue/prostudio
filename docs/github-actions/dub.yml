@@ -1,0 +1,102 @@
+name: Run YouTube Auto Dub
+
+on:
+  workflow_dispatch:
+    inputs:
+      youtube_url:
+        description: "رابط فيديو يوتيوب"
+        required: true
+        type: string
+      target_lang:
+        description: "لغة الدوبلاج"
+        required: true
+        default: "ar"
+        type: string
+      mode:
+        description: "وضع العمل"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - both
+          - dub
+          - sub
+      gender:
+        description: "جنس الصوت"
+        required: true
+        default: "male"
+        type: choice
+        options:
+          - male
+          - female
+      voice:
+        description: "صوت Edge-TTS (اختياري، مثال: ar-SA-HamedNeural)"
+        required: false
+        default: ""
+        type: string
+      model:
+        description: "نموذج Whisper"
+        required: true
+        default: "tiny"
+        type: choice
+        options:
+          - tiny
+          - base
+          - small
+      bg_music:
+        description: "الاحتفاظ بموسيقى الخلفية"
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  dub-video:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+          pip install faster-whisper edge-tts imageio-ffmpeg soundfile
+
+      - name: Run Dubbing
+        env:
+          YAD_OUTPUT_DIR: output
+          YAD_TEMP_DIR: temp
+          YAD_CACHE_DIR: .cache
+        run: |
+          extra=()
+          if [ -n "${{ inputs.voice }}" ]; then
+            extra+=(--voice "${{ inputs.voice }}")
+          fi
+          if [ "${{ inputs.bg_music }}" = "true" ]; then
+            extra+=(--bg-music)
+          fi
+          python -m youtube_auto_dub "${{ inputs.youtube_url }}" \
+            --lang "${{ inputs.target_lang }}" \
+            --mode "${{ inputs.mode }}" \
+            --gender "${{ inputs.gender }}" \
+            --model "${{ inputs.model }}" \
+            -o output \
+            "${extra[@]}"
+
+      - name: Upload Dubbed Video Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-dubbed-video
+          path: |
+            output/*.mp4
+            output/*.srt
+          if-no-files-found: error

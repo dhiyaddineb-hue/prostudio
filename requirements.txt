@@ -1,0 +1,16 @@
+faster-whisper
+torch
+yt-dlp
+pydub
+edge-tts
+httpx
+beautifulsoup4
+numpy
+rich
+soundfile
+imageio-ffmpeg
+fastapi
+uvicorn
+python-multipart
+aiofiles
+librosa

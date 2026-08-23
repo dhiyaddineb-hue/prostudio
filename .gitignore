@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+*.egg
+.venv/
+.mypy_cache/
+.ruff_cache/
+
+# Project runtime
+.cache/
+temp/
+output/
+uploads/
+*.mp4
+*.wav
+*.mp3
+*.srt
+*.webm
+*.mkv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
