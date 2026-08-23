@@ -43,12 +43,19 @@ python -m youtube_auto_dub video.mp4 -m dub -l ar -g female --voice ar-EG-SalmaN
 
 ## GitHub Actions
 
+انسخ القالب إلى مسار GitHub ثم شغّله يدوياً:
+
+```bash
+mkdir -p .github/workflows
+cp docs/github-actions/dub.yml .github/workflows/dub.yml
+```
+
 1. ارفع المستودع إلى GitHub
 2. اذهب إلى **Actions → Run YouTube Auto Dub**
 3. ضع الرابط واضغط **Run workflow**
 4. حمّل `final-dubbed-video` من Artifacts
 
-الملف: `.github/workflows/dub.yml`
+الملف الجاهز: `docs/github-actions/dub.yml`
 
 ## المتطلبات
 
