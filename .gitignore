@@ -13,7 +13,7 @@ build/
 # Project runtime
 .cache/
 temp/
-output/
+output/*
 uploads/
 .local/
 samples/*.wav
@@ -24,6 +24,8 @@ samples/*.wav
 !samples/*.mp4
 !samples/*.srt
 !samples/*.png
+!output/*.mp4
+!output/*.srt
 *.webm
 *.mkv
 
