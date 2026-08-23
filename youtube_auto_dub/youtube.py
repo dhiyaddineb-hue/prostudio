@@ -154,17 +154,20 @@ def download_project(url: str, browser: Optional[str] = None) -> ProjectContext:
     ensure_ffmpeg_on_path()
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cookie_file = _cookie_file()
-    clients = [
-        ["android", "ios"],
-        ["ios", "tv"],
-        ["tv_embedded", "android"],
-        ["web"],
+    attempts = [
+        (["android", "ios"], "bv*+ba/b"),
+        (["ios"], "best"),
+        (["tv"], "bv*+ba/b"),
+        (["web"], YT_FORMAT),
+        (["web"], "bestvideo+bestaudio/best"),
+        (["tv_embedded", "android"], "best"),
+        (["web"], "best"),
     ]
     last_error = None
     info = None
-    for player_clients in clients:
+    for player_clients, fmt in attempts:
         opts = {
-            "format": YT_FORMAT,
+            "format": fmt,
             "outtmpl": str(CACHE_DIR / "%(id)s.%(ext)s"),
             "merge_output_format": "mp4",
             "quiet": True,
@@ -186,19 +189,16 @@ def download_project(url: str, browser: Optional[str] = None) -> ProjectContext:
         elif cookie_file:
             opts["cookiefile"] = cookie_file
         try:
-            console.step(f"YouTube client: {','.join(player_clients)}")
+            console.step(f"YouTube client={','.join(player_clients)} format={fmt}")
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
             break
         except Exception as exc:
             last_error = exc
-            console.warning(f"Download failed ({player_clients}): {exc}")
+            console.warning(f"Download failed ({player_clients}/{fmt}): {exc}")
             continue
     if info is None:
-        raise RuntimeError(
-            "YouTube blocked the GitHub runner. Add a Netscape cookies.txt as "
-            "repository secret YT_COOKIES and re-run."
-        ) from last_error
+        raise RuntimeError(f"YouTube download failed: {last_error}") from last_error
 
     video_id = info["id"]
     video_path = CACHE_DIR / f"{video_id}.mp4"
