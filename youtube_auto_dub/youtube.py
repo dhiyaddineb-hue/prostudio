@@ -131,16 +131,29 @@ def load_source(url_or_path: str, browser: Optional[str] = None) -> ProjectConte
     return import_local_video(url_or_path)
 
 
+def _normalize_cookie_text(raw: str) -> str:
+    text = raw.replace("\r\n", "\n").replace("\r", "\n")
+    text = text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+    if "youtube.com" not in text and "SID=" in text and ";" in text:
+        pairs = [p.strip() for p in re.split(r";\s*", text) if "=" in p]
+        lines = ["# Netscape HTTP Cookie File"]
+        for pair in pairs:
+            name, value = pair.split("=", 1)
+            lines.append(f".youtube.com\tTRUE\t/\tTRUE\t0\t{name.strip()}\t{value.strip()}")
+        text = "\n".join(lines) + "\n"
+    return text
+
+
 def _cookie_file() -> Optional[str]:
     import os
 
     raw = os.environ.get("YAD_COOKIES") or os.environ.get("YT_COOKIES")
+    path = None
     if raw:
-        text = raw.replace("\\n", "\n")
         path = CACHE_DIR / "cookies.txt"
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        return str(path)
+        path.write_text(_normalize_cookie_text(raw), encoding="utf-8")
+        return str(path.resolve())
     for candidate in (
         os.environ.get("YAD_COOKIES_FILE"),
         os.environ.get("YT_COOKIES_FILE"),
@@ -149,18 +162,35 @@ def _cookie_file() -> Optional[str]:
         str(CACHE_DIR / "cookies.txt"),
     ):
         if candidate and Path(candidate).exists() and Path(candidate).stat().st_size > 20:
-            return str(Path(candidate).resolve())
+            src = Path(candidate)
+            text = _normalize_cookie_text(src.read_text(encoding="utf-8", errors="replace"))
+            dest = CACHE_DIR / "cookies.normalized.txt"
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            dest.write_text(text, encoding="utf-8")
+            return str(dest.resolve())
     return None
 
 
 def _validate_cookies(path: str) -> None:
     text = Path(path).read_text(encoding="utf-8", errors="replace")
-    first = (text.splitlines() or [""])[0][:80]
-    console.step(f"Cookies file {path} ({Path(path).stat().st_size} bytes) first={first!r}")
-    if "youtube.com" not in text:
+    lines = [ln for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
+    yt_lines = [ln for ln in lines if "youtube.com" in ln]
+    tabbed = sum(1 for ln in yt_lines if "\t" in ln)
+    names = []
+    for ln in yt_lines:
+        parts = ln.split("\t")
+        if len(parts) >= 6:
+            names.append(parts[5])
+    console.step(
+        f"Cookies {path}: {Path(path).stat().st_size}B lines={len(lines)} "
+        f"youtube={len(yt_lines)} netscape={tabbed} names={sorted(set(names))[:12]}"
+    )
+    if not yt_lines:
+        raise RuntimeError("cookies.txt has no youtube.com rows")
+    if tabbed == 0:
         raise RuntimeError(
-            "cookies.txt has no youtube.com entries. Export Netscape cookies "
-            "while signed into YouTube and put the full file in secret YT_COOKIES."
+            "cookies.txt is not Netscape format (no tabs). "
+            "Use the 'Get cookies.txt LOCALLY' export, not DevTools copy."
         )
 
 
@@ -170,17 +200,24 @@ def download_project(url: str, browser: Optional[str] = None) -> ProjectContext:
     cookie_file = _cookie_file()
     if cookie_file:
         _validate_cookies(cookie_file)
+        attempts = [
+            (["web"], "bestvideo+bestaudio/best"),
+            (["web"], "best"),
+            (["tv"], "bv*+ba/b"),
+            (["web_safari"], "best"),
+            (["android"], "best"),
+        ]
     else:
         console.warning("No YouTube cookies file found")
-    attempts = [
-        (["android", "ios"], "bv*+ba/b"),
-        (["ios"], "best"),
-        (["tv"], "bv*+ba/b"),
-        (["web"], YT_FORMAT),
-        (["web"], "bestvideo+bestaudio/best"),
-        (["tv_embedded", "android"], "best"),
-        (["web"], "best"),
-    ]
+        attempts = [
+            (["android", "ios"], "bv*+ba/b"),
+            (["ios"], "best"),
+            (["tv"], "bv*+ba/b"),
+            (["web"], YT_FORMAT),
+            (["web"], "bestvideo+bestaudio/best"),
+            (["tv_embedded", "android"], "best"),
+            (["web"], "best"),
+        ]
     last_error = None
     info = None
     for player_clients, fmt in attempts:
@@ -194,18 +231,12 @@ def download_project(url: str, browser: Optional[str] = None) -> ProjectContext:
             "retries": 5,
             "fragment_retries": 5,
             "extractor_args": {"youtube": {"player_client": player_clients}},
-            "http_headers": {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-                ),
-                "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
-            },
         }
         if browser:
             opts["cookiesfrombrowser"] = (browser.lower(),)
         elif cookie_file:
             opts["cookiefile"] = cookie_file
+            console.step(f"Using cookiefile={cookie_file}")
         try:
             console.step(f"YouTube client={','.join(player_clients)} format={fmt}")
             with yt_dlp.YoutubeDL(opts) as ydl:
