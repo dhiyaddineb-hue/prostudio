@@ -113,8 +113,9 @@ class GoogleTranslator:
         try:
             return await self._translate_scrape(text, source, target)
         except Exception as e:
-            console.error(f"All translation methods failed: {e}")
-            return text
+            console.warning(f"Online translation failed ({e}), using offline engine")
+            from youtube_auto_dub.local_translate import translate_offline
+            return translate_offline(text, source=source, target=target)
 
     async def translate_batch(self, texts: List[str], target: str, source: str = "auto") -> List[str]:
         """Translate a batch of texts, falling back to individual translation if batch fails."""

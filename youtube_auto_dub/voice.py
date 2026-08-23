@@ -92,7 +92,15 @@ def pick_voice(lang: str, gender: str = "male", voice: str | None = None) -> str
 
 # ── Edge TTS ────────────────────────────────────────────────────────────
 
-async def speak_edge(text: str, voice: str, dest: Path, retries: int = None, timeout: int = None):
+async def speak_edge(
+    text: str,
+    voice: str,
+    dest: Path,
+    retries: int = None,
+    timeout: int = None,
+    lang: str = "ar",
+    gender: str = "male",
+):
     if retries is None:
         retries = EDGE_TTS_RETRIES
     if timeout is None:
@@ -111,10 +119,15 @@ async def speak_edge(text: str, voice: str, dest: Path, retries: int = None, tim
         except Exception as e:
             last = e
             console.warning(f"Edge TTS error (attempt {attempt + 1}): {e}")
+            name = type(e).__name__
+            if "SSL" in name or "Connector" in name or "Client" in name:
+                break
         dest.unlink(missing_ok=True)
         if attempt < retries:
             await asyncio.sleep(EDGE_TTS_RETRY_DELAY)
-    raise last or RuntimeError("Edge TTS failed")
+    console.warning("Edge TTS unavailable, using local eSpeak NG")
+    from youtube_auto_dub.local_tts import speak_local
+    speak_local(text, dest, lang=lang, gender=gender)
 
 
 # ── Qwen3-TTS ───────────────────────────────────────────────────────────

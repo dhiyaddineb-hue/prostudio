@@ -131,6 +131,7 @@ def public_job(job: Dict[str, Any]) -> Dict[str, Any]:
         "gender": job.get("gender"),
         "mode": job.get("mode"),
         "voice": job.get("voice"),
+        "transcript": job.get("transcript") or "",
         "title": job.get("title"),
         "output_name": job.get("output_name"),
         "error": job.get("error"),
@@ -149,6 +150,51 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
+
+DEMO_ID = "demo-ready"
+DEMO_VIDEO = next(
+    (p for p in (
+        OUTPUT_DIR / "ProStudio_Arabic_Demo.mp4",
+        ROOT.parent / "samples" / "ProStudio_Arabic_Demo.mp4",
+    ) if p.exists()),
+    OUTPUT_DIR / "ProStudio_Arabic_Demo.mp4",
+)
+DEMO_SRT = DEMO_VIDEO.with_suffix(".srt")
+DEMO_SOURCE = ROOT.parent / "samples" / "prostudio_en.mp4"
+
+
+def seed_demo_job() -> None:
+    if not DEMO_VIDEO.exists() or DEMO_ID in jobs:
+        return
+    jobs[DEMO_ID] = {
+        "id": DEMO_ID,
+        "status": "done",
+        "stage": "done",
+        "percent": 100,
+        "message": "تجربة جاهزة — دبلجة عربية",
+        "url": "demo",
+        "source": str(DEMO_SOURCE),
+        "lang": "ar",
+        "gender": "male",
+        "mode": "both",
+        "model": "offline",
+        "voice": "ar-local-hamed",
+        "bg_music": True,
+        "transcript": "",
+        "title": "تجربة ProStudio الجاهزة",
+        "output_path": str(DEMO_VIDEO),
+        "output_name": DEMO_VIDEO.name,
+        "srt_path": str(DEMO_SRT) if DEMO_SRT.exists() else None,
+        "error": None,
+        "events": [{"type": "done", "stage": "done", "percent": 100, "message": "جاهز"}],
+        "created_at": _now(),
+        "updated_at": _now(),
+    }
+
+
+@app.on_event("startup")
+async def _startup() -> None:
+    seed_demo_job()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -314,6 +360,7 @@ async def create_job(
     model: str = Form("tiny"),
     voice: str = Form(""),
     bg_music: str = Form("true"),
+    transcript: str = Form(""),
     file: Optional[UploadFile] = File(None),
 ) -> Dict[str, Any]:
     source = (url or "").strip()
@@ -326,7 +373,10 @@ async def create_job(
             shutil.copyfileobj(file.file, handle)
         source = str(saved_upload)
     elif not source:
-        raise HTTPException(400, "أدخل رابط يوتيوب أو ارفع ملف فيديو")
+        if DEMO_SOURCE.exists():
+            source = str(DEMO_SOURCE)
+        else:
+            raise HTTPException(400, "أدخل رابط يوتيوب أو ارفع ملف فيديو")
 
     job_id = uuid.uuid4().hex[:12]
     job = {
@@ -343,6 +393,7 @@ async def create_job(
         "model": model,
         "voice": voice or None,
         "bg_music": bg_music.lower() in {"1", "true", "yes", "on"},
+        "transcript": (transcript or "").strip(),
         "title": Path(source).name if saved_upload else url,
         "output_path": None,
         "output_name": None,
@@ -377,6 +428,13 @@ async def _run_job(job_id: str) -> None:
             )
 
         try:
+            demo_script = (
+                "Welcome to ProStudio. This short film shows automatic video dubbing. "
+                "First we transcribe the speech. Then we translate the meaning into Arabic. "
+                "Finally we generate a new voice and sync it with the picture."
+            )
+            transcript = (job.get("transcript") or "").strip() or demo_script
+            job["transcript"] = transcript
             args = build_args(
                 job["source"],
                 lang=job["lang"],
@@ -386,6 +444,8 @@ async def _run_job(job_id: str) -> None:
                 voice=job["voice"],
                 bg_music=job["bg_music"],
                 output_dir=str(OUTPUT_DIR),
+                transcript=transcript,
+                source_lang="en",
             )
             if TEMP_DIR.exists():
                 shutil.rmtree(TEMP_DIR, ignore_errors=True)

@@ -101,6 +101,13 @@ function attachEvents() {
   });
 
   $("dubForm").addEventListener("submit", onSubmit);
+  $("demoBtn").addEventListener("click", () => {
+    showResult("demo-ready", "ProStudio_Arabic_Demo.mp4");
+    $("statusLine").textContent = "تجربة جاهزة — دبلجة عربية";
+    $("percent").textContent = "100%";
+    renderStages("render");
+    logLine("فتح التجربة الجاهزة");
+  });
 }
 
 async function onSubmit(event) {

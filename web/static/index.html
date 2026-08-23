@@ -54,6 +54,11 @@
           <em id="fileName" data-ar="MP4 / MKV / WEBM حتى 400MB" data-en="MP4 / MKV / WEBM up to 400MB">MP4 / MKV / WEBM حتى 400MB</em>
         </label>
 
+        <label class="field">
+          <span data-ar="نص الفيديو (مستحسن — يعمل فوراً بدون Whisper)" data-en="Transcript (recommended — works offline)">نص الفيديو (مستحسن — يعمل فوراً بدون Whisper)</span>
+          <textarea id="transcript" name="transcript" rows="4">Welcome to ProStudio. This short film shows automatic video dubbing. First we transcribe the speech. Then we translate the meaning into Arabic. Finally we generate a new voice and sync it with the picture.</textarea>
+        </label>
+
         <div class="grid">
           <label class="field">
             <span data-ar="لغة الدوبلاج" data-en="Target language">لغة الدوبلاج</span>
@@ -92,6 +97,9 @@
           </label>
         </div>
 
+        <div class="actions" style="margin-bottom:12px">
+          <button type="button" id="demoBtn" class="ghost">شاهد التجربة الجاهزة</button>
+        </div>
         <button type="submit" id="startBtn" class="primary">
           <span data-ar="ابدأ الدبلجة الآن" data-en="Start dubbing now">ابدأ الدبلجة الآن</span>
         </button>

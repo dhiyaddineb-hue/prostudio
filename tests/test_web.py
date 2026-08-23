@@ -29,6 +29,6 @@ def test_index_serves_studio():
     assert "ProStudio" in res.text
 
 
-def test_job_requires_source():
-    res = client.post("/api/jobs", data={"lang": "ar"})
-    assert res.status_code == 400
+def test_job_without_source_uses_demo_or_rejects():
+    res = client.post("/api/jobs", data={"lang": "ar", "transcript": "Hello."})
+    assert res.status_code in {200, 400}

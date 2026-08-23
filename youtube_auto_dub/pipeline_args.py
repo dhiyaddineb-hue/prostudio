@@ -26,6 +26,8 @@ def build_args(
     no_vad: bool = False,
     bg_music: bool = True,
     output_dir: Optional[str] = None,
+    transcript: Optional[str] = None,
+    source_lang: Optional[str] = None,
 ) -> Namespace:
     args = Namespace(
         url=url,
@@ -43,6 +45,8 @@ def build_args(
         no_vad=no_vad,
         bg_music=bg_music,
         output_dir=output_dir,
+        transcript=transcript,
+        source_lang=source_lang,
     )
     args.lang_sub = sub_lang
     args.lang_dub = dub_lang

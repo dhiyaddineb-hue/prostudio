@@ -15,10 +15,15 @@ build/
 temp/
 output/
 uploads/
+.local/
+samples/*.wav
 *.mp4
 *.wav
 *.mp3
 *.srt
+!samples/*.mp4
+!samples/*.srt
+!samples/*.png
 *.webm
 *.mkv
 

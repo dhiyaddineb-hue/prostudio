@@ -92,7 +92,16 @@ async def run(args, progress=None) -> Path:
         _report(progress, "transcribe", f"تفريغ الصوت ({model_name})", 22)
 
         cached = project.load_cache("segments")
-        if cached:
+        transcript = (getattr(args, "transcript", None) or "").strip()
+        if transcript:
+            from youtube_auto_dub.align_text import segments_from_transcript
+            console.step("Using provided transcript")
+            duration = float(project.metadata.duration) if project.metadata else 0.0
+            project.segments = segments_from_transcript(
+                transcript, project.audio_path, duration=duration
+            )
+            lang_detected = getattr(args, "source_lang", None) or "en"
+        elif cached and not getattr(args, "refresh", False):
             console.step("Using cached transcription")
             project.segments = [
                 SubtitleSegment(start=s["start"], end=s["end"],
@@ -104,13 +113,18 @@ async def run(args, progress=None) -> Path:
             hint = build_hint(project.metadata)
             if hint:
                 console.step("Prompting with video metadata")
-
-            raw, lang_detected = transcribe(
-                project.audio_path,
-                model_name=model_name,
-                device=device,
-                hint=hint,
-            )
+            try:
+                raw, lang_detected = transcribe(
+                    project.audio_path,
+                    model_name=model_name,
+                    device=device,
+                    hint=hint,
+                )
+            except Exception as exc:
+                console.warning(f"Whisper unavailable ({exc})")
+                raise RuntimeError(
+                    "تعذر التفريغ الآلي. الصق نص الفيديو في خانة النص ثم أعد المحاولة."
+                ) from exc
             console.success(f"Detected: {lang_detected}")
 
             console.info("Grouping segments")
@@ -201,8 +215,10 @@ async def run(args, progress=None) -> Path:
                         args.gender,
                         voice=getattr(args, "edge_voice", None),
                     )
-                    tasks.append(speak_edge(seg.translated_text_dub, voice,
-                                            seg.tts_audio_path))
+                    tasks.append(speak_edge(
+                        seg.translated_text_dub, voice, seg.tts_audio_path,
+                        lang=dub_lang, gender=args.gender,
+                    ))
 
             await asyncio.gather(*tasks)
 
@@ -263,6 +279,9 @@ async def run(args, progress=None) -> Path:
             output_path=out,
         )
         console.success("Video rendered")
+        project.output_path = out
+        _report(progress, "done", "اكتمل الدوبلاج", 100)
 
     console.print()
     console.print(f"[bold #38bdf8]Output: {out.resolve()}[/bold #38bdf8]")
+    return out

@@ -96,7 +96,7 @@ h1 {
 
 .field, .drop { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .field span, .toggle span { color: var(--muted); font-size: 13px; }
-input[type="url"], select {
+input[type="url"], select, textarea {
   width: 100%;
   background: #0c0d13;
   color: var(--ink);
