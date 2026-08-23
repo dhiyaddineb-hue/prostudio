@@ -135,19 +135,33 @@ def _cookie_file() -> Optional[str]:
     import os
 
     raw = os.environ.get("YAD_COOKIES") or os.environ.get("YT_COOKIES")
-    if raw and "youtube.com" in raw:
+    if raw:
+        text = raw.replace("\\n", "\n")
         path = CACHE_DIR / "cookies.txt"
-        path.write_text(raw.replace("\\n", "\n"), encoding="utf-8")
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
         return str(path)
     for candidate in (
         os.environ.get("YAD_COOKIES_FILE"),
         os.environ.get("YT_COOKIES_FILE"),
         "cookies.txt",
+        str(Path.cwd() / "cookies.txt"),
         str(CACHE_DIR / "cookies.txt"),
     ):
         if candidate and Path(candidate).exists() and Path(candidate).stat().st_size > 20:
-            return candidate
+            return str(Path(candidate).resolve())
     return None
+
+
+def _validate_cookies(path: str) -> None:
+    text = Path(path).read_text(encoding="utf-8", errors="replace")
+    first = (text.splitlines() or [""])[0][:80]
+    console.step(f"Cookies file {path} ({Path(path).stat().st_size} bytes) first={first!r}")
+    if "youtube.com" not in text:
+        raise RuntimeError(
+            "cookies.txt has no youtube.com entries. Export Netscape cookies "
+            "while signed into YouTube and put the full file in secret YT_COOKIES."
+        )
 
 
 def download_project(url: str, browser: Optional[str] = None) -> ProjectContext:
