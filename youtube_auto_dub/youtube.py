@@ -232,6 +232,7 @@ def download_project(url: str, browser: Optional[str] = None) -> ProjectContext:
             "fragment_retries": 5,
             "extractor_args": {"youtube": {"player_client": player_clients}},
         }
+        opts.update(_ytdlp_js_opts())
         if browser:
             opts["cookiesfrombrowser"] = (browser.lower(),)
         elif cookie_file:
