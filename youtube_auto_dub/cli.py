@@ -97,6 +97,7 @@ def main():
     try:
         asyncio.run(run(args))
     except KeyboardInterrupt:
-        pass
+        raise SystemExit(130)
     except Exception as e:
         console.print(f"\n[red]Error: {e}[/red]")
+        raise SystemExit(1)
