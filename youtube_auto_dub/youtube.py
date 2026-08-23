@@ -131,25 +131,79 @@ def load_source(url_or_path: str, browser: Optional[str] = None) -> ProjectConte
     return import_local_video(url_or_path)
 
 
+def _cookie_file() -> Optional[str]:
+    import os
+
+    raw = os.environ.get("YAD_COOKIES") or os.environ.get("YT_COOKIES")
+    if raw and "youtube.com" in raw:
+        path = CACHE_DIR / "cookies.txt"
+        path.write_text(raw.replace("\\n", "\n"), encoding="utf-8")
+        return str(path)
+    for candidate in (
+        os.environ.get("YAD_COOKIES_FILE"),
+        os.environ.get("YT_COOKIES_FILE"),
+        "cookies.txt",
+        str(CACHE_DIR / "cookies.txt"),
+    ):
+        if candidate and Path(candidate).exists() and Path(candidate).stat().st_size > 20:
+            return candidate
+    return None
+
+
 def download_project(url: str, browser: Optional[str] = None) -> ProjectContext:
     ensure_ffmpeg_on_path()
-    opts = {
-        "format": YT_FORMAT,
-        "outtmpl": str(CACHE_DIR / "%(id)s.%(ext)s"),
-        "merge_output_format": "mp4",
-        "quiet": True,
-        "no_warnings": True,
-        "nocheckcertificate": True,
-    }
-    if browser:
-        opts["cookiesfrombrowser"] = (browser.lower(),)
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cookie_file = _cookie_file()
+    clients = [
+        ["android", "ios"],
+        ["ios", "tv"],
+        ["tv_embedded", "android"],
+        ["web"],
+    ]
+    last_error = None
+    info = None
+    for player_clients in clients:
+        opts = {
+            "format": YT_FORMAT,
+            "outtmpl": str(CACHE_DIR / "%(id)s.%(ext)s"),
+            "merge_output_format": "mp4",
+            "quiet": True,
+            "no_warnings": True,
+            "nocheckcertificate": True,
+            "retries": 5,
+            "fragment_retries": 5,
+            "extractor_args": {"youtube": {"player_client": player_clients}},
+            "http_headers": {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                ),
+                "Accept-Language": "en-US,en;q=0.9,ar;q=0.8",
+            },
+        }
+        if browser:
+            opts["cookiesfrombrowser"] = (browser.lower(),)
+        elif cookie_file:
+            opts["cookiefile"] = cookie_file
+        try:
+            console.step(f"YouTube client: {','.join(player_clients)}")
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+            break
+        except Exception as exc:
+            last_error = exc
+            console.warning(f"Download failed ({player_clients}): {exc}")
+            continue
+    if info is None:
+        raise RuntimeError(
+            "YouTube blocked the GitHub runner. Add a Netscape cookies.txt as "
+            "repository secret YT_COOKIES and re-run."
+        ) from last_error
 
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        video_id = info["id"]
-        video_path = CACHE_DIR / f"{video_id}.mp4"
-        audio_path = CACHE_DIR / f"{video_id}.wav"
-        metadata = _extract_metadata(info)
+    video_id = info["id"]
+    video_path = CACHE_DIR / f"{video_id}.mp4"
+    audio_path = CACHE_DIR / f"{video_id}.wav"
+    metadata = _extract_metadata(info)
 
     if not video_path.exists():
         # yt-dlp may have written a slightly different extension
