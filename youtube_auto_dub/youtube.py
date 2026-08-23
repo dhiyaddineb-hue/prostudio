@@ -194,6 +194,53 @@ def _validate_cookies(path: str) -> None:
         )
 
 
+def _start_pot_provider() -> None:
+    """Start bgutil POT HTTP server so yt-dlp can pass YouTube bot checks."""
+    import sys
+    import time
+    import urllib.request
+
+    console.step("Installing POT provider plugin")
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "-q", "-U", "bgutil-ytdlp-pot-provider"],
+        check=False, capture_output=True,
+    )
+    root = Path.home() / "bgutil-ytdlp-pot-provider"
+    if not (root / "server").exists():
+        console.step("Cloning POT provider server")
+        subprocess.run(
+            [
+                "git", "clone", "--depth", "1", "--branch", "1.3.2",
+                "https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git",
+                str(root),
+            ],
+            check=False, capture_output=True,
+        )
+    server = root / "server"
+    main_js = server / "build" / "main.js"
+    if server.exists() and not main_js.exists():
+        console.step("Building POT provider")
+        subprocess.run(["npm", "ci", "--ignore-scripts"], cwd=server, check=False, capture_output=True)
+        subprocess.run(["npx", "--yes", "tsc"], cwd=server, check=False, capture_output=True)
+    if not main_js.exists():
+        console.warning("POT provider build missing")
+        return
+    subprocess.Popen(
+        ["node", str(main_js)],
+        cwd=str(server),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    for _ in range(30):
+        try:
+            urllib.request.urlopen("http://127.0.0.1:4416", timeout=1)
+            console.step("POT provider ready on :4416")
+            return
+        except Exception:
+            time.sleep(0.4)
+    console.warning("POT provider did not become ready")
+
+
 def _ytdlp_js_opts() -> dict:
     opts: dict = {"remote_components": ["ejs:github"]}
     deno = shutil.which("deno")
