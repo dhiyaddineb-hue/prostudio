@@ -56,6 +56,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          ref: arena/01a02fab-prostudio
 
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
@@ -64,19 +66,31 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install -U yt-dlp
           pip install .
           pip install faster-whisper edge-tts imageio-ffmpeg soundfile
+
+      - name: Write YouTube cookies
+        env:
+          YT_COOKIES: ${{ secrets.YT_COOKIES }}
+        run: |
+          if [ -z "${YT_COOKIES}" ]; then
+            echo "YT_COOKIES secret is empty"
+            exit 1
+          fi
+          printf '%s\n' "$YT_COOKIES" > cookies.txt
+          echo "cookies.txt ready"
 
       - name: Run Dubbing
         env:
           YAD_OUTPUT_DIR: output
           YAD_TEMP_DIR: temp
           YAD_CACHE_DIR: .cache
+          YAD_COOKIES_FILE: cookies.txt
         run: |
           set -euo pipefail
           extra=()
@@ -93,15 +107,16 @@ jobs:
             --model "${{ inputs.model }}" \
             -o output \
             "${extra[@]}"
-          ls -lh output || true
+          mkdir -p artifacts
+          cp -v output/*.mp4 artifacts/ || true
+          cp -v output/*.srt artifacts/ || true
+          ls -lh output artifacts
 
       - name: Upload Dubbed Video Artifact
-        if: always()
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: final-dubbed-video
-          path: |
-            output/*.mp4
-            output/*.srt
+          path: artifacts/*
           if-no-files-found: error
           retention-days: 14
