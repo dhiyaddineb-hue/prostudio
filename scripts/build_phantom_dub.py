@@ -33,7 +33,8 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # Everything for this dub lives in one project folder.
 PROJECT = load_or_create(
-    "Phantom-Thread", title="Phantom Thread — دبلجة مصرية", lang="ar", dialect="eg"
+    __import__("os").environ.get("PROJECT", "Phantom-Thread"),
+    title="Phantom Thread — دبلجة مصرية", lang="ar", dialect="eg",
 ).ensure_dirs()
 
 CLIP = PROJECT.voices_dir

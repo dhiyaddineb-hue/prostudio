@@ -81,6 +81,33 @@ curl localhost:8080/api/health
 
 تعرض الواجهة هذه الحالة في الشريط العلوي، وتنبّهك إن كان النص مطلوباً.
 
+## الاستنساخ عبر GitHub Actions
+
+الاستنساخ العصبي يحتاج أوزاناً من HuggingFace. إن كانت محجوبة عندك، شغّله على
+مشغّلات GitHub التي تصل إليها:
+
+انسخ القالب أولاً إلى مسار GitHub:
+
+```bash
+cp docs/github-actions/clone.yml .github/workflows/clone.yml
+git add .github/workflows/clone.yml && git commit -m "enable clone workflow" && git push
+```
+
+ثم: **Actions → Clone voices and dub → Run workflow**
+
+يقتطع مقطعاً مرجعياً من صوت كل ممثل، يولّد جمله بصوته، ثم يرفع الناتج
+كـ artifact. وعلى جهاز يصل إلى HuggingFace:
+
+```bash
+pip install f5-tts
+PROJECT=Phantom-Thread python scripts/clone_project.py
+PROJECT=Phantom-Thread python scripts/build_phantom_dub.py
+```
+
+التسجيلات السابقة تُنسخ إلى `voices_before_clone/` قبل الاستبدال، فالتراجع ممكن.
+
+> أوزان بعض النماذج مرخّصة **CC BY-NC** (غير تجارية). راجع ترخيص ما تستخدمه.
+
 ## تنظيم المشاريع
 
 كل دبلجة لها **مجلد مستقل** تحت `projects/`، مكتفٍ بذاته:
