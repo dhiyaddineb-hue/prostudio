@@ -40,6 +40,29 @@ from youtube_auto_dub.stem_split import decode_stereo, split_center  # noqa: E40
 SR = 44100
 
 
+def merge_runs(
+    windows: list[tuple[float, float]],
+    max_gap: float = 1.5,
+) -> list[tuple[float, float]]:
+    """Join a speaker's consecutive cues into continuous stretches.
+
+    Individual captions are short — the longest here is 2.8 s, under the 3 s a
+    clone needs — but consecutive lines from the same actor are one unbroken
+    piece of speech in the source. Merging across the small gaps between them
+    yields references of 10 s instead of failing outright.
+    """
+    if not windows:
+        return []
+    ordered = sorted(windows)
+    merged = [list(ordered[0])]
+    for start, end in ordered[1:]:
+        if start - merged[-1][1] <= max_gap:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return [(a, b) for a, b in merged]
+
+
 def pick_reference_window(
     stem: np.ndarray,
     windows: list[tuple[float, float]],
@@ -53,12 +76,19 @@ def pick_reference_window(
     best: tuple[float, float] | None = None
     best_energy = -1.0
     step = 0.25
-    for start, end in windows:
-        if end - start < REF_MIN_SEC:
-            continue
+    usable = [w for w in windows if w[1] - w[0] >= REF_MIN_SEC]
+    if not usable:
+        # Fall back to the longest stretch available, even if it is short:
+        # a 2.5 s reference still clones better than refusing to try.
+        longest = max(windows, key=lambda w: w[1] - w[0], default=None)
+        if longest is None or longest[1] - longest[0] < 1.5:
+            return None
+        usable = [longest]
+
+    for start, end in usable:
         span = min(end - start, want)
         t = start
-        while t + span <= end:
+        while t + span <= end + 1e-6:
             seg = stem[int(t * SR): int((t + span) * SR)]
             if seg.size:
                 energy = float(np.mean(seg ** 2))
@@ -103,7 +133,10 @@ def main() -> None:
 
     refs: dict[str, CloneRef] = {}
     for speaker, windows in by_speaker.items():
-        window = pick_reference_window(actor_voice, windows, want)
+        # Consecutive lines are continuous speech in the source; merging them
+        # is what makes a reference long enough to clone from.
+        runs = merge_runs(windows)
+        window = pick_reference_window(actor_voice, runs, want)
         if window is None:
             print(f"  [{speaker}] no window long enough to clone from — skipping")
             continue
