@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
-"""Dub the Phantom Thread clip over a separated music bed.
+"""Dub the Phantom Thread clip, one subtitle cue at a time.
 
-Two things make this a real dub rather than a voice-over:
+Two problems with the earlier pass drove this rewrite.
 
-1. **Stem separation.** The original English dialogue is pulled out of the
-   centre channel (``youtube_auto_dub.stem_split``) so the Arabic takes play
-   over score and effects alone, instead of on top of the English performance.
+**Drift.** Speaker turns were recorded as a single continuous take and dropped
+at the turn's start time. Every line after the first then landed wherever the
+narration happened to reach — measured drift ran to 1.9 s by the end of a long
+turn. Now each cue is anchored to its own timestamp, so an error in one line
+cannot propagate into the next.
 
-2. **Measured casting.** Each take is pitch-shifted toward the median F0 of the
-   *original* actor in that window, so the dub tracks the performance instead
-   of sounding like a narrator. The shift is capped, skipped on lines too short
-   to measure, and reverted if it does not actually move toward the actor.
+**Quality.** Pitch/formant conversion measurably degraded the recordings
+(harmonics-to-noise ratio dropped by up to 1.4 dB) and tempo compression made
+them sound hurried. Casting is still decided by the actor's measured pitch, but
+the audio itself is left alone unless a line genuinely overruns its slot.
 
-Speaker assignment was confirmed against the picture, not pitch alone: the
-centre stem still carries score, and an early pass mis-cast the man at 22-29s
-as a woman on a bad reading.
-
-Timing comes from the burned-in subtitles: the script was read off the frames
-and each line's slot is when its caption is on screen.
+Timing and script both come from the burned-in subtitles.
 """
 
 from __future__ import annotations
@@ -30,9 +27,6 @@ import soundfile as sf
 
 from youtube_auto_dub.ffmpeg_bin import ensure_ffmpeg_on_path, ffmpeg_exe
 from youtube_auto_dub.stem_split import decode_stereo, split_center
-from youtube_auto_dub.clone_tts import available as clone_available
-from youtube_auto_dub.clone_tts import clone_speak, pick_reference
-from youtube_auto_dub.voice_profile import convert, measure
 
 ROOT = Path(__file__).resolve().parent.parent
 CLIP = ROOT / "samples" / "phantom"
@@ -44,61 +38,58 @@ OUT_VIDEO = ROOT / "samples" / "Phantom_Thread_Pro_DUB.mp4"
 OUT_SRT = OUT_VIDEO.with_suffix(".srt")
 
 SR = 44100
-MAX_TEMPO = 1.16        # past this the read sounds hurried
-DIALOG_LEAD_DB = 11.0   # dialogue level above the residual score
-RESIDUAL_DUCK_DB = -9.0  # gentle duck of the music under speech
-MAX_SEMITONES = 2.0     # cap on pitch matching, to protect voice quality
-MIN_PITCH_MATCH_SEC = 2.5  # shorter lines give an unreliable F0 median
+MAX_TEMPO = 1.12        # gentler than before; past this the read sounds rushed
+TAIL_ALLOWANCE = 0.45   # a line may run this far past the next cue's start
+DIALOG_LEAD_DB = 11.0
+RESIDUAL_DUCK_DB = -15.0
 
-# take, slot start, hard limit before the next voice enters
-GROUPS = [
-    ("g1_f", 0.40, 2.30),
-    ("g2_m", 2.40, 13.30),
-    ("g3_f", 13.40, 17.20),
-    ("g4_m", 17.30, 19.10),
-    ("g5_f", 19.20, 22.10),
-    ("g6_m", 22.10, 29.30),
-    ("g7_f", 29.40, 46.30),
-    ("g8_m", 46.40, 58.60),
-]
-
-GROUP_TEXT = {
-    "g1_f": "لماذا لستَ متزوّجًا؟",
-    "g2_m": "أنا على يقين بأن الزواج لم يُكتب لي أبدًا. أنا رجلٌ خُلق للعزوبة، ولا شفاء لي من ذلك. الزواج سيجعلني مخادعًا، وأنا لا أريد ذلك أبدًا.",
-    "g3_f": "أظنّ أنك تتظاهر بالقوة فقط.",
-    "g4_m": "لا، أنا قوي.",
-    "g5_f": "قوي أمام مَن؟ أتمنى ألا تكون كذلك معي.",
-    "g6_m": "أظنّ أن توقّعات الآخرين وافتراضاتهم هي ما يورث القلب وجعَه.",
-    "g7_f": "أريدك... مستلقيًا على ظهرك، عاجزًا، رقيقًا، مكشوفًا، وليس لك سواي لأعتني بك. ثم أريدك أن تستعيد قوتك من جديد.",
-    "g8_m": "أسمع صوتك يناديني باسمي في أحلامي، وحين أستيقظ أجد الدموع تنهمر على وجهي. أشتاقُ إليكِ.",
-}
-
+# (start, end, speaker, text). ``end`` is the caption's own end; the audio may
+# breathe into the gap that follows if nothing else is speaking.
 CUES = [
-    (0.40, 1.90, "لماذا لستَ متزوّجًا؟"),
-    (2.40, 4.70, "أنا على يقين بأن الزواج لم يُكتب لي أبدًا"),
-    (5.00, 7.20, "أنا رجلٌ خُلق للعزوبة"),
-    (7.70, 9.00, "ولا شفاء لي من ذلك"),
-    (9.70, 11.30, "الزواج سيجعلني مخادعًا"),
-    (11.30, 12.90, "وأنا لا أريد ذلك أبدًا"),
-    (13.40, 15.80, "أظنّ أنك تتظاهر بالقوة فقط"),
-    (17.30, 18.90, "لا، أنا قوي"),
-    (19.20, 20.30, "قوي أمام مَن؟"),
-    (20.50, 22.10, "أتمنى ألا تكون كذلك معي"),
-    (22.10, 24.80, "أظنّ أن توقّعات الآخرين"),
-    (24.80, 26.40, "وافتراضاتهم"),
-    (27.40, 29.00, "هي ما يورث القلب وجعَه"),
-    (29.40, 30.50, "أريدك..."),
-    (31.10, 32.70, "مستلقيًا على ظهرك"),
-    (33.00, 34.00, "عاجزًا"),
-    (34.70, 35.60, "رقيقًا"),
-    (36.50, 37.60, "مكشوفًا"),
-    (38.10, 39.80, "وليس لك سواي لأعتني بك"),
-    (41.10, 43.50, "ثم أريدك أن تستعيد قوتك من جديد"),
-    (46.40, 49.20, "أسمع صوتك يناديني باسمي في أحلامي"),
-    (49.20, 50.90, "وحين أستيقظ"),
-    (50.90, 53.40, "أجد الدموع تنهمر على وجهي"),
-    (54.80, 55.40, "أشتاقُ إليكِ."),
+    (0.40, 1.90, "f", "لماذا لستَ متزوّجًا؟"),
+    (2.40, 4.70, "m", "أنا على يقين بأن الزواج لم يُكتب لي أبدًا"),
+    (5.00, 7.20, "m", "أنا رجلٌ خُلق للعزوبة"),
+    (7.70, 9.00, "m", "ولا شفاء لي من ذلك"),
+    (9.70, 11.30, "m", "الزواج سيجعلني مخادعًا"),
+    (11.30, 12.90, "m", "وأنا لا أريد ذلك أبدًا"),
+    (13.40, 15.80, "f", "أظنّ أنك تتظاهر بالقوة فقط"),
+    (17.30, 18.90, "m", "لا، أنا قوي"),
+    (19.20, 20.30, "f", "قوي أمام مَن؟"),
+    (20.50, 22.10, "f", "أتمنى ألا تكون كذلك معي"),
+    (22.10, 24.80, "m", "أظنّ أن توقّعات الآخرين"),
+    (24.80, 26.40, "m", "وافتراضاتهم"),
+    (27.40, 29.00, "m", "هي ما يورث القلب وجعَه"),
+    (29.40, 30.50, "f", "أريدك..."),
+    (31.10, 32.70, "f", "مستلقيًا على ظهرك"),
+    (33.00, 34.00, "f", "عاجزًا"),
+    (34.70, 35.60, "f", "رقيقًا"),
+    (36.50, 37.60, "f", "مكشوفًا"),
+    (38.10, 39.80, "f", "وليس لك سواي لأعتني بك"),
+    (41.10, 43.50, "f", "ثم أريدك أن تستعيد قوتك من جديد"),
+    (46.40, 49.20, "m", "أسمع صوتك يناديني باسمي في أحلامي"),
+    (49.20, 50.90, "m", "وحين أستيقظ"),
+    (50.90, 53.40, "m", "أجد الدموع تنهمر على وجهي"),
+    (54.80, 55.40, "m", "أشتاقُ إليكِ."),
 ]
+
+# Cues still served by slicing a multi-line group take, until each has its own
+# recording. cue index (0-based) -> (group file, position, total pieces).
+GROUP_SLICES = {
+    0: ("g1_f", 0, 1),
+    6: ("g3_f", 0, 1),
+    7: ("g4_m", 0, 1),
+    8: ("g5_f", 0, 2),
+    13: ("g7_f", 0, 7),
+    15: ("g7_f", 2, 7),
+    16: ("g7_f", 3, 7),
+    17: ("g7_f", 4, 7),
+    18: ("g7_f", 5, 7),
+    19: ("g7_f", 6, 7),
+    20: ("g8_m", 0, 4),
+    21: ("g8_m", 1, 4),
+    22: ("g8_m", 2, 4),
+    23: ("g8_m", 3, 4),
+}
 
 
 def decode(path: Path, sr: int = SR) -> np.ndarray:
@@ -124,24 +115,6 @@ def trim(audio: np.ndarray, floor_db: float = -45.0) -> np.ndarray:
     return audio[max(int(loud[0]) - 2, 0) * fr: min(int(loud[-1]) + 3, n) * fr]
 
 
-def _filter(src: Path, chain: str, dst: Path) -> np.ndarray:
-    subprocess.run(
-        [ffmpeg_exe(), "-y", "-i", str(src), "-filter:a", chain,
-         "-ar", str(SR), "-ac", "1", str(dst)],
-        capture_output=True, check=True,
-    )
-    return sf.read(str(dst), dtype="float32")[0]
-
-
-def probe_rate(path: Path) -> int:
-    """Sample rate of a media file, read from ffmpeg's own report."""
-    import re
-
-    res = subprocess.run([ffmpeg_exe(), "-i", str(path)], capture_output=True, text=True)
-    m = re.search(r"(\d+) Hz", res.stderr or "")
-    return int(m.group(1)) if m else SR
-
-
 def _atempo_chain(factor: float) -> str:
     parts, r = [], factor
     while r > 2.0:
@@ -154,24 +127,23 @@ def _atempo_chain(factor: float) -> str:
     return ",".join(parts)
 
 
-def shift_pitch(src: Path, semitones: float, dst: Path) -> np.ndarray:
-    """Resample-and-retime: changes pitch while preserving duration.
-
-    ``asetrate`` reinterprets the stream's *own* sample rate, so the multiplier
-    must be based on the file's rate — using a fixed constant would also
-    resample the clip and wreck its duration. It shortens audio by ``ratio``,
-    so tempo is divided by the same ratio to restore the original length.
-    """
-    ratio = 2 ** (semitones / 12.0)
-    src_sr = probe_rate(src)
-    chain = (
-        f"asetrate={int(round(src_sr * ratio))},aresample={SR},"
-        + _atempo_chain(1.0 / ratio)
+def retime(audio: np.ndarray, factor: float) -> np.ndarray:
+    """Speed a clip up by ``factor`` without changing its pitch."""
+    tmp_in = CLIP / "_retime_in.wav"
+    tmp_out = CLIP / "_retime_out.wav"
+    sf.write(tmp_in, audio, SR)
+    subprocess.run(
+        [ffmpeg_exe(), "-y", "-i", str(tmp_in), "-filter:a", _atempo_chain(factor),
+         "-ar", str(SR), "-ac", "1", str(tmp_out)],
+        capture_output=True, check=True,
     )
-    return _filter(src, chain, dst)
+    out = sf.read(str(tmp_out), dtype="float32")[0]
+    tmp_in.unlink(missing_ok=True)
+    tmp_out.unlink(missing_ok=True)
+    return out
 
 
-def fade(a: np.ndarray, ms: int = 14) -> np.ndarray:
+def fade(a: np.ndarray, ms: int = 15) -> np.ndarray:
     n = min(int(SR * ms / 1000), len(a) // 2)
     if n < 2:
         return a
@@ -182,77 +154,52 @@ def fade(a: np.ndarray, ms: int = 14) -> np.ndarray:
     return out
 
 
-def median_f0(seg: np.ndarray, sr: int = SR) -> float | None:
-    """Median fundamental of a window.
+def split_on_pauses(audio: np.ndarray, pieces: int) -> list[np.ndarray]:
+    """Cut a multi-line take into ``pieces`` at its longest internal pauses."""
+    if pieces <= 1:
+        return [audio]
+    fr = int(SR * 0.02)
+    n = len(audio) // fr
+    if n < pieces * 2:
+        return [audio] * pieces
+    energy = np.sqrt(np.mean(audio[: n * fr].reshape(n, fr) ** 2, axis=1) + 1e-12)
+    quiet = energy < max(float(np.median(energy)) * 0.30, 1e-5)
 
-    Uses a longer analysis frame plus cumulative mean normalisation (the YIN
-    idea) and picks the *first* strong dip rather than the global best. Plain
-    autocorrelation happily locks onto a harmonic, which on short lines made
-    a downward shift look like an upward one.
-    """
-    w, h = int(sr * 0.06), int(sr * 0.02)
-    lo, hi = int(sr / 300), int(sr / 70)
-    vals = []
-    for i in range(max((len(seg) - w) // h, 0)):
-        s = seg[i * h: i * h + w]
-        if np.sqrt(np.mean(s ** 2) + 1e-12) < 1e-3:
-            continue
-        s = s - s.mean()
-        n = len(s)
-        ac = np.correlate(s, s, "full")[n - 1:]
-        energy = np.concatenate(([np.dot(s, s)], np.cumsum(s[::-1] ** 2)[::-1][1:]))
-        # difference function, then cumulative mean normalisation
-        d = energy[0] + energy - 2 * ac[: len(energy)]
-        d = d[: hi + 1]
-        if len(d) <= lo + 2:
-            continue
-        cm = np.ones_like(d)
-        run = np.cumsum(d[1:])
-        idx = np.arange(1, len(d))
-        cm[1:] = d[1:] * idx / np.maximum(run, 1e-12)
-        window = cm[lo:hi]
-        if window.size == 0:
-            continue
-        below = np.where(window < 0.25)[0]
-        peak = lo + int(below[0] if below.size else np.argmin(window))
-        if cm[peak] >= 0.6:
-            continue
-        # parabolic refinement around the chosen dip
-        refined = float(peak)
-        if 0 < peak < len(d) - 1:
-            a, b, c = d[peak - 1], d[peak], d[peak + 1]
-            denom = a - 2 * b + c
-            if abs(denom) > 1e-12:
-                refined = peak + 0.5 * float(a - c) / float(denom)
-        if refined > 0:
-            vals.append(sr / refined)
-    return float(np.median(vals)) if len(vals) >= 6 else None
+    runs, start = [], None
+    for i, is_quiet in enumerate(quiet):
+        if is_quiet and start is None:
+            start = i
+        elif not is_quiet and start is not None:
+            if i - start >= 5:  # >=100 ms of silence
+                runs.append((start, i, i - start))
+            start = None
+    runs.sort(key=lambda r: -r[2])
+    cuts = sorted(int((a + b) / 2) for a, b, _ in runs[: pieces - 1])
+
+    bounds = [0] + cuts + [n]
+    out = [audio[bounds[k] * fr: bounds[k + 1] * fr] for k in range(len(bounds) - 1)]
+    while len(out) < pieces:
+        out.append(np.zeros(fr, dtype=np.float32))
+    return out[:pieces]
 
 
-def voiced_f0(seg: np.ndarray, sr: int = SR, keep: float = 0.35) -> float | None:
-    """F0 of the loudest, most speech-like part of a separated stem.
+def cue_audio(index: int, speaker: str, cache: dict) -> np.ndarray | None:
+    """Audio for one cue: its own recording if present, else a group slice."""
+    own = CLIP / f"c{index + 1:02d}_{speaker}.mp3"
+    if own.exists():
+        return trim(decode(own))
 
-    The centre-channel stem still carries some score, and quiet frames are
-    mostly that residue. Restricting the estimate to the strongest frames keeps
-    the music from dragging the median off the actor's real pitch.
-    """
-    frame = int(sr * 0.06)
-    hop = int(sr * 0.03)
-    count = max((len(seg) - frame) // hop, 0)
-    if count < 4:
+    spec = GROUP_SLICES.get(index)
+    if not spec:
         return None
-    energies = np.array([
-        np.sqrt(np.mean(seg[i * hop: i * hop + frame] ** 2) + 1e-12)
-        for i in range(count)
-    ])
-    cutoff = np.quantile(energies, 1.0 - keep)
-    loud = [i for i in range(count) if energies[i] >= cutoff]
-    if not loud:
+    name, position, total = spec
+    src = CLIP / f"{name}.mp3"
+    if not src.exists():
         return None
-    # Concatenate the loud frames into one signal: the estimator needs a run of
-    # audio, not isolated 60 ms slices.
-    voiced = np.concatenate([seg[i * hop: i * hop + frame] for i in loud])
-    return median_f0(voiced, sr)
+    if name not in cache:
+        cache[name] = split_on_pauses(trim(decode(src)), total)
+    parts = cache[name]
+    return trim(parts[position]) if position < len(parts) else None
 
 
 def stamp(sec: float) -> str:
@@ -266,87 +213,48 @@ def main() -> None:
     if not SRC.exists():
         raise SystemExit(f"source clip missing: {SRC}")
 
-    cloning = clone_available()
-    print(
-        "neural cloning: ENABLED (F5-TTS)" if cloning
-        else "neural cloning: unavailable — using acoustic voice conversion"
-    )
     print("separating stems…")
     left, right = decode_stereo(SRC, SR)
-    original_voice, music = split_center(left, right, SR)
+    _, music = split_center(left, right, SR)
     total = len(music)
 
     voice = np.zeros(total + SR, dtype=np.float32)
     gate = np.zeros(total + SR, dtype=np.float32)
+    cache: dict = {}
+    placed = 0
 
-    for name, start, limit in GROUPS:
-        take = CLIP / f"{name}.mp3"
-        if not take.exists():
-            raise SystemExit(f"missing take: {take}")
+    for i, (start, end, speaker, text) in enumerate(CUES):
+        audio = cue_audio(i, speaker, cache)
+        if audio is None or audio.size == 0:
+            print(f"  cue {i + 1:2d}: MISSING")
+            continue
 
-        # Voice conversion: measure the real actor here and reshape the take
-        # toward that voice (pitch + vocal-tract size), not just its pitch.
-        work = take
-        audio = trim(decode(take))
-        notes = []
-
-        # Preferred path: clone the actor outright when F5-TTS weights exist.
-        if cloning:
-            ref = pick_reference(
-                original_voice, SR, start, limit,
-                GROUP_TEXT.get(name, ""), CLIP / f"{name}_ref.wav",
-            )
-            if ref and clone_speak(GROUP_TEXT.get(name, ""), ref, CLIP / f"{name}_clone.wav"):
-                work = CLIP / f"{name}_clone.wav"
-                audio = trim(decode(work))
-                notes.append("cloned from the original actor")
-
-        actor = measure(original_voice[int(start * SR): int(limit * SR)], SR)
-        speaker = measure(audio, SR, focus=False)
-
-        if "cloned from the original actor" in notes:
-            pass  # a real clone already carries the actor's identity
-        elif actor and speaker and actor.reliable and speaker.f0_median > 0:
-            converted, report = convert(audio, SR, speaker, actor)
-            check = measure(converted, SR, focus=False)
-            moved_closer = (
-                check
-                and abs(check.f0_median - actor.f0_median)
-                < abs(speaker.f0_median - actor.f0_median)
-            )
-            if moved_closer and np.isfinite(converted).all():
-                audio = trim(converted)
-                work = CLIP / f"{name}_voice.wav"
-                sf.write(work, audio, SR)
-                notes.append(
-                    f"voice {speaker.f0_median:.0f}->{check.f0_median:.0f}Hz"
-                    f" (target {actor.f0_median:.0f}), formants x{report['formant_ratio']:.3f}"
-                )
-            else:
-                notes.append("conversion reverted (no improvement)")
-        elif actor and not actor.reliable:
-            notes.append(f"actor unreliable (F0 IQR {100 * actor.f0_iqr / max(actor.f0_median,1):.0f}%)")
-
-        budget = limit - start
+        # A line may use its own slot plus the silence before the next cue.
+        next_start = CUES[i + 1][0] if i + 1 < len(CUES) else start + 8.0
+        budget = max(next_start - start - 0.08, end - start)
         dur = len(audio) / SR
-        if dur > budget:
-            factor = min(dur / budget, MAX_TEMPO)
-            audio = trim(_filter(work, _atempo_chain(factor), CLIP / f"{name}_fit.wav"))
+
+        note = "natural"
+        if dur > budget + TAIL_ALLOWANCE:
+            factor = min(dur / (budget + TAIL_ALLOWANCE), MAX_TEMPO)
+            audio = trim(retime(audio, factor))
             dur = len(audio) / SR
-            notes.append(f"atempo x{factor:.3f}")
+            note = f"atempo x{factor:.3f}"
+            if dur > budget + TAIL_ALLOWANCE:
+                note += f" (+{dur - budget - TAIL_ALLOWANCE:.2f}s over)"
 
         audio = fade(audio)
         at = int(start * SR)
-        end = min(at + len(audio), len(voice))
-        voice[at:end] += audio[: end - at]
-        gate[at:end] = 1.0
-        print(f"  {name}: {dur:5.2f}s / {budget:5.2f}s  {'; '.join(notes) or 'natural'}")
+        stop = min(at + len(audio), len(voice))
+        voice[at:stop] += audio[: stop - at]
+        gate[at:stop] = 1.0
+        placed += 1
+        print(f"  cue {i + 1:2d}: {start:6.2f}s  {dur:5.2f}s / {budget:5.2f}s  {note}")
 
+    print(f"placed {placed}/{len(CUES)} cues")
     voice = voice[:total]
     gate = gate[:total]
 
-    # Duck what little score sits under the dialogue, then set the voice
-    # against that ducked bed so the lead is exact.
     win = int(SR * 0.25)
     smooth = np.clip(
         np.convolve(gate, np.ones(win, dtype=np.float32) / win, mode="same"), 0.0, 1.0
@@ -382,15 +290,10 @@ def main() -> None:
         check=True, capture_output=True,
     )
     final.unlink(missing_ok=True)
-    for pattern in ("*_pitch.wav", "*_voice.wav", "*_ref.wav", "*_clone.wav"):
-        for leftover in CLIP.glob(pattern):
-            leftover.unlink(missing_ok=True)
-    for leftover in CLIP.glob("*_fit.wav"):
-        leftover.unlink(missing_ok=True)
 
     with OUT_SRT.open("w", encoding="utf-8") as fh:
-        for i, (s, e, t) in enumerate(CUES, 1):
-            fh.write(f"{i}\n{stamp(s)} --> {stamp(e)}\n{t}\n\n")
+        for i, (s, e, _speaker, text) in enumerate(CUES, 1):
+            fh.write(f"{i}\n{stamp(s)} --> {stamp(e)}\n{text}\n\n")
 
     print(f"\nvideo     {OUT_VIDEO} ({OUT_VIDEO.stat().st_size} bytes)")
     print(f"subtitles {OUT_SRT}")
