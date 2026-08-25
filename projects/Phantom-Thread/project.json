@@ -188,7 +188,7 @@
       "end": 53.4,
       "speaker": "m",
       "text": "بلاقي الدموع على وشي",
-      "take": null
+      "take": "c23_m.wav"
     },
     {
       "i": 24,
@@ -196,7 +196,7 @@
       "end": 55.4,
       "speaker": "m",
       "text": "وحشتيني.",
-      "take": null
+      "take": "c24_m.wav"
     }
   ],
   "voices": {
