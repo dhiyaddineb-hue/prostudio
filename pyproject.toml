@@ -26,6 +26,7 @@ dependencies = [
     "python-multipart>=0.0.9",
     "aiofiles>=24.1",
     "espeakng-loader>=0.2",
+    "praat-parselmouth>=0.4",
 ]
 
 [project.optional-dependencies]

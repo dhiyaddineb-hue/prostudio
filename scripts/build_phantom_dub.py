@@ -30,6 +30,7 @@ import soundfile as sf
 
 from youtube_auto_dub.ffmpeg_bin import ensure_ffmpeg_on_path, ffmpeg_exe
 from youtube_auto_dub.stem_split import decode_stereo, split_center
+from youtube_auto_dub.voice_profile import convert, measure
 
 ROOT = Path(__file__).resolve().parent.parent
 CLIP = ROOT / "samples" / "phantom"
@@ -265,35 +266,35 @@ def main() -> None:
         if not take.exists():
             raise SystemExit(f"missing take: {take}")
 
-        # Cast check: match this take to the actor actually speaking here.
-        actor_f0 = voiced_f0(original_voice[int(start * SR): int(limit * SR)])
+        # Voice conversion: measure the real actor here and reshape the take
+        # toward that voice (pitch + vocal-tract size), not just its pitch.
         work = take
         audio = trim(decode(take))
         notes = []
 
-        take_f0 = median_f0(audio)
-        # Both estimates must be trustworthy, and the correction must be
-        # plausible. A very short line yields a noisy median, and acting on it
-        # would push the voice the wrong way.
-        if actor_f0 and take_f0 and len(audio) / SR >= MIN_PITCH_MATCH_SEC:
-            semis = 12.0 * np.log2(actor_f0 / take_f0)
-            if abs(semis) > MAX_SEMITONES * 2:
-                notes.append(f"pitch skipped (implausible {semis:+.1f}st)")
+        actor = measure(original_voice[int(start * SR): int(limit * SR)], SR)
+        speaker = measure(audio, SR, focus=False)
+
+        if actor and speaker and actor.reliable and speaker.f0_median > 0:
+            converted, report = convert(audio, SR, speaker, actor)
+            check = measure(converted, SR, focus=False)
+            moved_closer = (
+                check
+                and abs(check.f0_median - actor.f0_median)
+                < abs(speaker.f0_median - actor.f0_median)
+            )
+            if moved_closer and np.isfinite(converted).all():
+                audio = trim(converted)
+                work = CLIP / f"{name}_voice.wav"
+                sf.write(work, audio, SR)
+                notes.append(
+                    f"voice {speaker.f0_median:.0f}->{check.f0_median:.0f}Hz"
+                    f" (target {actor.f0_median:.0f}), formants x{report['formant_ratio']:.3f}"
+                )
             else:
-                semis = float(np.clip(semis, -MAX_SEMITONES, MAX_SEMITONES))
-                if abs(semis) >= 0.25:
-                    work = CLIP / f"{name}_pitch.wav"
-                    shifted = trim(shift_pitch(take, semis, work))
-                    got = median_f0(shifted)
-                    # Only keep the shift if it actually moved toward the actor.
-                    if got and abs(got - actor_f0) < abs(take_f0 - actor_f0):
-                        audio = shifted
-                        notes.append(f"pitch {semis:+.2f}st {take_f0:.0f}->{got:.0f}Hz")
-                    else:
-                        work = take
-                        notes.append("pitch reverted (no improvement)")
-        elif actor_f0:
-            notes.append("pitch skipped (line too short)")
+                notes.append("conversion reverted (no improvement)")
+        elif actor and not actor.reliable:
+            notes.append(f"actor unreliable (F0 IQR {100 * actor.f0_iqr / max(actor.f0_median,1):.0f}%)")
 
         budget = limit - start
         dur = len(audio) / SR
@@ -350,8 +351,9 @@ def main() -> None:
         check=True, capture_output=True,
     )
     final.unlink(missing_ok=True)
-    for leftover in CLIP.glob("*_pitch.wav"):
-        leftover.unlink(missing_ok=True)
+    for pattern in ("*_pitch.wav", "*_voice.wav"):
+        for leftover in CLIP.glob(pattern):
+            leftover.unlink(missing_ok=True)
     for leftover in CLIP.glob("*_fit.wav"):
         leftover.unlink(missing_ok=True)
 
