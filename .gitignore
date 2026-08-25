@@ -32,6 +32,7 @@ samples/*.wav
 !samples/voices/*.json
 !samples/phantom/
 !samples/phantom/*.mp3
+!samples/phantom/*.wav
 *.webm
 *.mkv
 
