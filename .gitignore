@@ -30,9 +30,6 @@ samples/*.wav
 !samples/voices/
 !samples/voices/*.mp3
 !samples/voices/*.json
-!samples/phantom/
-!samples/phantom/*.mp3
-!samples/phantom/*.wav
 *.webm
 *.mkv
 
@@ -42,3 +39,13 @@ samples/*.wav
 *.swp
 *.swo
 .DS_Store
+
+# Dub projects: keep the recipe and deliverables, drop scratch and source media.
+projects/*/work/
+projects/*/source/
+!projects/*/output/
+!projects/*/voices/
+!projects/*/project.json
+!projects/*/voices/*.wav
+!projects/*/output/*.mp4
+!projects/*/output/*.srt

@@ -1,0 +1,211 @@
+{
+  "slug": "Phantom-Thread",
+  "title": "Phantom Thread — دبلجة مصرية",
+  "source_name": "Phantom Thread.mp4",
+  "lang": "ar",
+  "dialect": "eg",
+  "created_at": "2026-08-25T19:01:07+00:00",
+  "cues": [
+    {
+      "i": 1,
+      "start": 0.4,
+      "end": 1.9,
+      "speaker": "f",
+      "text": "ليه مش متجوز؟",
+      "take": "c01_f.wav"
+    },
+    {
+      "i": 2,
+      "start": 2.4,
+      "end": 4.7,
+      "speaker": "m",
+      "text": "أنا متأكد إن الجواز مش مكتوب لي أبدًا",
+      "take": "c02_m.wav"
+    },
+    {
+      "i": 3,
+      "start": 5.0,
+      "end": 7.2,
+      "speaker": "m",
+      "text": "أنا راجل اتخلقت للعزوبية",
+      "take": "c03_m.wav"
+    },
+    {
+      "i": 4,
+      "start": 7.7,
+      "end": 9.0,
+      "speaker": "m",
+      "text": "ومفيش علاج لده",
+      "take": "c04_m.wav"
+    },
+    {
+      "i": 5,
+      "start": 9.7,
+      "end": 11.3,
+      "speaker": "m",
+      "text": "الجواز هيخليني كدّاب",
+      "take": "c05_m.wav"
+    },
+    {
+      "i": 6,
+      "start": 11.3,
+      "end": 12.9,
+      "speaker": "m",
+      "text": "وأنا عمري ما هعوز كده",
+      "take": "c06_m.wav"
+    },
+    {
+      "i": 7,
+      "start": 13.4,
+      "end": 15.8,
+      "speaker": "f",
+      "text": "أظن إنك بتتظاهر بالقوة وبس",
+      "take": "c07_f.wav"
+    },
+    {
+      "i": 8,
+      "start": 17.3,
+      "end": 18.9,
+      "speaker": "m",
+      "text": "لأ، أنا قوي",
+      "take": "c08_m.wav"
+    },
+    {
+      "i": 9,
+      "start": 19.2,
+      "end": 20.3,
+      "speaker": "f",
+      "text": "قوي قدام مين؟",
+      "take": "c09_f.wav"
+    },
+    {
+      "i": 10,
+      "start": 20.5,
+      "end": 22.1,
+      "speaker": "f",
+      "text": "أتمنى ما تكونش كده معايا",
+      "take": "c10_f.wav"
+    },
+    {
+      "i": 11,
+      "start": 22.1,
+      "end": 24.8,
+      "speaker": "m",
+      "text": "أظن إن توقعات الناس",
+      "take": "c11_m.wav"
+    },
+    {
+      "i": 12,
+      "start": 24.8,
+      "end": 26.4,
+      "speaker": "m",
+      "text": "وافتراضاتهم",
+      "take": "c12_m.wav"
+    },
+    {
+      "i": 13,
+      "start": 27.4,
+      "end": 29.0,
+      "speaker": "m",
+      "text": "هي اللي بتوجع القلب",
+      "take": "c13_m.wav"
+    },
+    {
+      "i": 14,
+      "start": 29.4,
+      "end": 30.5,
+      "speaker": "f",
+      "text": "عايزاك...",
+      "take": "c14_f.wav"
+    },
+    {
+      "i": 15,
+      "start": 31.1,
+      "end": 32.7,
+      "speaker": "f",
+      "text": "مستلقي على ضهرك",
+      "take": "c15_f.wav"
+    },
+    {
+      "i": 16,
+      "start": 33.0,
+      "end": 34.0,
+      "speaker": "f",
+      "text": "عاجز",
+      "take": "c16_f.wav"
+    },
+    {
+      "i": 17,
+      "start": 34.7,
+      "end": 35.6,
+      "speaker": "f",
+      "text": "رقيق",
+      "take": "c17_f.wav"
+    },
+    {
+      "i": 18,
+      "start": 36.5,
+      "end": 37.6,
+      "speaker": "f",
+      "text": "مكشوف",
+      "take": "c18_f.wav"
+    },
+    {
+      "i": 19,
+      "start": 38.1,
+      "end": 39.8,
+      "speaker": "f",
+      "text": "ومفيش قدامك غيري يهتم بيك",
+      "take": "c19_f.wav"
+    },
+    {
+      "i": 20,
+      "start": 41.1,
+      "end": 43.5,
+      "speaker": "f",
+      "text": "وبعدين عايزاك تستعيد قوتك من تاني",
+      "take": "c20_f.wav"
+    },
+    {
+      "i": 21,
+      "start": 46.4,
+      "end": 49.2,
+      "speaker": "m",
+      "text": "بسمع صوتك بينده على اسمي في أحلامي",
+      "take": "c21_m.wav"
+    },
+    {
+      "i": 22,
+      "start": 49.2,
+      "end": 50.9,
+      "speaker": "m",
+      "text": "ولما بصحى",
+      "take": "c22_m.wav"
+    },
+    {
+      "i": 23,
+      "start": 50.9,
+      "end": 53.4,
+      "speaker": "m",
+      "text": "بلاقي الدموع على وشي",
+      "take": null
+    },
+    {
+      "i": 24,
+      "start": 54.8,
+      "end": 55.4,
+      "speaker": "m",
+      "text": "وحشتيني.",
+      "take": null
+    }
+  ],
+  "voices": {
+    "m": "voice-05 (مصري عميق)",
+    "f": "voice-06 (مصرية)"
+  },
+  "render": {
+    "sample_rate": 44100,
+    "loudness": "-16 LUFS",
+    "max_tempo": 1.12
+  }
+}

@@ -26,16 +26,34 @@ import numpy as np
 import soundfile as sf
 
 from youtube_auto_dub.ffmpeg_bin import ensure_ffmpeg_on_path, ffmpeg_exe
+from youtube_auto_dub.project_dirs import load_or_create
 from youtube_auto_dub.stem_split import decode_stereo, split_center
 
 ROOT = Path(__file__).resolve().parent.parent
-CLIP = ROOT / "samples" / "phantom"
-SRC = ROOT / "inbox" / (
-    "Phantom Threadفنانٌ في الحياكة يريد امرأةً تلهمه من دون أن تربك نظامه،"
-    " وهي ترفض أن تبقى مجرد مُ.mp4"
-)
-OUT_VIDEO = ROOT / "samples" / "Phantom_Thread_Pro_DUB.mp4"
-OUT_SRT = OUT_VIDEO.with_suffix(".srt")
+
+# Everything for this dub lives in one project folder.
+PROJECT = load_or_create(
+    "Phantom-Thread", title="Phantom Thread — دبلجة مصرية", lang="ar", dialect="eg"
+).ensure_dirs()
+
+CLIP = PROJECT.voices_dir
+WORK = PROJECT.work_dir
+OUT_VIDEO = PROJECT.video_path
+OUT_SRT = PROJECT.srt_path
+
+
+def _source() -> Path:
+    """The clip to dub: the project's own copy, else whatever is in inbox/."""
+    local = sorted(PROJECT.source_dir.glob("*.mp4"))
+    if local:
+        return local[0]
+    inbox = sorted((ROOT / "inbox").glob("*.mp4"))
+    if inbox:
+        return inbox[0]
+    raise SystemExit("no source clip: put one in the project's source/ folder")
+
+
+SRC = _source()
 
 SR = 44100
 MAX_TEMPO = 1.12        # gentler than before; past this the read sounds rushed
@@ -129,8 +147,8 @@ def _atempo_chain(factor: float) -> str:
 
 def retime(audio: np.ndarray, factor: float) -> np.ndarray:
     """Speed a clip up by ``factor`` without changing its pitch."""
-    tmp_in = CLIP / "_retime_in.wav"
-    tmp_out = CLIP / "_retime_out.wav"
+    tmp_in = WORK / "_retime_in.wav"
+    tmp_out = WORK / "_retime_out.wav"
     sf.write(tmp_in, audio, SR)
     subprocess.run(
         [ffmpeg_exe(), "-y", "-i", str(tmp_in), "-filter:a", _atempo_chain(factor),
@@ -296,8 +314,8 @@ def main() -> None:
     if peak > 0.99:
         mixed *= 0.99 / peak
 
-    raw = CLIP / "mix_raw.wav"
-    final = CLIP / "mix_final.wav"
+    raw = WORK / "mix_raw.wav"
+    final = WORK / "mix_final.wav"
     sf.write(raw, mixed, SR)
     subprocess.run(
         [ffmpeg_exe(), "-y", "-i", str(raw),

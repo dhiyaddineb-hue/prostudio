@@ -21,6 +21,7 @@ from youtube_auto_dub.core import run as run_pipeline
 from youtube_auto_dub.ffmpeg_bin import ensure_ffmpeg_on_path
 from youtube_auto_dub.models import LANG_MAP_PATH, OUTPUT_DIR, TEMP_DIR
 from youtube_auto_dub.pipeline_args import build_args
+from youtube_auto_dub.project_dirs import PROJECTS_DIR, list_projects
 from youtube_auto_dub.runtime import capabilities, have_offline_asr, have_whisper
 from youtube_auto_dub.voice import list_voices, load_lang_map, pick_voice
 
@@ -157,6 +158,50 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 SAMPLES_DIR = ROOT.parent / "samples"
 if SAMPLES_DIR.is_dir():
     app.mount("/samples", StaticFiles(directory=SAMPLES_DIR), name="samples")
+
+
+if PROJECTS_DIR.is_dir():
+    app.mount("/projects", StaticFiles(directory=PROJECTS_DIR), name="projects")
+
+
+@app.get("/api/projects")
+async def api_projects() -> List[Dict[str, Any]]:
+    """Every dub project on disk, newest first."""
+    items = list_projects()
+    for item in items:
+        if item.get("rendered"):
+            item["watch"] = f"/watch/p/{item['slug']}"
+            item["video"] = f"/projects/{item['slug']}/output/{item['slug']}.mp4"
+    return items
+
+
+@app.get("/watch/p/{slug}", response_class=HTMLResponse)
+async def watch_project(slug: str) -> HTMLResponse:
+    """Player for a project's finished render."""
+    safe = Path(slug).name
+    video = PROJECTS_DIR / safe / "output" / f"{safe}.mp4"
+    if not video.exists():
+        raise HTTPException(404, "Not rendered yet")
+    subs = video.with_suffix(".srt")
+    track = (
+        f'<track kind="subtitles" srclang="ar" label="العربية" default '
+        f'src="/projects/{safe}/output/{subs.name}">' if subs.exists() else ""
+    )
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{safe}</title>
+<style>
+ body{{margin:0;background:#07080c;color:#f4efe4;font-family:system-ui,sans-serif;
+      display:grid;place-items:center;min-height:100vh;gap:14px}}
+ video{{max-width:min(94vw,460px);max-height:78vh;border-radius:14px;
+      box-shadow:0 24px 60px rgba(0,0,0,.5)}}
+ a{{color:#e8b86d}}
+</style></head><body>
+<video controls autoplay playsinline
+       src="/projects/{safe}/output/{video.name}">{track}</video>
+<p><a href="/projects/{safe}/output/{video.name}" download>تحميل</a></p>
+</body></html>""")
 
 
 @app.get("/watch/{name}", response_class=HTMLResponse)
