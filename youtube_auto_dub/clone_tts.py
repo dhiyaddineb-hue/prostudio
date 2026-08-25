@@ -7,6 +7,26 @@ stem, so a dubbed line is spoken in the original actor's own voice.
 The weights live on HuggingFace. Where that host is unreachable this module
 reports ``available() is False`` and the caller falls back to the acoustic
 conversion in ``voice_profile`` — the pipeline never hard-fails on it.
+
+Searching GitHub for weights instead
+------------------------------------
+GitHub *is* reachable here when HuggingFace is not, and a few projects commit
+their model weights straight into the repo, which codeload.github.com will then
+serve as a tarball. That route works — ``ramishi/vocale-tts-cli`` ships 186 MB
+of voice-cloning ONNX and downloads fine.
+
+It does not solve Arabic. Its tokenizer holds 4000 pieces, of which 66 contain
+Arabic script and only 21 are longer than a single character, so Arabic is
+spelled out letter by letter: the model is English. The mainstream engines
+(F5-TTS, OpenVoice, Coqui) commit no weights at all, and every Arabic project
+found — including nipponjo/tts_arabic — hosts its weights on HuggingFace.
+
+Note also that GitHub *Release* assets are not a way around this: they redirect
+to release-assets.githubusercontent.com, which is blocked even through an
+authenticated ``gh api`` stream. Only in-repo files reachable via codeload work.
+
+If you do point this at a cloning model, mind the licence: the vocale weights
+above are CC BY-NC 4.0 and may not be used commercially.
 """
 
 from __future__ import annotations
