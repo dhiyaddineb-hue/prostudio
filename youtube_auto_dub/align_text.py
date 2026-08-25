@@ -14,6 +14,39 @@ from youtube_auto_dub.models import SubtitleSegment
 
 _SENT_SPLIT = re.compile(r"(?<=[.!?؟。])\s+|\n+")
 
+# Script ranges that identify a language without any model.
+_SCRIPTS = (
+    ("ar", re.compile(r"[\u0600-\u06ff]")),
+    ("he", re.compile(r"[\u0590-\u05ff]")),
+    ("ru", re.compile(r"[\u0400-\u04ff]")),
+    ("el", re.compile(r"[\u0370-\u03ff]")),
+    ("hi", re.compile(r"[\u0900-\u097f]")),
+    ("th", re.compile(r"[\u0e00-\u0e7f]")),
+    ("ko", re.compile(r"[\uac00-\ud7af\u1100-\u11ff]")),
+    ("ja", re.compile(r"[\u3040-\u30ff]")),
+    ("zh", re.compile(r"[\u4e00-\u9fff]")),
+)
+
+
+def guess_language(text: str, default: str = "en") -> str:
+    """Best-effort language id from the dominant script in ``text``.
+
+    Latin-script languages all collapse to ``default``; the point is only to
+    stop a pasted Arabic transcript from being labelled English and then
+    "translated" into itself.
+    """
+    if not text or not text.strip():
+        return default
+    best, best_n = default, 0
+    for code, pattern in _SCRIPTS:
+        n = len(pattern.findall(text))
+        if n > best_n:
+            best, best_n = code, n
+    # Japanese kana beat Han characters when both are present.
+    if best == "zh" and re.search(r"[\u3040-\u30ff]", text):
+        best = "ja"
+    return best if best_n else default
+
 
 def split_sentences(text: str) -> List[str]:
     parts = [p.strip() for p in _SENT_SPLIT.split(text.strip()) if p.strip()]

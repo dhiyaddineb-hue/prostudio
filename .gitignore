@@ -13,7 +13,7 @@ build/
 # Project runtime
 .cache/
 temp/
-output/*
+output/
 uploads/
 inbox/*
 !inbox/.gitkeep
@@ -26,8 +26,6 @@ samples/*.wav
 !samples/*.mp4
 !samples/*.srt
 !samples/*.png
-!output/*.mp4
-!output/*.srt
 *.webm
 *.mkv
 

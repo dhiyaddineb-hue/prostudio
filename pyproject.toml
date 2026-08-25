@@ -25,6 +25,7 @@ dependencies = [
     "uvicorn>=0.30",
     "python-multipart>=0.0.9",
     "aiofiles>=24.1",
+    "espeakng-loader>=0.2",
 ]
 
 [project.optional-dependencies]

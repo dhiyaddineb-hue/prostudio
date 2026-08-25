@@ -4,9 +4,9 @@ import asyncio
 import logging
 from pathlib import Path
 
-import torch
 from rich.table import Table
 
+from youtube_auto_dub.align_text import guess_language
 from youtube_auto_dub.audio import (
     align_segments,
     finalize_audio,
@@ -24,6 +24,7 @@ from youtube_auto_dub.models import (
     WHISPER_DEFAULT_MODEL,
     SubtitleSegment,
 )
+from youtube_auto_dub.runtime import have_whisper, pick_device
 from youtube_auto_dub.speech import build_hint, transcribe
 from youtube_auto_dub.subs import read_srt
 from youtube_auto_dub.ui import console
@@ -49,7 +50,7 @@ async def run(args, progress=None) -> Path:
     sub_lang = args.lang_sub or base_lang
     dub_lang = args.lang_dub or base_lang
     out_root = Path(args.output_dir) if getattr(args, "output_dir", None) else Path("output")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = pick_device()
     model_name = args.whisper_model or WHISPER_DEFAULT_MODEL
 
     tts_engine = getattr(args, "tts_engine", DEFAULT_TTS_ENGINE)
@@ -100,7 +101,10 @@ async def run(args, progress=None) -> Path:
             project.segments = segments_from_transcript(
                 transcript, project.audio_path, duration=duration
             )
-            lang_detected = getattr(args, "source_lang", None) or "en"
+            lang_detected = getattr(args, "source_lang", None) or guess_language(
+                transcript
+            )
+            console.step(f"Source language: {lang_detected}")
         elif cached and not getattr(args, "refresh", False):
             console.step("Using cached transcription")
             project.segments = [
@@ -110,6 +114,11 @@ async def run(args, progress=None) -> Path:
             ]
             lang_detected = cached[0].get("lang")
         else:
+            if not have_whisper():
+                raise RuntimeError(
+                    "التفريغ الآلي غير متاح (faster-whisper غير مثبّت). "
+                    "ثبّت الحزمة أو الصق نص الفيديو في خانة النص."
+                )
             hint = build_hint(project.metadata)
             if hint:
                 console.step("Prompting with video metadata")
@@ -242,12 +251,15 @@ async def run(args, progress=None) -> Path:
                 src_dur = float(project.metadata.duration) if project.metadata else 0.0
                 raw_mix = TEMP_DIR / "dub_raw.wav"
                 align_segments(info_list, src_dur, raw_mix)
+                ambient_gain = getattr(
+                    args, "ambient_gain", AUDIO_DEFAULT_AMBIENT_GAIN
+                )
                 finalize_audio(
                     raw_mix, project.audio_path,
                     project.dub_audio_path,
                     match_loudness=True,
-                    mix_ambient=False,
-                    ambient_gain=0.0,
+                    mix_ambient=keep_bg,
+                    ambient_gain=ambient_gain if keep_bg else 0.0,
                 )
             else:
                 overlay_dub(project.audio_path, project.segments,

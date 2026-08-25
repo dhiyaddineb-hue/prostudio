@@ -21,6 +21,7 @@ from youtube_auto_dub.core import run as run_pipeline
 from youtube_auto_dub.ffmpeg_bin import ensure_ffmpeg_on_path
 from youtube_auto_dub.models import LANG_MAP_PATH, OUTPUT_DIR, TEMP_DIR
 from youtube_auto_dub.pipeline_args import build_args
+from youtube_auto_dub.runtime import capabilities, have_whisper
 from youtube_auto_dub.voice import list_voices, load_lang_map, pick_voice
 
 ROOT = Path(__file__).resolve().parent
@@ -161,6 +162,35 @@ DEMO_VIDEO = next(
 )
 DEMO_SRT = DEMO_VIDEO.with_suffix(".srt")
 DEMO_SOURCE = ROOT.parent / "samples" / "prostudio_en.mp4"
+DEMO_SCRIPT = (
+    "Welcome to ProStudio. This short film shows automatic video dubbing. "
+    "First we transcribe the speech. Then we translate the meaning into Arabic. "
+    "Finally we generate a new voice and sync it with the picture."
+)
+
+
+def inspect_transcript(
+    transcript: str, source: str, whisper: Optional[bool] = None
+) -> str:
+    """Resolve the transcript to dub with.
+
+    A pasted transcript always wins. The bundled demo narration stands in only
+    for the bundled demo clip — never for a video the user supplied. When there
+    is no transcript and no Whisper, the job cannot proceed.
+    """
+    text = (transcript or "").strip()
+    if text:
+        return text
+    if source and source == str(DEMO_SOURCE):
+        return DEMO_SCRIPT
+    if whisper is None:
+        whisper = have_whisper()
+    if not whisper:
+        raise RuntimeError(
+            "لا يتوفر التفريغ الآلي (Whisper غير مثبّت). "
+            "الصق نص الفيديو في خانة النص ثم أعد المحاولة."
+        )
+    return ""
 
 
 def seed_demo_job() -> None:
@@ -204,13 +234,12 @@ async def index() -> FileResponse:
 
 @app.get("/api/health")
 async def health() -> Dict[str, Any]:
-    ffmpeg_ok = True
     try:
         ensure_ffmpeg_on_path()
     except Exception as exc:
-        ffmpeg_ok = False
         return {"ok": False, "ffmpeg": False, "error": str(exc)}
-    return {"ok": True, "ffmpeg": ffmpeg_ok, "jobs": len(jobs)}
+    caps = capabilities()
+    return {"ok": caps["ffmpeg"], "jobs": len(jobs), **caps}
 
 
 @app.get("/api/meta")
@@ -361,6 +390,7 @@ async def create_job(
     voice: str = Form(""),
     bg_music: str = Form("true"),
     transcript: str = Form(""),
+    source_lang: str = Form(""),
     file: Optional[UploadFile] = File(None),
 ) -> Dict[str, Any]:
     source = (url or "").strip()
@@ -394,6 +424,7 @@ async def create_job(
         "voice": voice or None,
         "bg_music": bg_music.lower() in {"1", "true", "yes", "on"},
         "transcript": (transcript or "").strip(),
+        "source_lang": (source_lang or "").strip() or None,
         "title": Path(source).name if saved_upload else url,
         "output_path": None,
         "output_name": None,
@@ -428,12 +459,9 @@ async def _run_job(job_id: str) -> None:
             )
 
         try:
-            demo_script = (
-                "Welcome to ProStudio. This short film shows automatic video dubbing. "
-                "First we transcribe the speech. Then we translate the meaning into Arabic. "
-                "Finally we generate a new voice and sync it with the picture."
+            transcript = inspect_transcript(
+                job.get("transcript") or "", job.get("source") or ""
             )
-            transcript = (job.get("transcript") or "").strip() or demo_script
             job["transcript"] = transcript
             args = build_args(
                 job["source"],
@@ -445,7 +473,7 @@ async def _run_job(job_id: str) -> None:
                 bg_music=job["bg_music"],
                 output_dir=str(OUTPUT_DIR),
                 transcript=transcript,
-                source_lang="en",
+                source_lang=job.get("source_lang") or None,
             )
             if TEMP_DIR.exists():
                 shutil.rmtree(TEMP_DIR, ignore_errors=True)

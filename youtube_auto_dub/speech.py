@@ -5,8 +5,6 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-import torch
-
 from youtube_auto_dub.ffmpeg_bin import ffmpeg_exe
 from youtube_auto_dub.models import (
     SR_WHISPER,
@@ -24,6 +22,7 @@ from youtube_auto_dub.models import (
     VideoMetadata,
     pick_whisper_compute_type,
 )
+from youtube_auto_dub.runtime import empty_cuda_cache
 from youtube_auto_dub.subs import refine_segments
 
 
@@ -152,7 +151,7 @@ def transcribe(
 
     del pipe
     if device == "cuda":
-        torch.cuda.empty_cache()
+        empty_cuda_cache()
 
     return refine_segments(raw), detected
 

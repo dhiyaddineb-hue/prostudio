@@ -139,14 +139,25 @@ def _inbox_video() -> Optional[Path]:
 
 
 def load_source(url_or_path: str, browser: Optional[str] = None) -> ProjectContext:
-    """Download a YouTube URL, import a local path, or use inbox/ upload."""
+    """Download a YouTube URL, import a local path, or use an inbox/ upload.
+
+    An explicit source always wins. The ``inbox/`` directory is only a
+    convenience for "drop a file in and run" with no arguments — it must never
+    hijack a URL or a path the caller actually asked for.
+    """
+    source = (url_or_path or "").strip()
+
+    if source:
+        if _URL_RE.match(source):
+            return download_project(source, browser)
+        return import_local_video(source)
+
     inbox = _inbox_video()
     if inbox:
         console.step(f"Using uploaded inbox file: {inbox}")
         return import_local_video(inbox)
-    if _URL_RE.match((url_or_path or "").strip()):
-        return download_project(url_or_path.strip(), browser)
-    return import_local_video(url_or_path)
+
+    raise ValueError("No video source given: pass a YouTube URL, a file path, or drop a file in inbox/.")
 
 
 def _normalize_cookie_text(raw: str) -> str:

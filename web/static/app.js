@@ -2,6 +2,7 @@ const $ = (id) => document.getElementById(id);
 
 const state = {
   meta: null,
+  health: null,
   jobId: null,
   locale: "ar",
 };
@@ -67,6 +68,39 @@ async function loadMeta() {
   fillLanguages();
   fillVoices();
   renderStages("queued");
+  await loadHealth();
+}
+
+async function loadHealth() {
+  try {
+    const res = await fetch("/api/health");
+    const health = await res.json();
+    state.health = health;
+    const pill = $("healthPill");
+    const note = $("transcriptNote");
+
+    if (!health.ffmpeg) {
+      pill.className = "pill bad";
+      pill.innerHTML = "<i></i> FFmpeg مفقود";
+    } else if (!health.can_dub) {
+      pill.className = "pill bad";
+      pill.innerHTML = "<i></i> لا يتوفر محرك صوت";
+    } else {
+      const engine = health.edge_tts ? "Edge-TTS" : "eSpeak محلي";
+      pill.className = "pill live";
+      pill.innerHTML = `<i></i> جاهز · ${engine}`;
+    }
+
+    if (health.needs_transcript) {
+      note.textContent =
+        "Whisper غير مثبّت على الخادم — الصق نص الفيديو، وإلا تعذّر التفريغ الآلي.";
+      note.classList.remove("hidden");
+    } else {
+      note.classList.add("hidden");
+    }
+  } catch (err) {
+    logLine(`تعذر فحص حالة الخادم: ${err}`);
+  }
 }
 
 function attachEvents() {
@@ -115,6 +149,11 @@ async function onSubmit(event) {
   const data = new FormData($("dubForm"));
   if (!data.get("url") && !data.get("file")?.name) {
     $("statusLine").textContent = "أدخل رابط يوتيوب أو ارفع ملف فيديو";
+    return;
+  }
+  if (state.health?.needs_transcript && !String(data.get("transcript") || "").trim()) {
+    $("statusLine").textContent =
+      "التفريغ الآلي غير متاح على الخادم — الصق نص الفيديو أولاً.";
     return;
   }
   data.set("bg_music", $("bg_music").checked ? "true" : "false");

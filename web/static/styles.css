@@ -180,3 +180,18 @@ footer a { color: var(--gold); }
   .grid { grid-template-columns: 1fr; }
   .hero, .studio, .result, .top, footer { padding-inline: 18px; }
 }
+
+.pill.bad { color: var(--bad); border-color: rgba(239, 139, 122, .4); }
+.pill.bad i {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--bad); margin-inline-end: 6px;
+  box-shadow: 0 0 0 4px rgba(239, 139, 122, .15);
+}
+.note {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  font-style: normal;
+  color: var(--gold);
+}
+.hidden { display: none !important; }

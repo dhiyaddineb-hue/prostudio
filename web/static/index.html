@@ -24,7 +24,7 @@
       </div>
     </div>
     <nav>
-      <span class="pill live"><i></i> جاهز للتشغيل</span>
+      <span class="pill live" id="healthPill"><i></i> جاهز للتشغيل</span>
       <button type="button" id="langToggle" class="ghost">EN</button>
     </nav>
   </header>
@@ -56,7 +56,8 @@
 
         <label class="field">
           <span data-ar="نص الفيديو (مستحسن — يعمل فوراً بدون Whisper)" data-en="Transcript (recommended — works offline)">نص الفيديو (مستحسن — يعمل فوراً بدون Whisper)</span>
-          <textarea id="transcript" name="transcript" rows="4">Welcome to ProStudio. This short film shows automatic video dubbing. First we transcribe the speech. Then we translate the meaning into Arabic. Finally we generate a new voice and sync it with the picture.</textarea>
+          <textarea id="transcript" name="transcript" rows="4" placeholder="الصق نص الفيديو هنا…"></textarea>
+          <em class="note hidden" id="transcriptNote"></em>
         </label>
 
         <div class="grid">

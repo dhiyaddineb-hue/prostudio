@@ -29,6 +29,7 @@ from youtube_auto_dub.models import (
     VOICE_MIN_FILE_SIZE,
     VOICE_PERSONAS,
 )
+from youtube_auto_dub.runtime import empty_cuda_cache
 from youtube_auto_dub.ui import console
 
 log = logging.getLogger(__name__)
@@ -167,8 +168,7 @@ async def speak_qwen(
             import soundfile as sf
             sf.write(str(dest), audio, SR_TTS)
             del model
-            import torch
-            torch.cuda.empty_cache()
+            empty_cuda_cache()
             if dest.exists() and dest.stat().st_size >= VOICE_MIN_FILE_SIZE:
                 return
             raise RuntimeError("Empty output")
@@ -205,7 +205,6 @@ def resolve_persona(
 
     try:
         import soundfile as sf
-        import torch
         from chatterbox import Chatterbox
     except ImportError:
         raise ImportError("chatterbox-tts required for voice personas")
@@ -217,7 +216,7 @@ def resolve_persona(
     audio = model.design_voice(text=ref, language=lang, instruct=eng_instruct)
     sf.write(wav, audio, SR_TTS)
     del model
-    torch.cuda.empty_cache()
+    empty_cuda_cache()
     return str(wav), ref
 
 
