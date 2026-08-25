@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
-"""Dub the Phantom Thread clip with the approved studio voices.
+"""Dub the Phantom Thread clip over a separated music bed.
 
-The source is a subtitled montage: the script was recovered from the burned-in
-Arabic subtitles, and each line's timing from when that subtitle is on screen.
-Lines are grouped per speaker so each take is delivered as one continuous
-thought instead of chopped per caption.
+Two things make this a real dub rather than a voice-over:
 
-Fitting strategy, in order of preference:
-  1. Keep the take at its natural pace.
-  2. Let it run into the silent gap after its slot (nothing is spoken there).
-  3. Only then apply a mild atempo, capped so the voice never sounds rushed.
+1. **Stem separation.** The original English dialogue is pulled out of the
+   centre channel (``youtube_auto_dub.stem_split``) so the Arabic takes play
+   over score and effects alone, instead of on top of the English performance.
+
+2. **Measured casting.** Each take is pitch-shifted toward the median F0 of the
+   *original* actor in that window, so the dub tracks the performance instead
+   of sounding like a narrator. The shift is capped, skipped on lines too short
+   to measure, and reverted if it does not actually move toward the actor.
+
+Speaker assignment was confirmed against the picture, not pitch alone: the
+centre stem still carries score, and an early pass mis-cast the man at 22-29s
+as a woman on a bad reading.
+
+Timing comes from the burned-in subtitles: the script was read off the frames
+and each line's slot is when its caption is on screen.
 """
 
 from __future__ import annotations
@@ -21,6 +29,7 @@ import numpy as np
 import soundfile as sf
 
 from youtube_auto_dub.ffmpeg_bin import ensure_ffmpeg_on_path, ffmpeg_exe
+from youtube_auto_dub.stem_split import decode_stereo, split_center
 
 ROOT = Path(__file__).resolve().parent.parent
 CLIP = ROOT / "samples" / "phantom"
@@ -31,12 +40,14 @@ SRC = ROOT / "inbox" / (
 OUT_VIDEO = ROOT / "samples" / "Phantom_Thread_Pro_DUB.mp4"
 OUT_SRT = OUT_VIDEO.with_suffix(".srt")
 
-SR = 24000
-MAX_TEMPO = 1.16      # beyond this the read starts to sound hurried
-DUCK_DB = -15.0       # how far the original bed drops under the dialogue
-DIALOG_LEAD_DB = 10.0  # how far dialogue must sit above the ducked score
+SR = 44100
+MAX_TEMPO = 1.16        # past this the read sounds hurried
+DIALOG_LEAD_DB = 11.0   # dialogue level above the residual score
+RESIDUAL_DUCK_DB = -9.0  # gentle duck of the music under speech
+MAX_SEMITONES = 2.0     # cap on pitch matching, to protect voice quality
+MIN_PITCH_MATCH_SEC = 2.5  # shorter lines give an unreliable F0 median
 
-# (take, slot start, hard limit before the next voice enters)
+# take, slot start, hard limit before the next voice enters
 GROUPS = [
     ("g1_f", 0.40, 2.30),
     ("g2_m", 2.40, 13.30),
@@ -48,7 +59,6 @@ GROUPS = [
     ("g8_m", 46.40, 58.60),
 ]
 
-# Per-caption text for the sidecar SRT.
 CUES = [
     (0.40, 1.90, "لماذا لستَ متزوّجًا؟"),
     (2.40, 4.70, "أنا على يقين بأن الزواج لم يُكتب لي أبدًا"),
@@ -97,26 +107,54 @@ def trim(audio: np.ndarray, floor_db: float = -45.0) -> np.ndarray:
     loud = np.where(e > 10 ** (floor_db / 20.0))[0]
     if loud.size == 0:
         return audio
-    a = max(int(loud[0]) - 2, 0) * fr
-    b = min(int(loud[-1]) + 3, n) * fr
-    return audio[a:b]
+    return audio[max(int(loud[0]) - 2, 0) * fr: min(int(loud[-1]) + 3, n) * fr]
 
 
-def tempo(path: Path, factor: float, dst: Path) -> np.ndarray:
-    chain, r = [], factor
-    while r > 2.0:
-        chain.append("atempo=2.0")
-        r /= 2.0
-    while r < 0.5:
-        chain.append("atempo=0.5")
-        r /= 0.5
-    chain.append(f"atempo={r:.6f}")
+def _filter(src: Path, chain: str, dst: Path) -> np.ndarray:
     subprocess.run(
-        [ffmpeg_exe(), "-y", "-i", str(path), "-filter:a", ",".join(chain),
+        [ffmpeg_exe(), "-y", "-i", str(src), "-filter:a", chain,
          "-ar", str(SR), "-ac", "1", str(dst)],
         capture_output=True, check=True,
     )
     return sf.read(str(dst), dtype="float32")[0]
+
+
+def probe_rate(path: Path) -> int:
+    """Sample rate of a media file, read from ffmpeg's own report."""
+    import re
+
+    res = subprocess.run([ffmpeg_exe(), "-i", str(path)], capture_output=True, text=True)
+    m = re.search(r"(\d+) Hz", res.stderr or "")
+    return int(m.group(1)) if m else SR
+
+
+def _atempo_chain(factor: float) -> str:
+    parts, r = [], factor
+    while r > 2.0:
+        parts.append("atempo=2.0")
+        r /= 2.0
+    while r < 0.5:
+        parts.append("atempo=0.5")
+        r /= 0.5
+    parts.append(f"atempo={r:.6f}")
+    return ",".join(parts)
+
+
+def shift_pitch(src: Path, semitones: float, dst: Path) -> np.ndarray:
+    """Resample-and-retime: changes pitch while preserving duration.
+
+    ``asetrate`` reinterprets the stream's *own* sample rate, so the multiplier
+    must be based on the file's rate — using a fixed constant would also
+    resample the clip and wreck its duration. It shortens audio by ``ratio``,
+    so tempo is divided by the same ratio to restore the original length.
+    """
+    ratio = 2 ** (semitones / 12.0)
+    src_sr = probe_rate(src)
+    chain = (
+        f"asetrate={int(round(src_sr * ratio))},aresample={SR},"
+        + _atempo_chain(1.0 / ratio)
+    )
+    return _filter(src, chain, dst)
 
 
 def fade(a: np.ndarray, ms: int = 14) -> np.ndarray:
@@ -130,6 +168,79 @@ def fade(a: np.ndarray, ms: int = 14) -> np.ndarray:
     return out
 
 
+def median_f0(seg: np.ndarray, sr: int = SR) -> float | None:
+    """Median fundamental of a window.
+
+    Uses a longer analysis frame plus cumulative mean normalisation (the YIN
+    idea) and picks the *first* strong dip rather than the global best. Plain
+    autocorrelation happily locks onto a harmonic, which on short lines made
+    a downward shift look like an upward one.
+    """
+    w, h = int(sr * 0.06), int(sr * 0.02)
+    lo, hi = int(sr / 300), int(sr / 70)
+    vals = []
+    for i in range(max((len(seg) - w) // h, 0)):
+        s = seg[i * h: i * h + w]
+        if np.sqrt(np.mean(s ** 2) + 1e-12) < 1e-3:
+            continue
+        s = s - s.mean()
+        n = len(s)
+        ac = np.correlate(s, s, "full")[n - 1:]
+        energy = np.concatenate(([np.dot(s, s)], np.cumsum(s[::-1] ** 2)[::-1][1:]))
+        # difference function, then cumulative mean normalisation
+        d = energy[0] + energy - 2 * ac[: len(energy)]
+        d = d[: hi + 1]
+        if len(d) <= lo + 2:
+            continue
+        cm = np.ones_like(d)
+        run = np.cumsum(d[1:])
+        idx = np.arange(1, len(d))
+        cm[1:] = d[1:] * idx / np.maximum(run, 1e-12)
+        window = cm[lo:hi]
+        if window.size == 0:
+            continue
+        below = np.where(window < 0.25)[0]
+        peak = lo + int(below[0] if below.size else np.argmin(window))
+        if cm[peak] >= 0.6:
+            continue
+        # parabolic refinement around the chosen dip
+        refined = float(peak)
+        if 0 < peak < len(d) - 1:
+            a, b, c = d[peak - 1], d[peak], d[peak + 1]
+            denom = a - 2 * b + c
+            if abs(denom) > 1e-12:
+                refined = peak + 0.5 * float(a - c) / float(denom)
+        if refined > 0:
+            vals.append(sr / refined)
+    return float(np.median(vals)) if len(vals) >= 6 else None
+
+
+def voiced_f0(seg: np.ndarray, sr: int = SR, keep: float = 0.35) -> float | None:
+    """F0 of the loudest, most speech-like part of a separated stem.
+
+    The centre-channel stem still carries some score, and quiet frames are
+    mostly that residue. Restricting the estimate to the strongest frames keeps
+    the music from dragging the median off the actor's real pitch.
+    """
+    frame = int(sr * 0.06)
+    hop = int(sr * 0.03)
+    count = max((len(seg) - frame) // hop, 0)
+    if count < 4:
+        return None
+    energies = np.array([
+        np.sqrt(np.mean(seg[i * hop: i * hop + frame] ** 2) + 1e-12)
+        for i in range(count)
+    ])
+    cutoff = np.quantile(energies, 1.0 - keep)
+    loud = [i for i in range(count) if energies[i] >= cutoff]
+    if not loud:
+        return None
+    # Concatenate the loud frames into one signal: the estimator needs a run of
+    # audio, not isolated 60 ms slices.
+    voiced = np.concatenate([seg[i * hop: i * hop + frame] for i in loud])
+    return median_f0(voiced, sr)
+
+
 def stamp(sec: float) -> str:
     h, rem = divmod(sec, 3600)
     m, s = divmod(rem, 60)
@@ -141,8 +252,11 @@ def main() -> None:
     if not SRC.exists():
         raise SystemExit(f"source clip missing: {SRC}")
 
-    bed = decode(SRC)
-    total = len(bed)
+    print("separating stems…")
+    left, right = decode_stereo(SRC, SR)
+    original_voice, music = split_center(left, right, SR)
+    total = len(music)
+
     voice = np.zeros(total + SR, dtype=np.float32)
     gate = np.zeros(total + SR, dtype=np.float32)
 
@@ -150,50 +264,70 @@ def main() -> None:
         take = CLIP / f"{name}.mp3"
         if not take.exists():
             raise SystemExit(f"missing take: {take}")
+
+        # Cast check: match this take to the actor actually speaking here.
+        actor_f0 = voiced_f0(original_voice[int(start * SR): int(limit * SR)])
+        work = take
         audio = trim(decode(take))
+        notes = []
+
+        take_f0 = median_f0(audio)
+        # Both estimates must be trustworthy, and the correction must be
+        # plausible. A very short line yields a noisy median, and acting on it
+        # would push the voice the wrong way.
+        if actor_f0 and take_f0 and len(audio) / SR >= MIN_PITCH_MATCH_SEC:
+            semis = 12.0 * np.log2(actor_f0 / take_f0)
+            if abs(semis) > MAX_SEMITONES * 2:
+                notes.append(f"pitch skipped (implausible {semis:+.1f}st)")
+            else:
+                semis = float(np.clip(semis, -MAX_SEMITONES, MAX_SEMITONES))
+                if abs(semis) >= 0.25:
+                    work = CLIP / f"{name}_pitch.wav"
+                    shifted = trim(shift_pitch(take, semis, work))
+                    got = median_f0(shifted)
+                    # Only keep the shift if it actually moved toward the actor.
+                    if got and abs(got - actor_f0) < abs(take_f0 - actor_f0):
+                        audio = shifted
+                        notes.append(f"pitch {semis:+.2f}st {take_f0:.0f}->{got:.0f}Hz")
+                    else:
+                        work = take
+                        notes.append("pitch reverted (no improvement)")
+        elif actor_f0:
+            notes.append("pitch skipped (line too short)")
+
         budget = limit - start
         dur = len(audio) / SR
-
         if dur > budget:
             factor = min(dur / budget, MAX_TEMPO)
-            audio = trim(tempo(take, factor, CLIP / f"{name}_fit.wav"))
+            audio = trim(_filter(work, _atempo_chain(factor), CLIP / f"{name}_fit.wav"))
             dur = len(audio) / SR
-            note = f"atempo x{factor:.3f}"
-            if dur > budget:  # still long: allow the tail to breathe past the limit
-                note += f" (+{dur - budget:.2f}s tail)"
-        else:
-            note = "natural"
+            notes.append(f"atempo x{factor:.3f}")
 
         audio = fade(audio)
         at = int(start * SR)
         end = min(at + len(audio), len(voice))
         voice[at:end] += audio[: end - at]
         gate[at:end] = 1.0
-        print(f"{name}: {dur:5.2f}s into {budget:5.2f}s  {note}")
+        print(f"  {name}: {dur:5.2f}s / {budget:5.2f}s  {'; '.join(notes) or 'natural'}")
 
     voice = voice[:total]
     gate = gate[:total]
 
-    # Smooth the duck so the bed dips around speech rather than stepping.
+    # Duck what little score sits under the dialogue, then set the voice
+    # against that ducked bed so the lead is exact.
     win = int(SR * 0.25)
-    kernel = np.ones(win, dtype=np.float32) / win
-    smooth = np.convolve(gate, kernel, mode="same")
-    smooth = np.clip(smooth, 0.0, 1.0)
-    duck = 10 ** (DUCK_DB / 20.0)
-    ducked = bed * (1.0 - (1.0 - duck) * smooth)
+    smooth = np.clip(
+        np.convolve(gate, np.ones(win, dtype=np.float32) / win, mode="same"), 0.0, 1.0
+    )
+    bed = music * (1.0 - (1.0 - 10 ** (RESIDUAL_DUCK_DB / 20.0)) * smooth)
 
-    # Set the dialogue level against the *ducked* score it will actually play
-    # over, rather than hoping a fixed gain lands in the right place.
     speaking = gate > 0
-    voice_rms = float(np.sqrt(np.mean(voice[speaking] ** 2) + 1e-12))
-    bed_rms = float(np.sqrt(np.mean(ducked[speaking] ** 2) + 1e-12))
-    if voice_rms > 0:
-        target = bed_rms * (10 ** (DIALOG_LEAD_DB / 20.0))
-        voice *= min(target / voice_rms, 24.0)
-        print(f"dialogue lead: {20 * np.log10(target / bed_rms):+.1f} dB over score")
+    v_rms = float(np.sqrt(np.mean(voice[speaking] ** 2) + 1e-12))
+    b_rms = float(np.sqrt(np.mean(bed[speaking] ** 2) + 1e-12))
+    if v_rms > 0:
+        voice *= min(b_rms * (10 ** (DIALOG_LEAD_DB / 20.0)) / v_rms, 40.0)
 
-    mixed = ducked + voice
-
+    mixed = bed + voice
     peak = float(np.max(np.abs(mixed)))
     if peak > 0.99:
         mixed *= 0.99 / peak
@@ -216,6 +350,10 @@ def main() -> None:
         check=True, capture_output=True,
     )
     final.unlink(missing_ok=True)
+    for leftover in CLIP.glob("*_pitch.wav"):
+        leftover.unlink(missing_ok=True)
+    for leftover in CLIP.glob("*_fit.wav"):
+        leftover.unlink(missing_ok=True)
 
     with OUT_SRT.open("w", encoding="utf-8") as fh:
         for i, (s, e, t) in enumerate(CUES, 1):
