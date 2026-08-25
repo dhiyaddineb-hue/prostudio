@@ -124,9 +124,27 @@ def import_local_video(path: Union[str, Path], title: Optional[str] = None) -> P
     return project
 
 
+def _inbox_video() -> Optional[Path]:
+    roots = [Path("inbox"), Path.cwd() / "inbox"]
+    for root in roots:
+        if not root.is_dir():
+            continue
+        videos = []
+        for ext in (".mp4", ".mkv", ".webm", ".mov", ".m4v"):
+            videos.extend(root.glob(f"*{ext}"))
+        videos = [p for p in videos if p.stat().st_size > 1024]
+        if videos:
+            return sorted(videos, key=lambda p: p.stat().st_mtime, reverse=True)[0]
+    return None
+
+
 def load_source(url_or_path: str, browser: Optional[str] = None) -> ProjectContext:
-    """Download a YouTube URL or import a local video path."""
-    if _URL_RE.match(url_or_path.strip()):
+    """Download a YouTube URL, import a local path, or use inbox/ upload."""
+    inbox = _inbox_video()
+    if inbox:
+        console.step(f"Using uploaded inbox file: {inbox}")
+        return import_local_video(inbox)
+    if _URL_RE.match((url_or_path or "").strip()):
         return download_project(url_or_path.strip(), browser)
     return import_local_video(url_or_path)
 
