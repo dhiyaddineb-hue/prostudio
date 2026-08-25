@@ -20,3 +20,4 @@ praat-parselmouth
 # اختياري: استنساخ عصبي (يحتاج أوزاناً من HuggingFace)
 # f5-tts
 pocketsphinx
+piper-tts

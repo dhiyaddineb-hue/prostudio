@@ -10,6 +10,7 @@ from typing import Optional
 
 import edge_tts
 
+from youtube_auto_dub.arabic_text import prepare as prepare_arabic
 from youtube_auto_dub.ffmpeg_bin import ffmpeg_exe
 from youtube_auto_dub.models import (
     EDGE_TTS_RETRIES,
@@ -107,6 +108,10 @@ async def speak_edge(
         retries = EDGE_TTS_RETRIES
     if timeout is None:
         timeout = EDGE_TTS_TIMEOUT
+
+    # Undiacritised Arabic makes a synthesiser guess at vowels; mark it up first.
+    if (lang or "").startswith("ar"):
+        text = prepare_arabic(text)
 
     # An approved studio take always beats a synthesised one.
     try:
