@@ -198,28 +198,27 @@ def align_segments(
             continue
         start_samp = int(s["start"] * sr)
         is_last = i + 1 >= len(valid)
-        budget = max(
-            (valid[i + 1]["start"] - s["start"] - gap_ms / 1000) if not is_last
-            else (source_duration - s["start"]),
-            s.get("target_dur", actual),
+        slot = (
+            (valid[i + 1]["start"] - s["start"] - gap_ms / 1000)
+            if not is_last
+            else (source_duration - s["start"])
         )
+        budget = max(slot, 0.35)
         ratio = actual / budget
 
-        if mode == "auto":
-            if ratio > TEMPO_OVERBUDGET_RATIO:
-                audio = _stretch(s["wav_path"], min(ratio, max_speed),
-                                 Path(str(s["wav_path"]).replace(".wav", "_sped.wav")), sr)
-            elif ratio < TEMPO_UNDERBUDGET_RATIO:
-                target = max(ratio / TEMPO_SLOWDOWN_DIVISOR, TEMPO_SLOWDOWN_FLOOR)
-                if target < 0.95:
-                    audio = _stretch(s["wav_path"], target,
-                                     Path(str(s["wav_path"]).replace(".wav", "_slow.wav")), sr)
-                else:
-                    audio = raw
-            else:
-                audio = raw
+        if mode == "auto" and ratio > TEMPO_OVERBUDGET_RATIO:
+            audio = _stretch(
+                s["wav_path"],
+                min(ratio, max_speed),
+                Path(str(s["wav_path"]).replace(".wav", "_sped.wav")),
+                sr,
+            )
         else:
             audio = raw
+        # Never play past the next line.
+        max_samples = max(int(budget * sr), 1)
+        if len(audio) > max_samples:
+            audio = audio[:_find_trim_point(audio, sr, max_samples)]
 
         if is_last:
             clip = int((budget + tail) * sr)
@@ -354,7 +353,7 @@ def render_video(
     dub_audio_path: Optional[Path],
     output_path: Path,
 ):
-    cmd = ["ffmpeg", "-y", "-i", str(video_path)]
+    cmd = [ffmpeg_exe(), "-y", "-i", str(video_path)]
     if dub_audio_path:
         cmd.extend(["-i", str(dub_audio_path)])
     vf = []

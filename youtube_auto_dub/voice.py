@@ -108,7 +108,8 @@ async def speak_edge(
     last = None
     for attempt in range(retries + 1):
         try:
-            c = edge_tts.Communicate(text, voice)
+            rate = "-8%" if (lang or "").startswith("ar") else "+0%"
+            c = edge_tts.Communicate(text, voice, rate=rate)
             await asyncio.wait_for(c.save(str(dest)), timeout=timeout)
             if dest.exists() and dest.stat().st_size >= VOICE_MIN_FILE_SIZE:
                 return

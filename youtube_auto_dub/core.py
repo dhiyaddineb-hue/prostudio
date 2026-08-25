@@ -235,7 +235,7 @@ async def run(args, progress=None) -> Path:
                         tts_dur = len(sf.read(seg.tts_audio_path, dtype="float32")[0]) / SR_TTS
                     info_list.append({
                         "start": seg.start,
-                        "target_dur": tts_dur,
+                        "target_dur": max(seg.duration, 0.35),
                         "wav_path": seg.tts_audio_path,
                     })
 
@@ -246,8 +246,8 @@ async def run(args, progress=None) -> Path:
                     raw_mix, project.audio_path,
                     project.dub_audio_path,
                     match_loudness=True,
-                    mix_ambient=keep_bg,
-                    ambient_gain=AUDIO_DEFAULT_AMBIENT_GAIN if keep_bg else 0.0,
+                    mix_ambient=False,
+                    ambient_gain=0.0,
                 )
             else:
                 overlay_dub(project.audio_path, project.segments,
@@ -274,7 +274,7 @@ async def run(args, progress=None) -> Path:
 
         render_video(
             video_path=project.video_path,
-            subtitle_path=project.subtitle_path if args.mode in ("sub", "both") else None,
+            subtitle_path=None,
             dub_audio_path=project.dub_audio_path if args.mode in ("dub", "both") else None,
             output_path=out,
         )
