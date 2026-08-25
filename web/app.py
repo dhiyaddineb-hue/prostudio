@@ -152,6 +152,40 @@ app.add_middleware(
 )
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
+# Serve finished renders straight from samples/ so a dub can be watched or
+# shared by URL without going through a job id.
+SAMPLES_DIR = ROOT.parent / "samples"
+if SAMPLES_DIR.is_dir():
+    app.mount("/samples", StaticFiles(directory=SAMPLES_DIR), name="samples")
+
+
+@app.get("/watch/{name}", response_class=HTMLResponse)
+async def watch(name: str) -> HTMLResponse:
+    """Minimal player page for a rendered clip in samples/."""
+    safe = Path(name).name  # never escape the samples directory
+    video = SAMPLES_DIR / safe
+    if not video.exists() or video.suffix.lower() != ".mp4":
+        raise HTTPException(404, "Clip not found")
+    subs = video.with_suffix(".srt")
+    track = (
+        f'<track kind="subtitles" srclang="ar" label="العربية" default '
+        f'src="/samples/{subs.name}">' if subs.exists() else ""
+    )
+    return HTMLResponse(f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{safe}</title>
+<style>
+ body{{margin:0;background:#07080c;color:#f4efe4;font-family:system-ui,sans-serif;
+      display:grid;place-items:center;min-height:100vh;gap:16px}}
+ video{{max-width:min(94vw,460px);max-height:80vh;border-radius:14px;
+      box-shadow:0 24px 60px rgba(0,0,0,.5)}}
+ a{{color:#e8b86d}}
+</style></head><body>
+<video controls autoplay playsinline src="/samples/{safe}">{track}</video>
+<p><a href="/samples/{safe}" download>تحميل {safe}</a></p>
+</body></html>""")
+
 DEMO_ID = "demo-ready"
 DEMO_VIDEO = next(
     (p for p in (
