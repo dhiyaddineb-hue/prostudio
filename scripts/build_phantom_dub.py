@@ -184,10 +184,16 @@ def split_on_pauses(audio: np.ndarray, pieces: int) -> list[np.ndarray]:
 
 
 def cue_audio(index: int, speaker: str, cache: dict) -> np.ndarray | None:
-    """Audio for one cue: its own recording if present, else a group slice."""
-    own = CLIP / f"c{index + 1:02d}_{speaker}.mp3"
-    if own.exists():
-        return trim(decode(own))
+    """Audio for one cue: its own recording if present, else a group slice.
+
+    Lossless WAV wins over MP3. The takes were originally rendered as 32 kb/s
+    MP3, which caps the voice near 8 kHz and is audibly muffled; a WAV of the
+    same line carries ~10.7 kHz and far more high-frequency detail.
+    """
+    for suffix in (".wav", ".mp3"):
+        own = CLIP / f"c{index + 1:02d}_{speaker}{suffix}"
+        if own.exists():
+            return trim(decode(own))
 
     spec = GROUP_SLICES.get(index)
     if not spec:
