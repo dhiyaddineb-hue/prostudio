@@ -1,86 +1,171 @@
 name: Run YouTube Auto Dub
 
+# Two jobs, pick one from the "Run workflow" dropdown:
+#   clone  — re-record a project's lines in the original actor's voice (F5-TTS)
+#   dub    — dub a YouTube URL from scratch
+#
+# Cloning needs model weights from HuggingFace. That host is blocked in the dev
+# sandbox but reachable from GitHub's runners, which is the whole reason this
+# workflow exists.
+
 on:
   workflow_dispatch:
     inputs:
-      youtube_url:
-        description: "رابط فيديو يوتيوب"
+      task:
+        description: "What to run"
         required: true
-        type: string
-      target_lang:
-        description: "لغة الدوبلاج"
-        required: true
-        default: "ar"
-        type: string
-      mode:
-        description: "وضع العمل"
-        required: true
-        default: "both"
+        default: "clone"
         type: choice
         options:
-          - both
+          - clone
           - dub
-          - sub
-      gender:
-        description: "جنس الصوت"
-        required: true
-        default: "male"
-        type: choice
-        options:
-          - male
-          - female
-      voice:
-        description: "صوت Edge-TTS (اختياري، مثال: ar-SA-HamedNeural)"
+      project:
+        description: "clone: project folder under projects/"
+        required: false
+        default: "Phantom-Thread"
+        type: string
+      ref_seconds:
+        description: "clone: seconds of the actor to clone from (3-12)"
+        required: false
+        default: "8"
+        type: string
+      youtube_url:
+        description: "dub: video URL"
         required: false
         default: ""
         type: string
-      model:
-        description: "نموذج Whisper"
-        required: true
-        default: "tiny"
+      target_lang:
+        description: "dub: target language"
+        required: false
+        default: "ar"
+        type: string
+      mode:
+        description: "dub: mode"
+        required: false
+        default: "both"
         type: choice
-        options:
-          - tiny
-          - base
-          - small
+        options: [both, dub, sub]
+      gender:
+        description: "dub: voice gender"
+        required: false
+        default: "male"
+        type: choice
+        options: [male, female]
+      model:
+        description: "dub: Whisper model"
+        required: false
+        default: "base"
+        type: choice
+        options: [tiny, base, small]
       bg_music:
-        description: "الاحتفاظ بموسيقى الخلفية"
-        required: true
+        description: "dub: keep background music"
+        required: false
         default: true
         type: boolean
 
 jobs:
-  dub-video:
+  clone:
+    if: inputs.task == 'clone'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
-      - name: Checkout Code
+      - name: Check out this branch
         uses: actions/checkout@v4
 
       - name: Install FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
 
-      - name: Install Dependencies
+      # The weights are the slow part of the run; keep them between runs.
+      - name: Cache model weights
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-f5tts-v1
+
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install .
-          pip install faster-whisper edge-tts imageio-ffmpeg soundfile
+          pip install -r requirements.txt
+          pip install f5-tts
 
-      - name: Run Dubbing
+      - name: Confirm the weights downloaded
+        run: |
+          python - <<'PY'
+          from f5_tts.api import F5TTS
+          F5TTS()
+          print("F5-TTS ready")
+          PY
+
+      - name: Clone each line in the original actor's voice
+        env:
+          PROJECT: ${{ inputs.project }}
+          REF_SECONDS: ${{ inputs.ref_seconds }}
+        run: python scripts/clone_project.py
+
+      - name: Render the dub
+        env:
+          PROJECT: ${{ inputs.project }}
+        run: python scripts/build_phantom_dub.py
+
+      - name: Upload the cloned dub
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloned-dub-${{ inputs.project }}
+          path: |
+            projects/${{ inputs.project }}/output/*.mp4
+            projects/${{ inputs.project }}/output/*.srt
+            projects/${{ inputs.project }}/voices/*.wav
+          if-no-files-found: error
+          retention-days: 30
+
+  dub:
+    if: inputs.task == 'dub'
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Check out this branch
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -U yt-dlp
+          pip install -r requirements.txt
+          pip install faster-whisper edge-tts
+
+      - name: Write YouTube cookies
+        env:
+          YT_COOKIES: ${{ secrets.YT_COOKIES }}
+        run: |
+          if [ -n "${YT_COOKIES}" ]; then
+            printf '%s\n' "$YT_COOKIES" > cookies.txt
+            echo "cookies.txt ready"
+          else
+            echo "No YT_COOKIES secret set; continuing without it"
+          fi
+
+      - name: Run the dub
         env:
           YAD_OUTPUT_DIR: output
           YAD_TEMP_DIR: temp
           YAD_CACHE_DIR: .cache
+          YAD_COOKIES_FILE: cookies.txt
         run: |
+          set -euo pipefail
           extra=()
-          if [ -n "${{ inputs.voice }}" ]; then
-            extra+=(--voice "${{ inputs.voice }}")
-          fi
           if [ "${{ inputs.bg_music }}" = "true" ]; then
             extra+=(--bg-music)
           fi
@@ -91,8 +176,9 @@ jobs:
             --model "${{ inputs.model }}" \
             -o output \
             "${extra[@]}"
+          ls -lh output
 
-      - name: Upload Dubbed Video Artifact
+      - name: Upload the dubbed video
         uses: actions/upload-artifact@v4
         with:
           name: final-dubbed-video
@@ -100,3 +186,4 @@ jobs:
             output/*.mp4
             output/*.srt
           if-no-files-found: error
+          retention-days: 14
