@@ -96,8 +96,9 @@ async function loadHealth() {
     }
 
     if (health.needs_transcript) {
-      note.textContent =
-        "Whisper غير مثبّت على الخادم — الصق نص الفيديو، وإلا تعذّر التفريغ الآلي.";
+      note.textContent = health.whisper_installed
+        ? "Whisper مثبّت لكن أوزانه غير متاحة (لا اتصال بمستودع النماذج) — الصق نص الفيديو."
+        : "Whisper غير مثبّت على الخادم — الصق نص الفيديو، وإلا تعذّر التفريغ الآلي.";
       note.classList.remove("hidden");
     } else {
       note.classList.add("hidden");

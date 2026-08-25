@@ -8,6 +8,7 @@ reported instead of crashing at import time.
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import socket
 import ssl
@@ -52,9 +53,54 @@ def empty_cuda_cache() -> None:
         pass
 
 
+def whisper_cached_models() -> list[str]:
+    """Whisper model names whose weights are already on disk.
+
+    faster-whisper downloads from HuggingFace on first use, so an importable
+    package proves nothing: on an offline box the import succeeds and the very
+    first transcription fails. Only a cached snapshot means it will work.
+    """
+    found: list[str] = []
+    roots = [
+        Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface")) / "hub",
+        Path.home() / ".cache" / "huggingface" / "hub",
+    ]
+    seen: set[Path] = set()
+    for root in roots:
+        if root in seen or not root.is_dir():
+            continue
+        seen.add(root)
+        for entry in root.glob("models--*aster-whisper*"):
+            snapshots = entry / "snapshots"
+            if not snapshots.is_dir():
+                continue
+            # A usable snapshot carries the actual weights, not just refs.
+            if any(
+                any(rev.glob("model*.bin")) or any(rev.glob("*.safetensors"))
+                for rev in snapshots.iterdir()
+                if rev.is_dir()
+            ):
+                found.append(entry.name.split("--")[-1])
+    return sorted(set(found))
+
+
 def have_whisper() -> bool:
-    """Automatic transcription needs faster-whisper."""
-    return have_module("faster_whisper")
+    """True only when transcription can actually run right now.
+
+    Requires both the package and either cached weights or a reachable hub to
+    fetch them from.
+    """
+    if not have_module("faster_whisper"):
+        return False
+    if whisper_cached_models():
+        return True
+    return huggingface_reachable()
+
+
+@lru_cache(maxsize=1)
+def huggingface_reachable() -> bool:
+    """Whether model weights can still be downloaded."""
+    return host_reachable("huggingface.co")
 
 
 def have_espeak() -> bool:
@@ -112,11 +158,15 @@ def capabilities() -> dict:
     espeak = have_espeak()
     whisper = have_whisper()
     studio = studio_takes()
+    cached = whisper_cached_models()
     return {
         "ffmpeg": ffmpeg,
         "device": pick_device(),
         "torch": have_module("torch"),
         "whisper": whisper,
+        "whisper_installed": have_module("faster_whisper"),
+        "whisper_models_cached": cached,
+        "model_hub": huggingface_reachable(),
         "edge_tts": edge,
         "espeak": espeak,
         "studio_voices": studio,

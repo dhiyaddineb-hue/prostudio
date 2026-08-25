@@ -82,7 +82,11 @@ TEMPO_OVERBUDGET_RATIO = 1.08
 TEMPO_UNDERBUDGET_RATIO = 0.0
 TEMPO_SLOWDOWN_DIVISOR = 1.0
 TEMPO_SLOWDOWN_FLOOR = 1.0
-AUDIO_DEFAULT_AMBIENT_GAIN = float(os.environ.get("YAD_AMBIENT_GAIN", "0.06"))
+# 0.06 was tuned for an un-separated bed that still carried the original
+# dialogue, so it had to be almost inaudible. With centre separation the bed is
+# speech-free and can sit at a normal level; the sidechain duck keeps it under
+# the new voice.
+AUDIO_DEFAULT_AMBIENT_GAIN = float(os.environ.get("YAD_AMBIENT_GAIN", "0.55"))
 
 
 # ── Voice / TTS defaults ──────────────────────────────────────────────────

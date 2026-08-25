@@ -265,8 +265,41 @@ def _loudness(path: Path) -> float:
     return -24.0
 
 
-def _isolate_ambient(audio_path: Path, out: Path, sr: int = SR) -> Optional[Path]:
+def _isolate_ambient(
+    audio_path: Path,
+    out: Path,
+    sr: int = SR,
+    stereo_source: Optional[Path] = None,
+) -> Optional[Path]:
+    """Extract the music/effects bed, with the original dialogue removed.
+
+    Centre-channel separation is tried first: film dialogue sits in the phantom
+    centre, so removing it leaves a genuinely speech-free bed. That only works
+    on real stereo — a mono or near-mono source falls back to harmonic
+    /percussive separation, which at least suppresses tonal content.
+
+    ``stereo_source`` should be the original media. The pipeline's working
+    audio is downmixed to mono for Whisper, which would defeat the separation
+    entirely.
+    """
     out.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        from youtube_auto_dub.stem_split import decode_stereo, split_center
+
+        probe = stereo_source if stereo_source and Path(stereo_source).exists() else audio_path
+        left, right = decode_stereo(probe, sr)
+        # A mono file decodes to two identical channels: nothing to separate.
+        spread = float(np.mean(np.abs(left - right)))
+        if spread > 1e-4:
+            _, music = split_center(left, right, sr)
+            sf.write(out, music, sr)
+            console.step("Isolated music bed (centre-channel separation)")
+            return out
+        log.info("Source is effectively mono; falling back to HPSS")
+    except Exception as exc:
+        log.warning("Centre separation failed (%s); falling back to HPSS", exc)
+
     try:
         import librosa
         y, _ = librosa.load(str(audio_path), sr=sr, mono=True)
@@ -287,6 +320,7 @@ def finalize_audio(
     match_loudness: bool = True,
     mix_ambient: bool = False,
     ambient_gain: float = AUDIO_DEFAULT_AMBIENT_GAIN,
+    stereo_source: Optional[Path] = None,
 ) -> Path:
     """Apply loudness normalisation and optional background mixing."""
     if not match_loudness and not mix_ambient:
@@ -310,14 +344,19 @@ def finalize_audio(
 
     if mix_ambient:
         bg = output.with_name("ambient.wav")
-        result = _isolate_ambient(original, bg, sr=SR)
+        result = _isolate_ambient(original, bg, sr=SR, stereo_source=stereo_source)
         if result and result.exists():
             dur = sf.info(str(work)).duration
             tmp = output.with_name(output.name + ".amb.wav")
+            # Duck the bed under speech with a sidechain compressor rather than
+            # a fixed volume: a constant gain either buries the dialogue during
+            # loud passages or leaves the music inaudible during quiet ones.
             filt = (
                 f"[1:a]atrim=0:{dur:.3f},asetpts=PTS-STARTPTS,"
                 f"volume={ambient_gain:.2f}[bg];"
-                f"[0:a][bg]amix=inputs=2:duration=first:weights=1 {ambient_gain:.2f}[out]"
+                f"[bg][0:a]sidechaincompress="
+                f"threshold=0.03:ratio=12:attack=20:release=350:makeup=1[duck];"
+                f"[0:a][duck]amix=inputs=2:duration=first:normalize=0[out]"
             )
             subprocess.run(
                 [ffmpeg_exe(), "-y", "-i", str(work), "-i", str(bg),

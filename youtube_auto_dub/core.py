@@ -260,6 +260,9 @@ async def run(args, progress=None) -> Path:
                     match_loudness=True,
                     mix_ambient=keep_bg,
                     ambient_gain=ambient_gain if keep_bg else 0.0,
+                    # The working audio is mono for Whisper; centre separation
+                    # needs the original stereo mix.
+                    stereo_source=project.video_path,
                 )
             else:
                 overlay_dub(project.audio_path, project.segments,
