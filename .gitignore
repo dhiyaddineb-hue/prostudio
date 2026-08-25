@@ -26,6 +26,10 @@ samples/*.wav
 !samples/*.mp4
 !samples/*.srt
 !samples/*.png
+# Approved studio voice takes are shipped assets, not scratch audio.
+!samples/voices/
+!samples/voices/*.mp3
+!samples/voices/*.json
 *.webm
 *.mkv
 

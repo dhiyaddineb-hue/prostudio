@@ -86,7 +86,11 @@ async function loadHealth() {
       pill.className = "pill bad";
       pill.innerHTML = "<i></i> لا يتوفر محرك صوت";
     } else {
-      const engine = health.edge_tts ? "Edge-TTS" : "eSpeak محلي";
+      const engine = health.studio_voices > 0
+        ? `صوت استوديو احترافي (${health.studio_voices})`
+        : health.edge_tts
+          ? "Edge-TTS"
+          : "eSpeak محلي";
       pill.className = "pill live";
       pill.innerHTML = `<i></i> جاهز · ${engine}`;
     }

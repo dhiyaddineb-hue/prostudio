@@ -1,0 +1,27 @@
+{
+  "e15e78adf84a3c63": {
+    "text": "مرحباً بكم في برو ستوديو.",
+    "file": "line1.mp3",
+    "voice": "studio-ar-male"
+  },
+  "383bd349e2f07877": {
+    "text": "يعرض هذا الفيلم القصير الدبلجة الآلية للفيديو.",
+    "file": "line2.mp3",
+    "voice": "studio-ar-male"
+  },
+  "6a130d3fa80311da": {
+    "text": "أولاً نُفرّغ الكلام.",
+    "file": "line3.mp3",
+    "voice": "studio-ar-male"
+  },
+  "3e60fe19f96974ef": {
+    "text": "ثم نترجم المعنى إلى العربية.",
+    "file": "line4.mp3",
+    "voice": "studio-ar-male"
+  },
+  "2331488441d3af50": {
+    "text": "وأخيراً نولّد صوتاً جديداً ونزامنه مع الصورة.",
+    "file": "line5.mp3",
+    "voice": "studio-ar-male"
+  }
+}

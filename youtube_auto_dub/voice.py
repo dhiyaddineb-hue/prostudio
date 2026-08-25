@@ -30,6 +30,7 @@ from youtube_auto_dub.models import (
     VOICE_PERSONAS,
 )
 from youtube_auto_dub.runtime import empty_cuda_cache
+from youtube_auto_dub.studio_tts import speak_studio
 from youtube_auto_dub.ui import console
 
 log = logging.getLogger(__name__)
@@ -106,6 +107,15 @@ async def speak_edge(
         retries = EDGE_TTS_RETRIES
     if timeout is None:
         timeout = EDGE_TTS_TIMEOUT
+
+    # An approved studio take always beats a synthesised one.
+    try:
+        if speak_studio(text, dest):
+            console.step("Studio voice take")
+            return
+    except Exception as exc:  # a bad take must never abort the dub
+        log.warning("Studio take failed for %r: %s", text[:40], exc)
+
     last = None
     for attempt in range(retries + 1):
         try:

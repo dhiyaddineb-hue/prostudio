@@ -67,6 +67,16 @@ def have_espeak() -> bool:
     return have_module("espeakng_loader")
 
 
+def studio_takes() -> int:
+    """Number of approved professional voice takes available offline."""
+    try:
+        from youtube_auto_dub.studio_tts import load_index
+
+        return len(load_index())
+    except Exception:
+        return 0
+
+
 def host_reachable(host: str, port: int = 443, timeout: float = 2.0) -> bool:
     """Reachability probe that completes a real TLS handshake.
 
@@ -101,6 +111,7 @@ def capabilities() -> dict:
     edge = edge_tts_reachable()
     espeak = have_espeak()
     whisper = have_whisper()
+    studio = studio_takes()
     return {
         "ffmpeg": ffmpeg,
         "device": pick_device(),
@@ -108,8 +119,9 @@ def capabilities() -> dict:
         "whisper": whisper,
         "edge_tts": edge,
         "espeak": espeak,
+        "studio_voices": studio,
         # A dub needs *some* way to make speech.
-        "can_dub": ffmpeg and (edge or espeak),
+        "can_dub": ffmpeg and (edge or espeak or studio > 0),
         # Without Whisper the user must paste a transcript.
         "needs_transcript": not whisper,
     }

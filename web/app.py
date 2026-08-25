@@ -155,6 +155,7 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 DEMO_ID = "demo-ready"
 DEMO_VIDEO = next(
     (p for p in (
+        ROOT.parent / "samples" / "ProStudio_Arabic_Pro.mp4",
         OUTPUT_DIR / "ProStudio_Arabic_Demo.mp4",
         ROOT.parent / "samples" / "ProStudio_Arabic_Demo.mp4",
     ) if p.exists()),
@@ -201,14 +202,14 @@ def seed_demo_job() -> None:
         "status": "done",
         "stage": "done",
         "percent": 100,
-        "message": "تجربة جاهزة — دبلجة عربية",
+        "message": "تجربة جاهزة — دبلجة عربية بصوت استوديو احترافي",
         "url": "demo",
         "source": str(DEMO_SOURCE),
         "lang": "ar",
         "gender": "male",
         "mode": "both",
         "model": "offline",
-        "voice": "ar-local-hamed",
+        "voice": "studio-ar-male",
         "bg_music": True,
         "transcript": "",
         "title": "تجربة ProStudio الجاهزة",
