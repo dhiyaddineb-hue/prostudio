@@ -221,8 +221,16 @@ def main() -> None:
 
     print("separating stems…")
     left, right = decode_stereo(SRC, SR)
-    _, music = split_center(left, right, SR)
-    total = len(music)
+    _, separated = split_center(left, right, SR)
+    original = ((left + right) / 2.0).astype(np.float32)
+    total = len(separated)
+
+    # Centre removal is only needed where the original dialogue plays. Measured
+    # on this clip it costs -8.7 dB in the low-mids and -10.6 dB in the presence
+    # band, which guts the body of the score. So the separated stem is used only
+    # under our own dialogue, and the untouched original is restored everywhere
+    # else — the music keeps its full weight between lines.
+    music = separated  # replaced below, once we know where speech lands
 
     voice = np.zeros(total + SR, dtype=np.float32)
     gate = np.zeros(total + SR, dtype=np.float32)
@@ -265,6 +273,17 @@ def main() -> None:
     smooth = np.clip(
         np.convolve(gate, np.ones(win, dtype=np.float32) / win, mode="same"), 0.0, 1.0
     )
+
+    # Crossfade between the two stems: the separated one only where our voice
+    # plays (so the original English underneath is gone), the untouched mix
+    # everywhere else (so the score keeps its full body).
+    blend = np.clip(
+        np.convolve(gate, np.ones(int(SR * 0.4), dtype=np.float32) / int(SR * 0.4),
+                    mode="same") * 2.5,
+        0.0, 1.0,
+    )
+    music = separated * blend + original[:total] * (1.0 - blend)
+
     bed = music * (1.0 - (1.0 - 10 ** (RESIDUAL_DUCK_DB / 20.0)) * smooth)
 
     speaking = gate > 0
