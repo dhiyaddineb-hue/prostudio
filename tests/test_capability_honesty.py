@@ -54,15 +54,15 @@ def test_ambient_isolation_prefers_the_stereo_source(tmp_path, monkeypatch):
     sf.write(mono, tone, sr)
 
     seen: dict = {}
-    real_decode = audio_mod.__dict__.get("decode_stereo")
+    from youtube_auto_dub import stem_split
+
+    real_decode = stem_split.decode_stereo
 
     def spy(path, rate):
         seen["path"] = str(path)
-        from youtube_auto_dub.stem_split import decode_stereo as real
+        return real_decode(path, rate)
 
-        return real(path, rate)
-
-    monkeypatch.setattr("youtube_auto_dub.stem_split.decode_stereo", spy)
+    monkeypatch.setattr(stem_split, "decode_stereo", spy)
 
     result = _isolate_ambient(mono, tmp_path / "bed.wav", sr=sr, stereo_source=stereo)
     assert result is not None and result.exists()

@@ -308,9 +308,58 @@ def _isolate_ambient(
         bg = librosa.istft(S * (P / (H + P + 1e-10)), length=len(y))
         sf.write(out, bg, sr)
         return out
+    except ImportError:
+        log.info("librosa not installed; using the built-in percussive filter")
+    except Exception as exc:
+        log.warning("HPSS isolation failed (%s); using the built-in filter", exc)
+
+    # Last resort, no third-party dependency: suppress the speech band. This is
+    # cruder than either method above but still removes most dialogue energy,
+    # and it keeps "keep background music" working on a minimal install.
+    try:
+        from youtube_auto_dub.stem_split import decode_stereo
+
+        left, right = decode_stereo(audio_path, sr)
+        mono = ((left + right) / 2.0).astype(np.float32)
+        bg = _suppress_speech_band(mono, sr)
+        sf.write(out, bg, sr)
+        console.step("Isolated music bed (speech-band suppression)")
+        return out
     except Exception as exc:
         log.warning("Background isolation failed: %s", exc)
         return None
+
+
+def _suppress_speech_band(mono: np.ndarray, sr: int) -> np.ndarray:
+    """Attenuate 300-3400 Hz, where most dialogue energy sits.
+
+    A blunt instrument compared with source separation, but it needs nothing
+    beyond numpy and leaves music above and below the voice band intact.
+    """
+    n_fft, hop = 2048, 512
+    window = np.hanning(n_fft).astype(np.float32)
+    pad = n_fft // 2
+    padded = np.pad(mono, (pad, pad + n_fft), mode="constant")
+    frames = 1 + (len(padded) - n_fft) // hop
+    idx = np.arange(n_fft)[None, :] + hop * np.arange(frames)[:, None]
+    spec = np.fft.rfft(padded[idx] * window, axis=1)
+
+    freqs = np.fft.rfftfreq(n_fft, 1.0 / sr)
+    gain = np.ones_like(freqs, dtype=np.float32)
+    voice = (freqs >= 300.0) & (freqs <= 3400.0)
+    gain[voice] = 0.25
+    spec *= gain[None, :]
+
+    blocks = np.fft.irfft(spec, n=n_fft, axis=1).astype(np.float32)
+    out_len = (frames - 1) * hop + n_fft
+    acc = np.zeros(out_len, dtype=np.float32)
+    norm = np.zeros(out_len, dtype=np.float32)
+    for i in range(frames):
+        at = i * hop
+        acc[at:at + n_fft] += blocks[i] * window
+        norm[at:at + n_fft] += window ** 2
+    acc /= np.maximum(norm, 1e-8)
+    return acc[pad:pad + len(mono)]
 
 
 def finalize_audio(
