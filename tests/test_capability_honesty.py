@@ -29,9 +29,10 @@ def test_whisper_true_when_hub_is_reachable(monkeypatch):
     assert runtime.have_whisper() is True
 
 
-def test_needs_transcript_tracks_real_whisper_usability():
+def test_needs_transcript_tracks_real_asr_usability():
     caps = runtime.capabilities()
-    assert caps["needs_transcript"] is (not caps["whisper"])
+    # Either recogniser removes the need for a pasted script.
+    assert caps["needs_transcript"] is not (caps["whisper"] or caps["offline_asr"])
     # The distinction the UI depends on must be reported.
     assert "whisper_installed" in caps
     assert isinstance(caps["whisper_models_cached"], list)

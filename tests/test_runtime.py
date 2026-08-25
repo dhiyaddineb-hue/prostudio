@@ -45,8 +45,8 @@ def test_capabilities_shape():
     ):
         assert key in caps
     assert isinstance(caps["can_dub"], bool)
-    # needs_transcript must mirror whisper availability
-    assert caps["needs_transcript"] is (not caps["whisper"])
+    # A transcript is only required when nothing can recognise speech.
+    assert caps["needs_transcript"] is not (caps["whisper"] or caps["offline_asr"])
 
 
 def test_guess_language_by_script():

@@ -84,6 +84,16 @@ def whisper_cached_models() -> list[str]:
     return sorted(set(found))
 
 
+def have_offline_asr() -> bool:
+    """PocketSphinx ships its English model in the wheel — no download needed."""
+    try:
+        from youtube_auto_dub.offline_asr import available
+
+        return available()
+    except Exception:
+        return False
+
+
 def have_whisper() -> bool:
     """True only when transcription can actually run right now.
 
@@ -159,6 +169,7 @@ def capabilities() -> dict:
     whisper = have_whisper()
     studio = studio_takes()
     cached = whisper_cached_models()
+    offline_asr = have_offline_asr()
     return {
         "ffmpeg": ffmpeg,
         "device": pick_device(),
@@ -167,11 +178,12 @@ def capabilities() -> dict:
         "whisper_installed": have_module("faster_whisper"),
         "whisper_models_cached": cached,
         "model_hub": huggingface_reachable(),
+        "offline_asr": offline_asr,
         "edge_tts": edge,
         "espeak": espeak,
         "studio_voices": studio,
         # A dub needs *some* way to make speech.
         "can_dub": ffmpeg and (edge or espeak or studio > 0),
-        # Without Whisper the user must paste a transcript.
-        "needs_transcript": not whisper,
+        # A transcript is only mandatory when nothing can recognise speech.
+        "needs_transcript": not (whisper or offline_asr),
     }

@@ -27,6 +27,7 @@ dependencies = [
     "aiofiles>=24.1",
     "espeakng-loader>=0.2",
     "praat-parselmouth>=0.4",
+    "pocketsphinx>=5.0",
 ]
 
 [project.optional-dependencies]

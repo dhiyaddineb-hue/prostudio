@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 
 from youtube_auto_dub.ffmpeg_bin import ffmpeg_exe
@@ -19,6 +20,50 @@ _AUDIO_OUTPUT_RETRIEVAL = 1
 _ESPEAKCHARS_UTF8 = 1
 _RATE = 1
 _PITCH = 3
+
+# libespeak-ng keeps global synthesis state, so concurrent calls corrupt it and
+# segfault the interpreter. The pipeline synthesises segments in parallel, so
+# every call into the library must serialise through this lock.
+_ESPEAK_LOCK = threading.Lock()
+
+# The library is initialised exactly once. Re-running espeak_Initialize on an
+# already-initialised library corrupts its global state and segfaults.
+_ESPEAK_LIB = None
+_ESPEAK_RATE = 0
+_ESPEAK_SAMPLES: list[int] = []
+_ESPEAK_CALLBACK = None
+
+
+def _espeak_library():
+    """Return (lib, sample_rate), initialising once. Caller must hold the lock."""
+    global _ESPEAK_LIB, _ESPEAK_RATE, _ESPEAK_CALLBACK
+    if _ESPEAK_LIB is not None:
+        return _ESPEAK_LIB, _ESPEAK_RATE
+    import ctypes
+
+    import espeakng_loader
+
+    lib = ctypes.CDLL(espeakng_loader.get_library_path())
+    rate = lib.espeak_Initialize(
+        _AUDIO_OUTPUT_RETRIEVAL, 0, espeakng_loader.get_data_path().encode(), 0
+    )
+    if rate <= 0:
+        return None, 0
+
+    proto = ctypes.CFUNCTYPE(
+        ctypes.c_int, ctypes.POINTER(ctypes.c_short), ctypes.c_int, ctypes.c_void_p
+    )
+
+    def _collect(wav, count, _events):
+        if wav and count > 0:
+            _ESPEAK_SAMPLES.extend(wav[i] for i in range(count))
+        return 0
+
+    # Keep a reference: if this is garbage collected the C side calls freed memory.
+    _ESPEAK_CALLBACK = proto(_collect)
+    lib.espeak_SetSynthCallback(_ESPEAK_CALLBACK)
+    _ESPEAK_LIB, _ESPEAK_RATE = lib, rate
+    return lib, rate
 
 VOICE_BY_LANG = {
     "ar": "ar",
@@ -64,47 +109,35 @@ def _synth_via_library(text: str, dest: Path, voice: str, speed: int, pitch: int
         return False
 
     try:
-        lib = ctypes.CDLL(espeakng_loader.get_library_path())
-        samples: list[int] = []
-
-        callback = ctypes.CFUNCTYPE(
-            ctypes.c_int, ctypes.POINTER(ctypes.c_short), ctypes.c_int, ctypes.c_void_p
-        )
-
-        def _collect(wav, count, _events):
-            if wav and count > 0:
-                samples.extend(wav[i] for i in range(count))
-            return 0
-
-        keep = callback(_collect)
-        rate = lib.espeak_Initialize(
-            _AUDIO_OUTPUT_RETRIEVAL, 0, espeakng_loader.get_data_path().encode(), 0
-        )
-        if rate <= 0:
-            return False
-        lib.espeak_SetSynthCallback(keep)
-        if lib.espeak_SetVoiceByName(voice.encode()) != 0:
-            # Fall back to the bare language code without the +mN/+fN variant.
-            if lib.espeak_SetVoiceByName(voice.split("+")[0].encode()) != 0:
+        with _ESPEAK_LOCK:
+            lib, rate = _espeak_library()
+            if lib is None:
                 return False
-        lib.espeak_SetParameter(_RATE, speed, 0)
-        lib.espeak_SetParameter(_PITCH, pitch, 0)
+            samples = _ESPEAK_SAMPLES
+            samples.clear()
 
-        payload = (text or ".").encode("utf-8")
-        lib.espeak_Synth(
-            payload, len(payload) + 1, 0, 1, 0, _ESPEAKCHARS_UTF8, None, None
-        )
-        lib.espeak_Synchronize()
-        if not samples:
-            return False
+            if lib.espeak_SetVoiceByName(voice.encode()) != 0:
+                # Fall back to the bare language code without the +mN/+fN variant.
+                if lib.espeak_SetVoiceByName(voice.split("+")[0].encode()) != 0:
+                    return False
+            lib.espeak_SetParameter(_RATE, speed, 0)
+            lib.espeak_SetParameter(_PITCH, pitch, 0)
 
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        with wave.open(str(dest), "wb") as handle:
-            handle.setnchannels(1)
-            handle.setsampwidth(2)
-            handle.setframerate(rate)
-            handle.writeframes(array.array("h", samples).tobytes())
-        return True
+            payload = (text or ".").encode("utf-8")
+            lib.espeak_Synth(
+                payload, len(payload) + 1, 0, 1, 0, _ESPEAKCHARS_UTF8, None, None
+            )
+            lib.espeak_Synchronize()
+            if not samples:
+                return False
+
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            with wave.open(str(dest), "wb") as handle:
+                handle.setnchannels(1)
+                handle.setsampwidth(2)
+                handle.setframerate(rate)
+                handle.writeframes(array.array("h", samples).tobytes())
+            return True
     except Exception:
         return False
 

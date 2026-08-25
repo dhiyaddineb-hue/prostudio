@@ -21,7 +21,7 @@ from youtube_auto_dub.core import run as run_pipeline
 from youtube_auto_dub.ffmpeg_bin import ensure_ffmpeg_on_path
 from youtube_auto_dub.models import LANG_MAP_PATH, OUTPUT_DIR, TEMP_DIR
 from youtube_auto_dub.pipeline_args import build_args
-from youtube_auto_dub.runtime import capabilities, have_whisper
+from youtube_auto_dub.runtime import capabilities, have_offline_asr, have_whisper
 from youtube_auto_dub.voice import list_voices, load_lang_map, pick_voice
 
 ROOT = Path(__file__).resolve().parent
@@ -185,10 +185,11 @@ def inspect_transcript(
     if source and source == str(DEMO_SOURCE):
         return DEMO_SCRIPT
     if whisper is None:
-        whisper = have_whisper()
+        # Either recogniser can produce a transcript; the pipeline picks.
+        whisper = have_whisper() or have_offline_asr()
     if not whisper:
         raise RuntimeError(
-            "لا يتوفر التفريغ الآلي (Whisper غير مثبّت). "
+            "لا يتوفر التفريغ الآلي على الخادم. "
             "الصق نص الفيديو في خانة النص ثم أعد المحاولة."
         )
     return ""

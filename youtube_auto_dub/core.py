@@ -24,6 +24,8 @@ from youtube_auto_dub.models import (
     WHISPER_DEFAULT_MODEL,
     SubtitleSegment,
 )
+from youtube_auto_dub.offline_asr import available as offline_asr_available
+from youtube_auto_dub.offline_asr import transcribe_offline
 from youtube_auto_dub.runtime import have_whisper, pick_device
 from youtube_auto_dub.speech import build_hint, transcribe
 from youtube_auto_dub.subs import read_srt
@@ -114,27 +116,43 @@ async def run(args, progress=None) -> Path:
             ]
             lang_detected = cached[0].get("lang")
         else:
-            if not have_whisper():
-                raise RuntimeError(
-                    "التفريغ الآلي غير متاح (faster-whisper غير مثبّت). "
-                    "ثبّت الحزمة أو الصق نص الفيديو في خانة النص."
+            raw = lang_detected = None
+            if have_whisper():
+                hint = build_hint(project.metadata)
+                if hint:
+                    console.step("Prompting with video metadata")
+                try:
+                    raw, lang_detected = transcribe(
+                        project.audio_path,
+                        model_name=model_name,
+                        device=device,
+                        hint=hint,
+                    )
+                    console.success(f"Detected: {lang_detected}")
+                except Exception as exc:
+                    console.warning(f"Whisper failed ({exc})")
+                    raw = None
+
+            if raw is None:
+                # Whisper is missing or could not fetch its weights. Rather than
+                # refuse to transcribe, fall back to the fully offline
+                # recogniser — clearly announced, since it is English-only and
+                # less accurate.
+                if not offline_asr_available():
+                    raise RuntimeError(
+                        "تعذر التفريغ الآلي. الصق نص الفيديو في خانة النص، "
+                        "أو ثبّت pocketsphinx للتفريغ دون إنترنت."
+                    )
+                console.warning(
+                    "Using offline PocketSphinx (English only, lower accuracy)"
                 )
-            hint = build_hint(project.metadata)
-            if hint:
-                console.step("Prompting with video metadata")
-            try:
-                raw, lang_detected = transcribe(
-                    project.audio_path,
-                    model_name=model_name,
-                    device=device,
-                    hint=hint,
-                )
-            except Exception as exc:
-                console.warning(f"Whisper unavailable ({exc})")
-                raise RuntimeError(
-                    "تعذر التفريغ الآلي. الصق نص الفيديو في خانة النص ثم أعد المحاولة."
-                ) from exc
-            console.success(f"Detected: {lang_detected}")
+                _report(progress, "transcribe", "تفريغ محلي دون إنترنت", 28)
+                raw = transcribe_offline(project.audio_path)
+                if not raw:
+                    raise RuntimeError(
+                        "تعذّر التعرف على أي كلام. الصق نص الفيديو في خانة النص."
+                    )
+                lang_detected = "en"
 
             console.info("Grouping segments")
             project.segments = group_segments(raw)

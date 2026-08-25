@@ -95,7 +95,11 @@ async function loadHealth() {
       pill.innerHTML = `<i></i> جاهز · ${engine}`;
     }
 
-    if (health.needs_transcript) {
+    if (!health.needs_transcript && !health.whisper && health.offline_asr) {
+      note.textContent =
+        "التفريغ الآلي يعمل محلياً عبر PocketSphinx (إنجليزي فقط، دقة أقل) — أو الصق النص لنتيجة أدق.";
+      note.classList.remove("hidden");
+    } else if (health.needs_transcript) {
       note.textContent = health.whisper_installed
         ? "Whisper مثبّت لكن أوزانه غير متاحة (لا اتصال بمستودع النماذج) — الصق نص الفيديو."
         : "Whisper غير مثبّت على الخادم — الصق نص الفيديو، وإلا تعذّر التفريغ الآلي.";
