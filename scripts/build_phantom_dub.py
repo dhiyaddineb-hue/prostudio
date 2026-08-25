@@ -30,6 +30,8 @@ import soundfile as sf
 
 from youtube_auto_dub.ffmpeg_bin import ensure_ffmpeg_on_path, ffmpeg_exe
 from youtube_auto_dub.stem_split import decode_stereo, split_center
+from youtube_auto_dub.clone_tts import available as clone_available
+from youtube_auto_dub.clone_tts import clone_speak, pick_reference
 from youtube_auto_dub.voice_profile import convert, measure
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -59,6 +61,17 @@ GROUPS = [
     ("g7_f", 29.40, 46.30),
     ("g8_m", 46.40, 58.60),
 ]
+
+GROUP_TEXT = {
+    "g1_f": "لماذا لستَ متزوّجًا؟",
+    "g2_m": "أنا على يقين بأن الزواج لم يُكتب لي أبدًا. أنا رجلٌ خُلق للعزوبة، ولا شفاء لي من ذلك. الزواج سيجعلني مخادعًا، وأنا لا أريد ذلك أبدًا.",
+    "g3_f": "أظنّ أنك تتظاهر بالقوة فقط.",
+    "g4_m": "لا، أنا قوي.",
+    "g5_f": "قوي أمام مَن؟ أتمنى ألا تكون كذلك معي.",
+    "g6_m": "أظنّ أن توقّعات الآخرين وافتراضاتهم هي ما يورث القلب وجعَه.",
+    "g7_f": "أريدك... مستلقيًا على ظهرك، عاجزًا، رقيقًا، مكشوفًا، وليس لك سواي لأعتني بك. ثم أريدك أن تستعيد قوتك من جديد.",
+    "g8_m": "أسمع صوتك يناديني باسمي في أحلامي، وحين أستيقظ أجد الدموع تنهمر على وجهي. أشتاقُ إليكِ.",
+}
 
 CUES = [
     (0.40, 1.90, "لماذا لستَ متزوّجًا؟"),
@@ -253,6 +266,11 @@ def main() -> None:
     if not SRC.exists():
         raise SystemExit(f"source clip missing: {SRC}")
 
+    cloning = clone_available()
+    print(
+        "neural cloning: ENABLED (F5-TTS)" if cloning
+        else "neural cloning: unavailable — using acoustic voice conversion"
+    )
     print("separating stems…")
     left, right = decode_stereo(SRC, SR)
     original_voice, music = split_center(left, right, SR)
@@ -272,10 +290,23 @@ def main() -> None:
         audio = trim(decode(take))
         notes = []
 
+        # Preferred path: clone the actor outright when F5-TTS weights exist.
+        if cloning:
+            ref = pick_reference(
+                original_voice, SR, start, limit,
+                GROUP_TEXT.get(name, ""), CLIP / f"{name}_ref.wav",
+            )
+            if ref and clone_speak(GROUP_TEXT.get(name, ""), ref, CLIP / f"{name}_clone.wav"):
+                work = CLIP / f"{name}_clone.wav"
+                audio = trim(decode(work))
+                notes.append("cloned from the original actor")
+
         actor = measure(original_voice[int(start * SR): int(limit * SR)], SR)
         speaker = measure(audio, SR, focus=False)
 
-        if actor and speaker and actor.reliable and speaker.f0_median > 0:
+        if "cloned from the original actor" in notes:
+            pass  # a real clone already carries the actor's identity
+        elif actor and speaker and actor.reliable and speaker.f0_median > 0:
             converted, report = convert(audio, SR, speaker, actor)
             check = measure(converted, SR, focus=False)
             moved_closer = (
@@ -351,7 +382,7 @@ def main() -> None:
         check=True, capture_output=True,
     )
     final.unlink(missing_ok=True)
-    for pattern in ("*_pitch.wav", "*_voice.wav"):
+    for pattern in ("*_pitch.wav", "*_voice.wav", "*_ref.wav", "*_clone.wav"):
         for leftover in CLIP.glob(pattern):
             leftover.unlink(missing_ok=True)
     for leftover in CLIP.glob("*_fit.wav"):

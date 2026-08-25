@@ -16,3 +16,6 @@ aiofiles
 librosa
 espeakng-loader
 praat-parselmouth
+
+# اختياري: استنساخ عصبي (يحتاج أوزاناً من HuggingFace)
+# f5-tts
