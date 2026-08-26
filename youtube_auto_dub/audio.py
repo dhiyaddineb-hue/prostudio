@@ -435,12 +435,47 @@ def mux_video(video: Path, audio: Path, output: Path):
     )
 
 
+def _has_video_stream(path: Path) -> bool:
+    """True when the file carries a real video track, not just cover art."""
+    try:
+        res = subprocess.run(
+            [ffmpeg_exe(), "-hide_banner", "-i", str(path)],
+            capture_output=True, text=True,
+        )
+        text = (res.stderr or "") + (res.stdout or "")
+    except Exception:
+        return True  # assume video; the caller's own error will be clearer
+    for line in text.splitlines():
+        if "Stream #" in line and "Video:" in line:
+            # Embedded artwork shows up as a still image codec.
+            if any(tag in line for tag in ("mjpeg", "png", "bmp", "attached pic")):
+                continue
+            return True
+    return False
+
+
 def render_video(
     video_path: Path,
     subtitle_path: Optional[Path],
     dub_audio_path: Optional[Path],
     output_path: Path,
 ):
+    # An audio-only source (mp3, wav, m4a…) has no video stream to map, and
+    # forcing "-map 0:v:0" makes ffmpeg fail. Detect it and write audio out.
+    if not _has_video_stream(video_path):
+        if dub_audio_path:
+            out = output_path.with_suffix(".mp3")
+            subprocess.run(
+                [ffmpeg_exe(), "-y", "-i", str(dub_audio_path),
+                 "-c:a", "libmp3lame", "-b:a", "192k", str(out)],
+                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            if out != output_path:
+                shutil.copy2(out, output_path)
+        else:
+            shutil.copy2(video_path, output_path)
+        return
+
     cmd = [ffmpeg_exe(), "-y", "-i", str(video_path)]
     if dub_audio_path:
         cmd.extend(["-i", str(dub_audio_path)])

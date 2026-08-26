@@ -303,7 +303,10 @@ async def run(args, progress=None) -> Path:
             info += f"_S-{sub_lang}"
         if args.lang_dub:
             info += f"_D-{dub_lang}"
-        out = out_root / f"Output_{args.mode}_{info}_{project.video_id}.mp4"
+        # Keep the container honest: an audio-only source produces audio.
+        from youtube_auto_dub.audio import _has_video_stream
+        ext = "mp4" if _has_video_stream(project.video_path) else "mp3"
+        out = out_root / f"Output_{args.mode}_{info}_{project.video_id}.{ext}"
 
         render_video(
             video_path=project.video_path,

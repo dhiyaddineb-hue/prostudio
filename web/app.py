@@ -21,7 +21,7 @@ from youtube_auto_dub.core import run as run_pipeline
 from youtube_auto_dub.ffmpeg_bin import ensure_ffmpeg_on_path
 from youtube_auto_dub.models import LANG_MAP_PATH, OUTPUT_DIR, TEMP_DIR
 from youtube_auto_dub.pipeline_args import build_args
-from youtube_auto_dub.project_dirs import PROJECTS_DIR, list_projects
+from youtube_auto_dub.project_dirs import PROJECTS_DIR, create as create_project, list_projects
 from youtube_auto_dub.runtime import capabilities, have_offline_asr, have_whisper
 from youtube_auto_dub.voice import list_voices, load_lang_map, pick_voice
 
@@ -136,6 +136,7 @@ def public_job(job: Dict[str, Any]) -> Dict[str, Any]:
         "transcript": job.get("transcript") or "",
         "title": job.get("title"),
         "output_name": job.get("output_name"),
+        "project": job.get("project"),
         "error": job.get("error"),
         "created_at": job.get("created_at"),
         "updated_at": job.get("updated_at"),
@@ -249,6 +250,16 @@ DEMO_SCRIPT = (
 )
 
 
+def job_output_dir(job: Dict[str, Any]) -> Path:
+    """Where a job writes its results: its own project, else the shared dir."""
+    slug = job.get("project")
+    if slug:
+        folder = PROJECTS_DIR / slug / "output"
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder
+    return OUTPUT_DIR
+
+
 def inspect_transcript(
     transcript: str, source: str, whisper: Optional[bool] = None
 ) -> str:
@@ -311,6 +322,17 @@ async def _startup() -> None:
 @app.get("/", response_class=HTMLResponse)
 async def index() -> FileResponse:
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/send", response_class=HTMLResponse)
+async def send_page() -> FileResponse:
+    """Real upload page: drop a file, watch it dub, download the result."""
+    return FileResponse(STATIC / "send.html")
+
+
+@app.get("/projects", response_class=HTMLResponse)
+async def projects_page() -> FileResponse:
+    return FileResponse(STATIC / "projects.html")
 
 
 @app.get("/api/health")
@@ -477,9 +499,15 @@ async def create_job(
     source = (url or "").strip()
     saved_upload: Optional[Path] = None
 
+    project = None
     if file and file.filename:
+        # Every upload gets its own project folder instead of a shared
+        # uploads/ bucket, so a job's source, voices and output stay together
+        # and can be zipped or deleted as one unit.
+        stem = Path(file.filename).stem or "dub"
         suffix = Path(file.filename).suffix.lower() or ".mp4"
-        saved_upload = UPLOADS / f"{uuid.uuid4().hex}{suffix}"
+        project = create_project(stem, title=stem, lang=lang).ensure_dirs()
+        saved_upload = project.source_dir / f"source{suffix}"
         with saved_upload.open("wb") as handle:
             shutil.copyfileobj(file.file, handle)
         source = str(saved_upload)
@@ -507,6 +535,7 @@ async def create_job(
         "transcript": (transcript or "").strip(),
         "source_lang": (source_lang or "").strip() or None,
         "title": Path(source).name if saved_upload else url,
+        "project": project.slug if project else None,
         "output_path": None,
         "output_name": None,
         "srt_path": None,
@@ -552,7 +581,7 @@ async def _run_job(job_id: str) -> None:
                 model=job["model"],
                 voice=job["voice"],
                 bg_music=job["bg_music"],
-                output_dir=str(OUTPUT_DIR),
+                output_dir=str(job_output_dir(job)),
                 transcript=transcript,
                 source_lang=job.get("source_lang") or None,
             )
@@ -566,7 +595,7 @@ async def _run_job(job_id: str) -> None:
             job["output_name"] = Path(output).name
             srt = TEMP_DIR / "subtitles.srt"
             if srt.exists():
-                dest = OUTPUT_DIR / f"{Path(output).stem}.srt"
+                dest = job_output_dir(job) / f"{Path(output).stem}.srt"
                 shutil.copy2(srt, dest)
                 job["srt_path"] = str(dest)
             _push(job_id, {

@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>إرسال ملف للدبلجة — ProStudio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--bg:#07080c;--ink:#f4efe4;--muted:#b7b0a3;--line:rgba(244,239,228,.12);
+        --card:rgba(16,17,23,.78);--gold:#e8b86d;--ok:#7dcea0;--bad:#ef8b7a}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
+       font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;
+       background-image:radial-gradient(circle at 12% 6%,rgba(232,184,109,.15),transparent 38%),
+                        radial-gradient(circle at 90% 88%,rgba(90,140,255,.10),transparent 34%)}
+  header{padding:24px 6vw 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
+  .mark{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
+        background:linear-gradient(160deg,var(--gold),#9a6a2c);color:#1a1208;font-weight:700}
+  .brand strong{display:block}.brand small{color:var(--muted)}
+  nav a{color:var(--muted);text-decoration:none;font-size:14.5px;margin-inline-start:16px}
+  nav a:hover,nav a.on{color:var(--gold)}
+  main{max-width:860px;margin:0 auto;padding:22px 6vw 60px}
+  h1{font-size:clamp(24px,4vw,34px);margin:14px 0 8px}
+  .lede{color:var(--muted);margin:0 0 24px;font-size:16.5px;line-height:1.8}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:18px}
+  h2{font-size:17px;margin:0 0 16px}
+
+  .drop{border:2px dashed var(--line);border-radius:16px;padding:40px 24px;text-align:center;
+        cursor:pointer;transition:.18s;display:block}
+  .drop:hover,.drop.hot{border-color:var(--gold);background:rgba(232,184,109,.06)}
+  .drop strong{display:block;font-size:17px;margin-bottom:6px}
+  .drop em{color:var(--muted);font-style:normal;font-size:14px}
+  .drop.has{border-color:var(--ok);background:rgba(125,206,160,.07)}
+
+  label{display:block;font-size:14.5px;margin:14px 0 7px}
+  select,textarea,input[type=url]{width:100%;background:rgba(0,0,0,.32);color:var(--ink);
+    border:1px solid var(--line);border-radius:11px;padding:12px 14px;font-size:15px;font-family:inherit}
+  textarea{resize:vertical;min-height:80px;line-height:1.8}
+  select:focus,textarea:focus,input:focus{outline:none;border-color:var(--gold)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:640px){.row{grid-template-columns:1fr}}
+
+  button.cta{display:block;width:100%;padding:16px;border-radius:13px;font-size:16.5px;
+    font-weight:700;border:0;cursor:pointer;margin-top:20px;font-family:inherit;
+    background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208}
+  button.cta:disabled{opacity:.5;cursor:not-allowed}
+  button.cta:not(:disabled):hover{filter:brightness(1.07)}
+
+  .bar{height:8px;background:rgba(255,255,255,.07);border-radius:99px;overflow:hidden;margin:16px 0 10px}
+  .bar i{display:block;height:100%;width:0;border-radius:99px;
+         background:linear-gradient(90deg,var(--gold),#f3d7a3);transition:width .3s}
+  .status{font-size:14.5px;color:var(--muted);min-height:22px;line-height:1.7}
+  .status.err{color:var(--bad)}
+  .status.ok{color:var(--ok)}
+  .stages{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+  .stages li{font-size:12.5px;padding:5px 11px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+  .stages li.on{border-color:var(--gold);color:var(--gold)}
+  .stages li.done{border-color:rgba(125,206,160,.4);color:var(--ok)}
+  .hidden{display:none}
+  video{width:100%;border-radius:14px;margin-top:16px;background:#000}
+  .btn{display:inline-block;margin:10px 8px 0 0;padding:11px 18px;border-radius:11px;
+       text-decoration:none;font-weight:600;font-size:14.5px}
+  .primary{background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208}
+  .ghost{border:1px solid var(--line);color:var(--ink)}
+  footer{color:var(--muted);font-size:13.5px;text-align:center;padding:0 6vw 40px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="mark">PS</span>
+    <div><strong>ProStudio</strong><small>إرسال ملف</small></div>
+  </div>
+  <nav>
+    <a href="/">الاستوديو</a>
+    <a href="/send" class="on">إرسال ملف</a>
+    <a href="/projects">المشاريع</a>
+  </nav>
+</header>
+
+<main>
+  <h1>أرسل ملفاً لدبلجته</h1>
+  <p class="lede">
+    فيديو أو صوت — اسحبه هنا مباشرة. يُنشأ له مجلد مشروع خاص،
+    وتتابع التقدّم لحظة بلحظة.
+  </p>
+
+  <form id="form" class="panel">
+    <label class="drop" id="drop">
+      <input id="file" type="file" hidden
+             accept="video/*,audio/*,.mp4,.mkv,.webm,.mov,.m4v,.mp3,.wav,.m4a,.aac,.ogg,.flac" />
+      <strong id="dropTitle">اسحب الملف هنا</strong>
+      <em id="dropHint">فيديو أو صوت · MP4 · MKV · WEBM · MOV · MP3 · WAV · M4A</em>
+    </label>
+
+    <label for="url" style="margin-top:18px">أو الصق رابطاً (يوتيوب أو رابط مباشر)</label>
+    <input id="url" type="url" placeholder="https://…" />
+
+    <div class="row" style="margin-top:6px">
+      <div>
+        <label for="lang">لغة الدبلجة</label>
+        <select id="lang"><option value="ar" selected>العربية</option></select>
+      </div>
+      <div>
+        <label for="gender">الصوت</label>
+        <select id="gender">
+          <option value="male">رجالي</option>
+          <option value="female">نسائي</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="mode">وضع العمل</label>
+        <select id="mode">
+          <option value="both">دبلجة + ترجمة</option>
+          <option value="dub">دبلجة فقط</option>
+          <option value="sub">ترجمة فقط</option>
+        </select>
+      </div>
+      <div>
+        <label for="music">الموسيقى الأصلية</label>
+        <select id="music">
+          <option value="true">احتفظ بها</option>
+          <option value="false">صوت الدبلجة فقط</option>
+        </select>
+      </div>
+    </div>
+
+    <label for="transcript">النص (اختياري — يرفع الدقة كثيراً)</label>
+    <textarea id="transcript" placeholder="اتركه فارغاً للتفريغ الآلي"></textarea>
+
+    <button class="cta" id="go" type="submit">ابدأ الدبلجة</button>
+  </form>
+
+  <section class="panel hidden" id="progress">
+    <h2>التقدّم</h2>
+    <div class="bar"><i id="fill"></i></div>
+    <p class="status" id="status">…</p>
+    <ul class="stages" id="stages"></ul>
+  </section>
+
+  <section class="panel hidden" id="result">
+    <h2>جاهز</h2>
+    <video id="player" controls playsinline></video>
+    <a class="btn primary" id="dl" href="#" download>تحميل الفيديو</a>
+    <a class="btn ghost" id="srt" href="#" download>الترجمة</a>
+  </section>
+</main>
+
+<footer>ProStudio · رخصة MIT</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const STAGES = [
+  ['download','التنزيل'],['transcribe','التفريغ'],['chunk','التقسيم'],
+  ['translate','الترجمة'],['tts','توليد الصوت'],['mix','المزامنة'],['render','التصدير'],
+];
+let picked = null;
+
+function renderStages(active){
+  const order = STAGES.map(s => s[0]).concat('done');
+  const at = order.indexOf(active);
+  $('stages').innerHTML = STAGES.map(([id,label]) => {
+    const i = order.indexOf(id);
+    const cls = at === i ? 'on' : (at > i ? 'done' : '');
+    return `<li class="${cls}">${label}</li>`;
+  }).join('');
+}
+
+function showFile(f){
+  picked = f;
+  const mb = (f.size / 1048576).toFixed(1);
+  $('dropTitle').textContent = f.name;
+  $('dropHint').textContent = `${mb} ميغابايت — جاهز للإرسال`;
+  $('drop').classList.add('has');
+}
+
+$('drop').addEventListener('click', () => $('file').click());
+$('file').addEventListener('change', e => e.target.files[0] && showFile(e.target.files[0]));
+['dragenter','dragover'].forEach(ev =>
+  $('drop').addEventListener(ev, e => { e.preventDefault(); $('drop').classList.add('hot'); }));
+['dragleave','drop'].forEach(ev =>
+  $('drop').addEventListener(ev, e => { e.preventDefault(); $('drop').classList.remove('hot'); }));
+$('drop').addEventListener('drop', e => {
+  const f = e.dataTransfer.files[0];
+  if (f) { $('file').files = e.dataTransfer.files; showFile(f); }
+});
+
+function setStatus(text, kind){
+  const el = $('status');
+  el.textContent = text;
+  el.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const url = $('url').value.trim();
+  if (!picked && !url){ setStatus('اختر ملفاً أو الصق رابطاً أولاً.', 'err'); return; }
+
+  const data = new FormData();
+  if (picked) data.append('file', picked);
+  data.append('url', url);
+  data.append('lang', $('lang').value);
+  data.append('gender', $('gender').value);
+  data.append('mode', $('mode').value);
+  data.append('bg_music', $('music').value);
+  data.append('transcript', $('transcript').value);
+
+  $('go').disabled = true;
+  $('progress').classList.remove('hidden');
+  $('result').classList.add('hidden');
+  renderStages('download');
+  setStatus('جارٍ رفع الملف…');
+
+  // XHR rather than fetch: it reports upload progress, which matters for a
+  // large video on a slow connection.
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/jobs');
+  xhr.upload.onprogress = ev => {
+    if (!ev.lengthComputable) return;
+    const pct = Math.round(ev.loaded / ev.total * 100);
+    $('fill').style.width = (pct * 0.25) + '%';
+    setStatus(`رفع الملف… ${pct}%`);
+  };
+  xhr.onload = () => {
+    let job;
+    try { job = JSON.parse(xhr.responseText); }
+    catch { setStatus('رد غير مفهوم من الخادم.', 'err'); $('go').disabled = false; return; }
+    if (xhr.status >= 400){
+      setStatus(job.detail || 'تعذّر إنشاء المهمة.', 'err');
+      $('go').disabled = false;
+      return;
+    }
+    setStatus('بدأت المعالجة…');
+    follow(job.id);
+  };
+  xhr.onerror = () => { setStatus('انقطع الاتصال أثناء الرفع.', 'err'); $('go').disabled = false; };
+  xhr.send(data);
+});
+
+function follow(id){
+  const src = new EventSource(`/api/jobs/${id}/events`);
+  src.onmessage = ev => {
+    const p = JSON.parse(ev.data);
+    if (p.percent != null) $('fill').style.width = Math.max(25, p.percent) + '%';
+    if (p.stage) renderStages(p.stage);
+    if (p.message) setStatus(p.message);
+    if (p.type === 'done'){ src.close(); finish(id); }
+    if (p.type === 'error'){
+      src.close();
+      setStatus(p.message || 'فشلت المهمة.', 'err');
+      $('go').disabled = false;
+    }
+  };
+  src.onerror = () => { src.close(); poll(id); };
+}
+
+async function poll(id){
+  try{
+    const r = await fetch(`/api/jobs/${id}`);
+    const j = await r.json();
+    if (j.percent != null) $('fill').style.width = Math.max(25, j.percent) + '%';
+    if (j.message) setStatus(j.message);
+    if (j.stage) renderStages(j.stage);
+    if (j.status === 'done') return finish(id);
+    if (j.status === 'error'){
+      setStatus(j.error || 'فشلت المهمة.', 'err');
+      $('go').disabled = false;
+      return;
+    }
+    setTimeout(() => poll(id), 2500);
+  } catch { setTimeout(() => poll(id), 4000); }
+}
+
+function finish(id){
+  $('fill').style.width = '100%';
+  setStatus('اكتملت الدبلجة.', 'ok');
+  renderStages('done');
+  $('result').classList.remove('hidden');
+  $('player').src = `/api/jobs/${id}/preview`;
+  $('dl').href = `/api/jobs/${id}/download`;
+  $('srt').href = `/api/jobs/${id}/srt`;
+  $('go').disabled = false;
+}
+
+renderStages('');
+</script>
+
+</body>
+</html>

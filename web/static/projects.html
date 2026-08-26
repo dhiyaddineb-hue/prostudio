@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>المشاريع — ProStudio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--bg:#07080c;--ink:#f4efe4;--muted:#b7b0a3;--line:rgba(244,239,228,.12);
+        --card:rgba(16,17,23,.78);--gold:#e8b86d;--ok:#7dcea0}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
+       font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;
+       background-image:radial-gradient(circle at 12% 6%,rgba(232,184,109,.15),transparent 38%),
+                        radial-gradient(circle at 90% 88%,rgba(90,140,255,.10),transparent 34%)}
+  header{padding:24px 6vw 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
+  .mark{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
+        background:linear-gradient(160deg,var(--gold),#9a6a2c);color:#1a1208;font-weight:700}
+  .brand strong{display:block}.brand small{color:var(--muted)}
+  nav a{color:var(--muted);text-decoration:none;font-size:14.5px;margin-inline-start:16px}
+  nav a:hover,nav a.on{color:var(--gold)}
+  main{max-width:900px;margin:0 auto;padding:22px 6vw 60px}
+  h1{font-size:clamp(24px,4vw,34px);margin:14px 0 8px}
+  .lede{color:var(--muted);margin:0 0 24px;font-size:16.5px;line-height:1.8}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+        padding:18px 20px;margin-bottom:14px;display:flex;justify-content:space-between;
+        gap:16px;align-items:center;flex-wrap:wrap}
+  .card h3{margin:0 0 6px;font-size:16.5px}
+  .meta{color:var(--muted);font-size:13.5px;line-height:1.8}
+  .tag{display:inline-block;font-size:12px;padding:3px 9px;border-radius:999px;
+       border:1px solid var(--line);color:var(--muted);margin-inline-end:6px}
+  .tag.ok{border-color:rgba(125,206,160,.4);color:var(--ok)}
+  .btn{display:inline-block;padding:10px 16px;border-radius:10px;text-decoration:none;
+       font-weight:600;font-size:14px;margin-inline-start:8px}
+  .primary{background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208}
+  .ghost{border:1px solid var(--line);color:var(--ink)}
+  .empty{color:var(--muted);text-align:center;padding:50px 20px;line-height:2}
+  footer{color:var(--muted);font-size:13.5px;text-align:center;padding:0 6vw 40px}
+  code{background:rgba(255,255,255,.06);padding:2px 7px;border-radius:6px;font-size:12.5px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="mark">PS</span>
+    <div><strong>ProStudio</strong><small>المشاريع</small></div>
+  </div>
+  <nav>
+    <a href="/">الاستوديو</a>
+    <a href="/send">إرسال ملف</a>
+    <a href="/projects" class="on">المشاريع</a>
+  </nav>
+</header>
+
+<main>
+  <h1>المشاريع</h1>
+  <p class="lede">كل ملف مرسَل له مجلد خاص يضم مصدره وأصواته ونتيجته.</p>
+  <div id="list"><p class="empty">جارٍ التحميل…</p></div>
+</main>
+
+<footer>ProStudio · رخصة MIT</footer>
+
+<script>
+fetch('/api/projects')
+  .then(r => r.json())
+  .then(items => {
+    const box = document.getElementById('list');
+    if (!items.length){
+      box.innerHTML = `<p class="empty">لا توجد مشاريع بعد.<br>
+        <a href="/send" style="color:var(--gold)">أرسل ملفاً للبدء ←</a></p>`;
+      return;
+    }
+    box.innerHTML = items.map(p => `
+      <div class="card">
+        <div>
+          <h3>${p.title || p.slug}</h3>
+          <div class="meta">
+            <span class="tag${p.rendered ? ' ok' : ''}">${p.rendered ? 'جاهز' : 'قيد العمل'}</span>
+            <span class="tag">${p.cues} جملة</span>
+            <span class="tag">${p.takes} تسجيل</span>
+            ${p.dialect ? `<span class="tag">${p.dialect}</span>` : ''}
+            <br><code>projects/${p.slug}/</code>
+          </div>
+        </div>
+        <div style="white-space:nowrap">
+          ${p.rendered ? `
+            <a class="btn primary" href="${p.watch}">معاينة</a>
+            <a class="btn ghost" href="${p.video}" download>تحميل</a>` : ''}
+        </div>
+      </div>`).join('');
+  })
+  .catch(() => {
+    document.getElementById('list').innerHTML =
+      '<p class="empty">تعذّر تحميل المشاريع.</p>';
+  });
+</script>
+
+</body>
+</html>
