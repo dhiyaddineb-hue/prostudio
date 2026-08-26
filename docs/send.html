@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>إرسال فيديو للدبلجة — ProStudio</title>
+<title>إرسال ملف — ProStudio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet" />
@@ -22,39 +22,38 @@
   .brand strong{display:block}.brand small{color:var(--muted)}
   nav a{color:var(--muted);text-decoration:none;font-size:14.5px;margin-inline-start:16px}
   nav a:hover,nav a.on{color:var(--gold)}
-  main{max-width:820px;margin:0 auto;padding:22px 6vw 60px}
-  h1{font-size:clamp(24px,4vw,36px);margin:14px 0 8px}
-  .lede{color:var(--muted);margin:0 0 24px;font-size:16.5px;line-height:1.8}
-  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:18px}
-  h2{font-size:17px;margin:0 0 16px}
-  label{display:block;font-size:14.5px;margin:14px 0 7px}
-  label:first-of-type{margin-top:0}
-  select,textarea{width:100%;background:rgba(0,0,0,.32);color:var(--ink);
-    border:1px solid var(--line);border-radius:11px;padding:12px 14px;font-size:15px;
-    font-family:inherit}
-  textarea{resize:vertical;min-height:84px;line-height:1.8}
-  select:focus,textarea:focus{outline:none;border-color:var(--gold)}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media(max-width:640px){.row{grid-template-columns:1fr}}
-  .cta{display:block;width:100%;text-align:center;padding:17px;border-radius:13px;
-       font-size:16.5px;font-weight:700;border:0;cursor:pointer;margin-top:20px;
-       background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208;
-       font-family:inherit;text-decoration:none}
+  main{max-width:640px;margin:0 auto;padding:40px 6vw 60px;text-align:center}
+  h1{font-size:clamp(26px,4.6vw,38px);margin:0 0 10px}
+  .lede{color:var(--muted);margin:0 0 30px;font-size:16.5px;line-height:1.8}
+
+  .drop{display:block;border:2px dashed var(--line);border-radius:20px;
+        padding:64px 28px;cursor:pointer;transition:.18s;background:var(--card)}
+  .drop:hover,.drop.hot{border-color:var(--gold);background:rgba(232,184,109,.07)}
+  .drop.has{border-color:var(--ok);background:rgba(125,206,160,.08)}
+  .icon{font-size:44px;line-height:1;margin-bottom:16px;opacity:.85}
+  .drop strong{display:block;font-size:19px;margin-bottom:8px}
+  .drop em{color:var(--muted);font-style:normal;font-size:14.5px;line-height:1.9}
+
+  .files{margin:18px 0 0;text-align:start;display:none}
+  .files.on{display:block}
+  .file{display:flex;align-items:center;gap:12px;background:var(--card);
+        border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:8px}
+  .file .nm{flex:1;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .file .sz{color:var(--muted);font-size:13px;white-space:nowrap}
+  .file .x{color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 4px}
+  .file .x:hover{color:var(--gold)}
+
+  .cta{display:block;width:100%;padding:17px;border-radius:13px;font-size:16.5px;
+       font-weight:700;border:0;cursor:pointer;margin-top:22px;font-family:inherit;
+       background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208;text-decoration:none}
+  .cta[hidden]{display:none}
   .cta:hover{filter:brightness(1.07)}
-  .note{border-inline-start:3px solid var(--gold);padding:13px 16px;margin-top:16px;
-        background:rgba(232,184,109,.07);border-radius:0 10px 10px 0;font-size:14.5px;
-        color:var(--muted);line-height:1.85}
-  .step{display:flex;gap:14px;padding:11px 0;border-bottom:1px solid rgba(244,239,228,.07);
-        font-size:14.5px;line-height:1.75;color:var(--muted)}
-  .step:last-child{border:0}
-  .n{flex:0 0 26px;height:26px;border-radius:50%;background:rgba(232,184,109,.15);
-     color:var(--gold);display:grid;place-items:center;font-weight:700;font-size:13px}
-  .step b{color:var(--ink)}
-  table{width:100%;border-collapse:collapse;font-size:14.5px}
-  td{padding:9px 0;border-bottom:1px solid var(--line);vertical-align:top}
-  td:first-child{color:var(--muted);white-space:nowrap;padding-inline-end:14px}
+
+  .note{border-inline-start:3px solid var(--gold);padding:14px 18px;margin-top:24px;
+        background:rgba(232,184,109,.07);border-radius:0 12px 12px 0;font-size:14.5px;
+        color:var(--muted);line-height:1.9;text-align:start}
+  .note b{color:var(--ink)}
   footer{color:var(--muted);font-size:13.5px;text-align:center;padding:0 6vw 40px}
-  a{color:var(--gold)}
 </style>
 </head>
 <body>
@@ -62,137 +61,120 @@
 <header>
   <div class="brand">
     <span class="mark">PS</span>
-    <div><strong>ProStudio</strong><small>إرسال فيديو</small></div>
+    <div><strong>ProStudio</strong><small>إرسال ملف</small></div>
   </div>
   <nav>
     <a href="index.html">الرئيسية</a>
     <a href="preview.html">المعاينة</a>
-    <a href="send.html" class="on">إرسال فيديو</a>
+    <a href="send.html" class="on">إرسال</a>
   </nav>
 </header>
 
 <main>
-  <h1>أرسل فيديو لدبلجته</h1>
-  <p class="lede">
-    اختر الإعدادات هنا، ثم اسحب ملف الفيديو في الصفحة التي تُفتح.
-    GitHub يستضيف الملف بنفسه — لا تحتاج خدمة تخزين خارجية.
-  </p>
+  <h1>أرسل ملفك</h1>
+  <p class="lede">فيديو أو صوت — اسحبه أو اختره، وسأتولى الباقي.</p>
 
-  <div class="panel">
-    <h2>إعدادات الدبلجة</h2>
+  <label class="drop" id="drop">
+    <input id="file" type="file" multiple hidden
+           accept="video/*,audio/*,.mp4,.mkv,.webm,.mov,.m4v,.avi,.mp3,.wav,.m4a,.aac,.ogg,.flac" />
+    <div class="icon">⬆</div>
+    <strong id="title">اسحب الملف هنا</strong>
+    <em id="hint">أو اضغط للاختيار<br>MP4 · MKV · MOV · MP3 · WAV · M4A</em>
+  </label>
 
-    <div class="row">
-      <div>
-        <label for="dialect">اللهجة</label>
-        <select id="dialect">
-          <option value="مصري">مصري</option>
-          <option value="فصحى">فصحى</option>
-          <option value="خليجي">خليجي</option>
-          <option value="شامي">شامي</option>
-        </select>
-      </div>
-      <div>
-        <label for="voices">الأصوات</label>
-        <select id="voices">
-          <option value="رجل وامرأة (حوار)">رجل وامرأة (حوار)</option>
-          <option value="رجل فقط">رجل فقط</option>
-          <option value="امرأة فقط">امرأة فقط</option>
-          <option value="راوٍ واحد">راوٍ واحد</option>
-        </select>
-      </div>
-    </div>
+  <div class="files" id="files"></div>
 
-    <label for="music">الموسيقى الأصلية</label>
-    <select id="music">
-      <option value="نعم — احتفظ بالموسيقى">نعم — احتفظ بالموسيقى</option>
-      <option value="لا — صوت الدبلجة فقط">لا — صوت الدبلجة فقط</option>
-    </select>
+  <a class="cta" id="go" hidden target="_blank" rel="noopener">إرسال ←</a>
 
-    <label for="script">النص العربي (اختياري — يرفع الدقة كثيراً)</label>
-    <textarea id="script" placeholder="اتركه فارغاً ليُستخرج من الترجمة الظاهرة على الفيديو"></textarea>
-
-    <label for="notes">ملاحظات (اختياري)</label>
-    <textarea id="notes" placeholder="صوت عميق وهادئ، إيقاع بطيء…" style="min-height:64px"></textarea>
-
-    <a class="cta" id="go" href="#" target="_blank" rel="noopener">
-      افتح صندوق الرفع ←
-    </a>
-
-    <div class="note">
-      <b style="color:var(--ink)">مهم:</b> بعد فتح الصفحة، <b style="color:var(--ink)">اسحب ملف
-      الفيديو وأفلته داخل المربع الكبير</b>. سيرفعه GitHub ويضع رابطه تلقائياً،
-      ثم اضغط <b style="color:var(--ink)">Submit new issue</b>.
-    </div>
-  </div>
-
-  <div class="panel">
-    <h2>الخطوات</h2>
-    <div class="step"><span class="n">١</span><div>اضبط الإعدادات أعلاه واضغط <b>افتح صندوق الرفع</b></div></div>
-    <div class="step"><span class="n">٢</span><div><b>اسحب الفيديو</b> وأفلته في مربع النص الكبير — انتظر اكتمال الرفع</div></div>
-    <div class="step"><span class="n">٣</span><div>اضغط <b>Submit new issue</b></div></div>
-    <div class="step"><span class="n">٤</span><div>تصلك النتيجة في نفس الطلب مع رابط معاينة</div></div>
-  </div>
-
-  <div class="panel">
-    <h2>حدود ينبغي معرفتها</h2>
-    <table>
-      <tr><td>حجم الملف</td><td>حتى ١٠ ميغابايت مرفوعاً مباشرة؛ الأكبر يحتاج رابطاً خارجياً</td></tr>
-      <tr><td>المدة</td><td>الأنسب حتى ٣ دقائق</td></tr>
-      <tr><td>الأصوات</td><td>أصوات تركيبية عالية الجودة، وليست استنساخاً لصوت الممثل</td></tr>
-      <tr><td>أفضل نتيجة</td><td>حوار واضح والموسيقى غير طاغية عليه</td></tr>
-      <tr><td>يتطلب</td><td>حساب GitHub مجاني</td></tr>
-    </table>
+  <div class="note">
+    <b>الخطوة الأخيرة:</b> بعد الضغط على «إرسال» تُفتح صفحة GitHub —
+    <b>اسحب ملفك داخل مربع النص هناك</b> وانتظر اكتمال الرفع، ثم اضغط
+    <b>Submit new issue</b>.
   </div>
 </main>
 
 <footer>ProStudio · رخصة MIT</footer>
 
 <script>
-// Build a plain new-issue link with the body pre-filled. A ?template= link only
-// works once the form lives on the repository's default branch, so this uses
-// the parameters that work from any branch today.
-const REPO = 'https://github.com/dhiyaddineb-hue/prostudio/issues/new';
+const $ = id => document.getElementById(id);
+const drop = $('drop'), input = $('file'), box = $('files'), go = $('go');
+let picked = [];
 
-function build(){
-  const v = id => document.getElementById(id).value.trim();
+const fmt = b => b < 1048576
+  ? (b / 1024).toFixed(0) + ' كيلوبايت'
+  : (b / 1048576).toFixed(1) + ' ميغابايت';
+
+function render(){
+  if (!picked.length){
+    box.classList.remove('on');
+    box.innerHTML = '';
+    drop.classList.remove('has');
+    $('title').textContent = 'اسحب الملف هنا';
+    $('hint').innerHTML = 'أو اضغط للاختيار<br>MP4 · MKV · MOV · MP3 · WAV · M4A';
+    go.hidden = true;
+    return;
+  }
+
+  box.classList.add('on');
+  box.innerHTML = picked.map((f, i) => `
+    <div class="file">
+      <span class="nm">${f.name}</span>
+      <span class="sz">${fmt(f.size)}</span>
+      <span class="x" data-i="${i}" title="إزالة">×</span>
+    </div>`).join('');
+
+  box.querySelectorAll('.x').forEach(el => {
+    el.onclick = e => {
+      e.preventDefault();
+      e.stopPropagation();
+      picked.splice(+el.dataset.i, 1);
+      render();
+    };
+  });
+
+  drop.classList.add('has');
+  $('title').textContent = picked.length === 1
+    ? 'ملف جاهز للإرسال'
+    : `${picked.length} ملفات جاهزة`;
+  $('hint').textContent = 'اضغط لإضافة المزيد';
+
+  // GitHub hosts the upload itself; the body just names what is coming so the
+  // request is readable before the file finishes attaching.
+  const list = picked.map(f => `- ${f.name} (${fmt(f.size)})`).join('\n');
   const body = [
-    '## الفيديو',
+    '## الملف',
     '',
-    '<!-- اسحب ملف الفيديو وأفلته هنا، أو الصق رابطاً -->',
+    '<!-- اسحب الملف هنا وانتظر اكتمال الرفع -->',
     '',
     '',
-    '## الإعدادات',
+    '---',
     '',
-    '| | |',
-    '| --- | --- |',
-    `| اللهجة | ${v('dialect')} |`,
-    `| الأصوات | ${v('voices')} |`,
-    `| الموسيقى | ${v('music')} |`,
-    '',
-    '## النص',
-    '',
-    v('script') || '_(يُستخرج تلقائياً من الترجمة الظاهرة على الفيديو)_',
-    '',
-    '## ملاحظات',
-    '',
-    v('notes') || '_(لا شيء)_',
+    list,
   ].join('\n');
 
   const q = new URLSearchParams({
-    title: `[دبلجة] فيديو جديد — ${v('dialect')}`,
+    title: `[دبلجة] ${picked[0].name}`,
     body,
     labels: 'dub-request',
   });
-  return `${REPO}?${q}`;
+  go.href = `https://github.com/dhiyaddineb-hue/prostudio/issues/new?${q}`;
+  go.hidden = false;
 }
 
-const go = document.getElementById('go');
-function refresh(){ go.href = build(); }
-document.querySelectorAll('select, textarea').forEach(el => {
-  el.addEventListener('change', refresh);
-  el.addEventListener('input', refresh);
-});
-refresh();
+function add(list){
+  for (const f of list) picked.push(f);
+  render();
+}
+
+input.addEventListener('change', e => { add(e.target.files); input.value = ''; });
+
+['dragenter','dragover'].forEach(ev =>
+  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('hot'); }));
+['dragleave','drop'].forEach(ev =>
+  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('hot'); }));
+drop.addEventListener('drop', e => { if (e.dataTransfer.files.length) add(e.dataTransfer.files); });
+
+render();
 </script>
 
 </body>
