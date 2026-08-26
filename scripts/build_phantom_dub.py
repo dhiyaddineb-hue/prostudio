@@ -62,6 +62,10 @@ SRC = _source()
 
 SR = 44100
 MAX_TEMPO = 1.12        # gentler than before; past this the read sounds rushed
+# Natural Arabic speech runs 11-15 characters/second. The synthesised takes come
+# out around 7.4, which reads as sluggish rather than deliberate.
+TARGET_RATE_MIN = 11.0
+MAX_NATURALISE = 1.6    # cap, so a very short line is not chipmunked
 TAIL_ALLOWANCE = 0.45   # a line may run this far past the next cue's start
 DIALOG_LEAD_DB = 11.0
 RESIDUAL_DUCK_DB = -15.0
@@ -124,7 +128,7 @@ def decode(path: Path, sr: int = SR) -> np.ndarray:
     return np.frombuffer(res.stdout, dtype=np.float32).copy()
 
 
-def trim(audio: np.ndarray, floor_db: float = -45.0) -> np.ndarray:
+def trim(audio: np.ndarray, floor_db: float = -40.0) -> np.ndarray:
     if audio.size == 0:
         return audio
     fr = int(SR * 0.01)
@@ -135,7 +139,8 @@ def trim(audio: np.ndarray, floor_db: float = -45.0) -> np.ndarray:
     loud = np.where(e > 10 ** (floor_db / 20.0))[0]
     if loud.size == 0:
         return audio
-    return audio[max(int(loud[0]) - 2, 0) * fr: min(int(loud[-1]) + 3, n) * fr]
+    # Keep only a hair of room: 20 ms in, 60 ms out.
+    return audio[max(int(loud[0]) - 2, 0) * fr: min(int(loud[-1]) + 6, n) * fr]
 
 
 def _atempo_chain(factor: float) -> str:
@@ -269,6 +274,18 @@ def main() -> None:
         next_start = CUES[i + 1][0] if i + 1 < len(CUES) else start + 8.0
         budget = max(next_start - start - 0.08, end - start)
         dur = len(audio) / SR
+
+        # The takes are uniformly slow — measured at ~7.4 characters/second
+        # against a natural Arabic rate of 11-15 — which is what makes the
+        # delivery drag. Speed each line toward a natural rate for its own text
+        # before worrying about whether it fits the slot.
+        chars = len([c for c in text if not c.isspace()])
+        if chars >= 3 and dur > 0.2:
+            rate = chars / dur
+            if rate < TARGET_RATE_MIN:
+                factor = min(TARGET_RATE_MIN / rate, MAX_NATURALISE)
+                audio = trim(retime(audio, factor))
+                dur = len(audio) / SR
 
         note = "natural"
         if dur > budget + TAIL_ALLOWANCE:
