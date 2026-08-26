@@ -49,3 +49,9 @@ projects/*/source/
 !projects/*/voices/*.wav
 !projects/*/output/*.mp4
 !projects/*/output/*.srt
+
+# GitHub Pages assets: the page serves these from beside itself, so the broad
+# *.mp4 / *.srt rules must not swallow them.
+!docs/*.mp4
+!docs/*.srt
+!docs/*.vtt
