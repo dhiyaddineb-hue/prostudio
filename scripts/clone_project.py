@@ -98,6 +98,70 @@ def pick_reference_window(
     return best
 
 
+def preflight(project) -> list[str]:
+    """Refuse clones that cannot work, instead of burning an hour to find out.
+
+    Two failures produced the garbled, non-Arabic audio in run #17:
+
+    1. The F5-TTS vocabulary is English/Chinese. It carries 25 Arabic glyphs and
+       is missing ``ا`` — the commonest letter in the language — so roughly a
+       fifth of the script is silently dropped before synthesis.
+
+    2. The reference clip is the actor speaking *English*, while ref_text is the
+       *Arabic* translation. F5 expects ref_text to be a literal transcript of
+       ref_audio; when they disagree the alignment collapses and the output
+       slurs into itself.
+    """
+    problems: list[str] = []
+
+    vocab: set[str] = set()
+    try:
+        import f5_tts
+
+        # f5_tts is a namespace package on some installs, so __file__ can be
+        # None; fall back to its search paths.
+        roots = [Path(f5_tts.__file__).parent] if f5_tts.__file__ else [
+            Path(p) for p in getattr(f5_tts, "__path__", [])
+        ]
+        for root in roots:
+            candidate = root / "infer" / "examples" / "vocab.txt"
+            if candidate.exists():
+                vocab = {
+                    line.rstrip("\n")
+                    for line in candidate.read_text(encoding="utf-8").splitlines()
+                }
+                break
+    except Exception:
+        vocab = set()
+
+    if vocab:
+        letters = [
+            ch
+            for cue in project.cues
+            for ch in cue["text"]
+            if "\u0600" <= ch <= "\u06ff"
+        ]
+        missing = [ch for ch in letters if ch not in vocab]
+        if letters and len(missing) / len(letters) > 0.05:
+            unique = "".join(sorted(set(missing)))
+            problems.append(
+                f"  ✗ vocabulary: {len(missing)}/{len(letters)} Arabic characters "
+                f"({len(missing) / len(letters) * 100:.0f}%) are not in the F5-TTS "
+                f"vocab and will be dropped. Missing: {unique}"
+            )
+
+    # The reference audio is the original performance, in its own language.
+    problems.append(
+        "  ✗ reference mismatch: ref_audio is the actor speaking the source "
+        "language, but ref_text is the Arabic translation. F5-TTS needs them to "
+        "match, so the clone will not track the words."
+    )
+
+    if problems:
+        problems.insert(0, "\nPreflight found blocking problems:")
+    return problems
+
+
 def main() -> None:
     slug = os.environ.get("PROJECT", "Phantom-Thread")
     want = float(os.environ.get("REF_SECONDS", "8"))
@@ -112,6 +176,15 @@ def main() -> None:
             "F5-TTS weights are not available here.\n"
             "Install f5-tts on a machine that can reach HuggingFace, or run "
             "the 'Clone voices and dub' workflow on GitHub Actions."
+        )
+
+    # Two hard checks before spending an hour of synthesis on a bad result.
+    problems = preflight(project)
+    if problems and os.environ.get("FORCE_CLONE") != "1":
+        print("\n".join(problems))
+        raise SystemExit(
+            "Refusing to run: the clone would produce unusable audio.\n"
+            "Set FORCE_CLONE=1 to run anyway."
         )
 
     sources = sorted(project.source_dir.glob("*.mp4")) or sorted(
