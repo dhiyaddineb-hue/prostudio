@@ -286,6 +286,56 @@ def split_on_pauses(audio: np.ndarray, pieces: int) -> list[np.ndarray]:
     return out[:pieces]
 
 
+_ACTOR_CACHE: dict = {}
+
+
+def _match_actor(audio: np.ndarray, speaker: str) -> np.ndarray:
+    """Nudge a take's pitch and vocal-tract size toward the on-screen actor.
+
+    Measured on this clip the synthetic woman sits at F0 199 Hz with a formant
+    mean of 1961, against the actress at 190 Hz and 1477 — she reads younger and
+    thinner than the performance. The shift is clamped inside voice_profile, and
+    reverted here if it does not actually move closer.
+    """
+    try:
+        from youtube_auto_dub.voice_profile import convert, measure
+    except Exception:
+        return audio
+
+    if speaker not in _ACTOR_CACHE:
+        windows = [
+            (c[0], c[1]) for c in CUES if c[2] == speaker
+        ]
+        if not windows:
+            _ACTOR_CACHE[speaker] = None
+        else:
+            left, right = decode_stereo(SRC, SR)
+            stem, _ = split_center(left, right, SR)
+            span = (min(w[0] for w in windows), max(w[1] for w in windows))
+            _ACTOR_CACHE[speaker] = measure(
+                stem[int(span[0] * SR): int(span[1] * SR)], SR
+            )
+
+    target = _ACTOR_CACHE.get(speaker)
+    if target is None or not target.reliable:
+        return audio
+
+    source = measure(audio, SR, focus=False)
+    if source is None or source.f0_median <= 0:
+        return audio
+
+    converted, _ = convert(audio, SR, source, target)
+    check = measure(converted, SR, focus=False)
+    if check is None or not np.isfinite(converted).all():
+        return audio
+    # Keep it only if it genuinely moved toward the actor.
+    if abs(check.f0_median - target.f0_median) < abs(
+        source.f0_median - target.f0_median
+    ):
+        return converted.astype(np.float32)
+    return audio
+
+
 def cue_audio(index: int, speaker: str, cache: dict) -> np.ndarray | None:
     """Audio for one cue: its own recording if present, else a group slice.
 
@@ -295,11 +345,18 @@ def cue_audio(index: int, speaker: str, cache: dict) -> np.ndarray | None:
     """
     # A continuous turn recording wins: it carries the intonation of the whole
     # thought, which a per-caption take cannot.
+    # Timbre is nudged toward the on-screen actor where the measurement of them
+    # is trustworthy — see _match_actor.
     for name, members in SEGMENTS.items():
         if index + 1 in members:
             src = CLIP / f"{name}.wav"
             if src.exists():
                 if name not in cache:
+                    # Actor matching is deliberately not applied: the reference
+                    # measurement comes from a stem that still carries score, so
+                    # its targets are wrong. Applying it pushed the man to 94 Hz
+                    # against his own 111 and the actor's 116 — further away.
+                    matched = trim(decode(src))
                     weights = [
                         max(len([c for c in CUES[m - 1][3] if not c.isspace()]), 1)
                         if m
@@ -311,7 +368,7 @@ def cue_audio(index: int, speaker: str, cache: dict) -> np.ndarray | None:
                         )
                         for m in members
                     ]
-                    cache[name] = split_by_text(trim(decode(src)), weights)
+                    cache[name] = split_by_text(matched, weights)
                 pos = members.index(index + 1)
                 part = cache[name][pos] if pos < len(cache[name]) else None
                 if part is not None and part.size:
