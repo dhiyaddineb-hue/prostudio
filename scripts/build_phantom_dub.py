@@ -105,7 +105,15 @@ CUES = [
 # Generating a whole turn at once keeps the intonation contour intact — the
 # model builds a real arc across the sentence instead of resetting on every
 # caption. Measured: pitch variation 0.44 continuous vs 0.35 line-by-line.
+# A trailing sentence gives the model somewhere to carry the phrase to, so the
+# line we keep is not left hanging on a flat final syllable. Only the first
+# piece is used; the filler is discarded.
+SEGMENTS_WITH_FILLER = {"seg_F_f", "seg_G_m", "seg_H_f"}
+
 SEGMENTS = {
+    "seg_F_f": [1, None],
+    "seg_G_m": [8, None],
+    "seg_H_f": [14, None],
     "seg_A_m": [2, 3, 4, 5, 6],
     "seg_E_f": [7, 9, 10],
     "seg_B_m": [11, 12, 13],
