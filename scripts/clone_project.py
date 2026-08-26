@@ -172,8 +172,22 @@ def main() -> None:
         shutil.copytree(project.voices_dir, backup)
         print(f"backed up existing takes to {backup.name}/")
 
+    # A preview run clones only a few lines, so the voices can be judged in
+    # minutes rather than after an hour of synthesis.
+    max_cues = int(os.environ.get("MAX_CUES", "0") or 0)
+    todo = [c for c in project.cues if c["speaker"] in refs]
+    if max_cues > 0:
+        picked: list = []
+        # Take them alternately per speaker, so a preview covers both voices.
+        for speaker in refs:
+            picked += [c for c in todo if c["speaker"] == speaker][
+                : max(1, max_cues // max(len(refs), 1))
+            ]
+        todo = sorted(picked, key=lambda c: c["i"])[:max_cues]
+        print(f"preview mode: cloning {len(todo)} of {len(project.cues)} lines")
+
     done = failed = 0
-    for cue in project.cues:
+    for cue in todo:
         speaker = cue["speaker"]
         ref = refs.get(speaker)
         if ref is None:

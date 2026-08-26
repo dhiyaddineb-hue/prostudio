@@ -29,6 +29,11 @@ on:
         required: false
         default: "8"
         type: string
+      max_cues:
+        description: "clone: 0 = all lines, or e.g. 3 for a quick voice preview"
+        required: false
+        default: "0"
+        type: string
       youtube_url:
         description: "dub: video URL"
         required: false
@@ -105,22 +110,37 @@ jobs:
         env:
           PROJECT: ${{ inputs.project }}
           REF_SECONDS: ${{ inputs.ref_seconds }}
+          MAX_CUES: ${{ inputs.max_cues }}
         run: python scripts/clone_project.py
 
+      # Upload the voices before rendering. Cloning costs about an hour, and a
+      # later failure used to throw all of it away.
+      - name: Upload the cloned voices
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloned-voices-${{ inputs.project }}
+          path: |
+            projects/${{ inputs.project }}/voices/*.wav
+            projects/${{ inputs.project }}/work/ref_*.wav
+          if-no-files-found: warn
+          retention-days: 30
+
       - name: Render the dub
+        if: inputs.max_cues == '0'
         env:
           PROJECT: ${{ inputs.project }}
         run: python scripts/build_phantom_dub.py
 
-      - name: Upload the cloned dub
+      - name: Upload the finished dub
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cloned-dub-${{ inputs.project }}
           path: |
             projects/${{ inputs.project }}/output/*.mp4
             projects/${{ inputs.project }}/output/*.srt
-            projects/${{ inputs.project }}/voices/*.wav
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
 
   dub:
