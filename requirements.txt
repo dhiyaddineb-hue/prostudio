@@ -21,4 +21,7 @@ praat-parselmouth
 # f5-tts
 pocketsphinx
 piper-tts
+# coqui-tts (XTTS-v2) breaks on transformers 5.x: it imports
+# isin_mps_friendly, removed in 5.0. It also needs >=4.57.
+transformers>=4.57,<5
 coqui-tts
