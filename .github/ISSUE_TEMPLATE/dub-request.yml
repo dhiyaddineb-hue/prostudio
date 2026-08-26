@@ -1,0 +1,82 @@
+name: طلب دبلجة
+description: أرسل فيديو لدبلجته إلى العربية
+title: "[دبلجة] "
+labels: ["dub-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## أرسل الفيديو
+
+        **اسحب ملف الفيديو وأفلته في خانة «الفيديو» أدناه** — سيرفعه GitHub
+        ويضع رابطه تلقائياً. الحد الأقصى 10 ميغابايت للملف المرفوع مباشرة؛
+        للملفات الأكبر ضع رابطاً (يوتيوب أو Drive أو أي رابط مباشر).
+
+  - type: textarea
+    id: video
+    attributes:
+      label: الفيديو
+      description: اسحب الملف هنا، أو الصق رابطاً.
+      placeholder: "اسحب الملف إلى هذا المربع…"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: dialect
+    attributes:
+      label: اللهجة
+      options:
+        - مصري
+        - فصحى
+        - خليجي
+        - شامي
+      default: 0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: voices
+    attributes:
+      label: الأصوات المطلوبة
+      options:
+        - رجل وامرأة (حوار)
+        - رجل فقط
+        - امرأة فقط
+        - راوٍ واحد
+      default: 0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: music
+    attributes:
+      label: الموسيقى الأصلية
+      description: عزل الحوار الأصلي مع الإبقاء على الموسيقى.
+      options:
+        - "نعم — احتفظ بالموسيقى"
+        - "لا — صوت الدبلجة فقط"
+      default: 0
+    validations:
+      required: true
+
+  - type: textarea
+    id: script
+    attributes:
+      label: النص (اختياري)
+      description: |
+        إن كان لديك النص العربي جاهزاً، الصقه هنا — النتيجة تكون أدق بكثير.
+        اتركه فارغاً ليُستخرج تلقائياً من الترجمة الظاهرة على الفيديو.
+      placeholder: |
+        00:02  السطر الأول
+        00:05  السطر الثاني
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: ملاحظات
+      description: طابع الصوت المطلوب، أو أي شيء آخر.
+      placeholder: "صوت عميق وهادئ، إيقاع بطيء…"
+    validations:
+      required: false

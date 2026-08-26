@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>إرسال فيديو للدبلجة — ProStudio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--bg:#07080c;--ink:#f4efe4;--muted:#b7b0a3;--line:rgba(244,239,228,.12);
+        --card:rgba(16,17,23,.78);--gold:#e8b86d;--ok:#7dcea0}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
+       font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;
+       background-image:radial-gradient(circle at 12% 6%,rgba(232,184,109,.15),transparent 38%),
+                        radial-gradient(circle at 90% 88%,rgba(90,140,255,.10),transparent 34%)}
+  header{padding:24px 6vw 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
+  .mark{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
+        background:linear-gradient(160deg,var(--gold),#9a6a2c);color:#1a1208;font-weight:700}
+  .brand strong{display:block}.brand small{color:var(--muted)}
+  nav a{color:var(--muted);text-decoration:none;font-size:14.5px;margin-inline-start:16px}
+  nav a:hover,nav a.on{color:var(--gold)}
+  main{max-width:760px;margin:0 auto;padding:22px 6vw 60px}
+  h1{font-size:clamp(24px,4vw,36px);margin:14px 0 8px}
+  .lede{color:var(--muted);margin:0 0 26px;font-size:16.5px;line-height:1.8}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px;margin-bottom:18px}
+  .cta{display:block;text-align:center;padding:18px;border-radius:14px;font-size:17px;font-weight:700;
+       background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208;text-decoration:none}
+  .cta:hover{filter:brightness(1.06)}
+  ol{margin:0;padding-inline-start:22px;line-height:2.1;color:var(--muted)}
+  ol b{color:var(--ink)}
+  .note{border-inline-start:3px solid var(--gold);padding:12px 16px;margin-top:18px;
+        background:rgba(232,184,109,.07);border-radius:0 10px 10px 0;font-size:14.5px;
+        color:var(--muted);line-height:1.85}
+  h2{font-size:17px;margin:0 0 14px}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  td{padding:9px 0;border-bottom:1px solid var(--line);vertical-align:top}
+  td:first-child{color:var(--muted);white-space:nowrap;padding-inline-end:14px}
+  footer{color:var(--muted);font-size:13.5px;text-align:center;padding:0 6vw 40px}
+  a{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="mark">PS</span>
+    <div><strong>ProStudio</strong><small>إرسال فيديو</small></div>
+  </div>
+  <nav>
+    <a href="index.html">الرئيسية</a>
+    <a href="preview.html">المعاينة</a>
+    <a href="send.html" class="on">إرسال فيديو</a>
+  </nav>
+</header>
+
+<main>
+  <h1>أرسل فيديو لدبلجته</h1>
+  <p class="lede">
+    اسحب الفيديو في النموذج، اختر اللهجة والأصوات، وأرسل.
+    يُفتح الطلب على GitHub فتصلني إشعاراً به.
+  </p>
+
+  <div class="panel">
+    <a class="cta"
+       href="https://github.com/dhiyaddineb-hue/prostudio/issues/new?template=dub-request.yml"
+       target="_blank" rel="noopener">افتح نموذج الإرسال ←</a>
+
+    <div class="note">
+      يتطلب حساب GitHub (مجاني). النموذج يرفع الفيديو بنفسه — لا تحتاج
+      خدمة تخزين خارجية للملفات حتى ١٠ ميغابايت.
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>الخطوات</h2>
+    <ol>
+      <li>اضغط الزر أعلاه — يفتح نموذجاً على GitHub</li>
+      <li><b>اسحب ملف الفيديو</b> وأفلته في خانة «الفيديو»، أو الصق رابطاً</li>
+      <li>اختر <b>اللهجة</b> و<b>الأصوات</b> والإبقاء على الموسيقى من عدمه</li>
+      <li>الصق <b>النص العربي</b> إن كان جاهزاً — يرفع الدقة كثيراً</li>
+      <li>اضغط <b>Submit new issue</b></li>
+    </ol>
+  </div>
+
+  <div class="panel">
+    <h2>ماذا يحدث بعدها</h2>
+    <table>
+      <tr><td>١</td><td>يُستخرج النص من الترجمة الظاهرة على الفيديو، أو يُستخدم نصك</td></tr>
+      <tr><td>٢</td><td>يُعزل الحوار الأصلي عن الموسيقى</td></tr>
+      <tr><td>٣</td><td>يُعاد الحوار باللهجة المطلوبة بمقاطع متصلة تحفظ التنغيم</td></tr>
+      <tr><td>٤</td><td>تُزامن كل جملة على توقيتها ويُمزج الصوت</td></tr>
+      <tr><td>٥</td><td>تصلك النتيجة في نفس الطلب، مع صفحة معاينة</td></tr>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>حدود ينبغي معرفتها</h2>
+    <table>
+      <tr><td>حجم الملف</td><td>حتى ١٠ ميغابايت مرفوعاً مباشرة؛ الأكبر يحتاج رابطاً</td></tr>
+      <tr><td>المدة</td><td>الأنسب حتى ٣ دقائق — الأطول يستغرق وقتاً أطول بكثير</td></tr>
+      <tr><td>الأصوات</td><td>أصوات تركيبية عالية الجودة، وليست استنساخاً لصوت الممثل</td></tr>
+      <tr><td>أفضل نتيجة</td><td>مقطع حواره واضح والموسيقى فيه غير طاغية</td></tr>
+    </table>
+  </div>
+</main>
+
+<footer>ProStudio · رخصة MIT</footer>
+
+</body>
+</html>

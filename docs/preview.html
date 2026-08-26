@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>معاينة الدبلجة — ProStudio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--bg:#07080c;--ink:#f4efe4;--muted:#b7b0a3;--line:rgba(244,239,228,.12);
+        --card:rgba(16,17,23,.78);--gold:#e8b86d;--ok:#7dcea0}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
+       font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;
+       background-image:radial-gradient(circle at 12% 6%,rgba(232,184,109,.15),transparent 38%),
+                        radial-gradient(circle at 90% 88%,rgba(90,140,255,.10),transparent 34%)}
+  header{padding:24px 6vw 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
+  .mark{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
+        background:linear-gradient(160deg,var(--gold),#9a6a2c);color:#1a1208;font-weight:700}
+  .brand strong{display:block}.brand small{color:var(--muted)}
+  nav a{color:var(--muted);text-decoration:none;font-size:14.5px;margin-inline-start:16px}
+  nav a:hover,nav a.on{color:var(--gold)}
+  main{max-width:1080px;margin:0 auto;padding:22px 6vw 60px}
+  h1{font-size:clamp(24px,4vw,36px);margin:14px 0 6px}
+  .lede{color:var(--muted);margin:0 0 24px;font-size:16.5px}
+  .grid{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:24px;align-items:start}
+  @media(max-width:840px){.grid{grid-template-columns:1fr}}
+  video{width:100%;border-radius:16px;background:#000;display:block;
+        box-shadow:0 24px 56px rgba(0,0,0,.55)}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px}
+  .panel h2{margin:0 0 14px;font-size:17px}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  td{padding:9px 0;border-bottom:1px solid var(--line);vertical-align:top}
+  td:first-child{color:var(--muted);white-space:nowrap;padding-inline-end:14px}
+  .ok{color:var(--ok);font-weight:600}
+  .btn{display:inline-block;margin:8px 8px 0 0;padding:12px 20px;border-radius:11px;
+       text-decoration:none;font-weight:600;font-size:14.5px}
+  .primary{background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208}
+  .ghost{border:1px solid var(--line);color:var(--ink)}
+  .cues{max-height:330px;overflow:auto;font-size:14px;line-height:1.95}
+  .cue{display:flex;gap:12px;padding:5px 0;border-bottom:1px solid rgba(244,239,228,.06);cursor:pointer}
+  .cue:hover{color:var(--gold)}
+  .cue time{color:var(--muted);font-variant-numeric:tabular-nums;flex:0 0 46px}
+  .cue.on{color:var(--gold);font-weight:600}
+  .tag{display:inline-block;font-size:12px;padding:3px 9px;border-radius:999px;
+       border:1px solid var(--line);color:var(--muted);margin-inline-end:6px}
+  footer{color:var(--muted);font-size:13.5px;text-align:center;padding:0 6vw 40px}
+  a{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="mark">PS</span>
+    <div><strong>ProStudio</strong><small>معاينة الدبلجة</small></div>
+  </div>
+  <nav>
+    <a href="index.html">الرئيسية</a>
+    <a href="preview.html" class="on">المعاينة</a>
+    <a href="send.html">إرسال فيديو</a>
+  </nav>
+</header>
+
+<main>
+  <h1>Phantom Thread — دبلجة مصرية</h1>
+  <p class="lede">
+    <span class="tag">24 جملة</span>
+    <span class="tag">عامية مصرية</span>
+    <span class="tag">59 ثانية</span>
+    شاهد قبل التحميل — اضغط أي سطر للانتقال إليه.
+  </p>
+
+  <div class="grid">
+    <div>
+      <video id="player" controls playsinline preload="metadata" src="Phantom-Thread.mp4">
+        <track kind="subtitles" srclang="ar" label="العربية" default src="Phantom-Thread.vtt" />
+        متصفحك لا يدعم تشغيل الفيديو.
+      </video>
+      <a class="btn primary" href="Phantom-Thread.mp4" download>تحميل الفيديو</a>
+      <a class="btn ghost" href="Phantom-Thread.srt" download>الترجمة SRT</a>
+    </div>
+
+    <div style="display:grid;gap:18px">
+      <section class="panel">
+        <h2>الحوار</h2>
+        <div class="cues" id="cues">جارٍ التحميل…</div>
+      </section>
+
+      <section class="panel">
+        <h2>القياسات</h2>
+        <table>
+          <tr><td>الشرائح</td><td><span class="ok">24 / 24</span></td></tr>
+          <tr><td>تداخل الجُمل</td><td><span class="ok">صفر</span></td></tr>
+          <tr><td>سرعة الكلام</td><td>10.4 حرف/ثانية</td></tr>
+          <tr><td>كتم الإنجليزية</td><td>‎−25.8 ديسيبل</td></tr>
+          <tr><td>الذروة</td><td>‎−1.40 dBFS بلا قصّ</td></tr>
+        </table>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer>ProStudio · رخصة MIT</footer>
+
+<script>
+// Build the transcript from the same VTT the player uses, so the two can never
+// drift apart.
+const player = document.getElementById('player');
+const box = document.getElementById('cues');
+
+function parseTime(t){
+  const [h,m,s] = t.split(':');
+  return (+h)*3600 + (+m)*60 + parseFloat(s);
+}
+
+fetch('Phantom-Thread.vtt')
+  .then(r => r.ok ? r.text() : Promise.reject(r.status))
+  .then(text => {
+    const cues = [];
+    for (const block of text.replace(/\r/g,'').split('\n\n')){
+      const lines = block.split('\n').filter(Boolean);
+      const at = lines.findIndex(l => l.includes('-->'));
+      if (at === -1) continue;
+      const [from] = lines[at].split('-->').map(s => s.trim());
+      const body = lines.slice(at+1).join(' ').trim();
+      if (body) cues.push({ t: parseTime(from), text: body });
+    }
+    if (!cues.length){ box.textContent = 'لا توجد ترجمة.'; return; }
+
+    box.innerHTML = '';
+    cues.forEach((c, i) => {
+      const row = document.createElement('div');
+      row.className = 'cue';
+      row.innerHTML = `<time>${new Date(c.t*1000).toISOString().substr(14,5)}</time><span>${c.text}</span>`;
+      row.onclick = () => { player.currentTime = c.t; player.play(); };
+      box.appendChild(row);
+      c.el = row;
+    });
+
+    let active = -1;
+    player.addEventListener('timeupdate', () => {
+      let i = cues.findIndex((c, n) =>
+        player.currentTime >= c.t && (n+1 === cues.length || player.currentTime < cues[n+1].t));
+      if (i !== active){
+        if (cues[active]) cues[active].el.classList.remove('on');
+        if (cues[i]) {
+          cues[i].el.classList.add('on');
+          cues[i].el.scrollIntoView({ block:'nearest', behavior:'smooth' });
+        }
+        active = i;
+      }
+    });
+  })
+  .catch(() => { box.textContent = 'تعذّر تحميل الترجمة.'; });
+</script>
+
+</body>
+</html>

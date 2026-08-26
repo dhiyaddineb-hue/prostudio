@@ -51,9 +51,16 @@
 </head>
 <body>
 
-<header>
-  <span class="mark">PS</span>
-  <div><strong>ProStudio</strong><small>دبلجة عربية آلية</small></div>
+<header style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+  <div style="display:flex;align-items:center;gap:12px">
+    <span class="mark">PS</span>
+    <div><strong>ProStudio</strong><small>دبلجة عربية آلية</small></div>
+  </div>
+  <nav style="display:flex;gap:16px">
+    <a href="index.html" style="color:var(--gold);text-decoration:none;font-size:14.5px">الرئيسية</a>
+    <a href="preview.html" style="color:var(--muted);text-decoration:none;font-size:14.5px">المعاينة</a>
+    <a href="send.html" style="color:var(--muted);text-decoration:none;font-size:14.5px">إرسال فيديو</a>
+  </nav>
 </header>
 
 <main>
@@ -73,9 +80,8 @@
         متصفحك لا يدعم تشغيل الفيديو.
       </video>
 
-      <a class="btn primary"
-         href="Phantom-Thread.mp4"
-         download>تحميل الفيديو</a>
+      <a class="btn primary" href="preview.html">معاينة كاملة ←</a>
+      <a class="btn ghost" href="Phantom-Thread.mp4" download>تحميل الفيديو</a>
       <a class="btn ghost"
          href="Phantom-Thread.srt"
          download>الترجمة SRT</a>
