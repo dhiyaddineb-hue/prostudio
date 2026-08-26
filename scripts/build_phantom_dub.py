@@ -203,6 +203,60 @@ def fade(a: np.ndarray, ms: int = 15) -> np.ndarray:
     return out
 
 
+def split_by_text(
+    audio: np.ndarray,
+    weights: list[float],
+    min_piece: float = 0.28,
+) -> list[np.ndarray]:
+    """Cut a continuous take into pieces proportional to their text length.
+
+    Splitting purely on the loudest pauses mis-assigns lines: in seg_D_f it gave
+    "مكشوف" (5 characters) 2.17 s while a 21-character line got 0.67 s, so the
+    wrong words landed on the wrong cues. Pause positions are still preferred,
+    but only the pause nearest each text-proportional boundary is used.
+    """
+    total = float(sum(weights)) or 1.0
+    n = len(audio)
+    if len(weights) <= 1 or n == 0:
+        return [audio]
+
+    fr = int(SR * 0.02)
+    frames = n // fr
+    quiet = np.zeros(max(frames, 1), dtype=bool)
+    if frames:
+        energy = np.sqrt(
+            np.mean(audio[: frames * fr].reshape(frames, fr) ** 2, axis=1) + 1e-12
+        )
+        quiet = energy < max(float(np.median(energy)) * 0.35, 1e-5)
+
+    cuts = []
+    running = 0.0
+    for w in weights[:-1]:
+        running += w
+        ideal = int(running / total * n)
+        # Snap to the nearest silent frame within 0.35 s, else cut where the
+        # text says to.
+        window = int(0.35 * SR) // fr
+        centre = min(max(ideal // fr, 0), max(frames - 1, 0))
+        best = None
+        for off in range(window + 1):
+            for cand in (centre - off, centre + off):
+                if 0 <= cand < frames and quiet[cand]:
+                    best = cand
+                    break
+            if best is not None:
+                break
+        cut = (best * fr) if best is not None else ideal
+        cuts.append(max(cut, int(min_piece * SR) * len(cuts)))
+
+    bounds = [0] + sorted(cuts) + [n]
+    out = []
+    for k in range(len(bounds) - 1):
+        piece = audio[bounds[k]: bounds[k + 1]]
+        out.append(piece if piece.size else np.zeros(int(min_piece * SR), dtype=np.float32))
+    return out
+
+
 def split_on_pauses(audio: np.ndarray, pieces: int) -> list[np.ndarray]:
     """Cut a multi-line take into ``pieces`` at its longest internal pauses."""
     if pieces <= 1:
@@ -246,7 +300,18 @@ def cue_audio(index: int, speaker: str, cache: dict) -> np.ndarray | None:
             src = CLIP / f"{name}.wav"
             if src.exists():
                 if name not in cache:
-                    cache[name] = split_on_pauses(trim(decode(src)), len(members))
+                    weights = [
+                        max(len([c for c in CUES[m - 1][3] if not c.isspace()]), 1)
+                        if m
+                        # Trailing filler: roughly as long as the line it
+                        # follows, so the kept piece gets its fair share.
+                        else max(
+                            len([c for c in CUES[members[0] - 1][3] if not c.isspace()]),
+                            1,
+                        )
+                        for m in members
+                    ]
+                    cache[name] = split_by_text(trim(decode(src)), weights)
                 pos = members.index(index + 1)
                 part = cache[name][pos] if pos < len(cache[name]) else None
                 if part is not None and part.size:
