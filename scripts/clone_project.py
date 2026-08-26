@@ -40,6 +40,14 @@ from youtube_auto_dub import xtts_clone  # noqa: E402
 
 SR = 44100
 
+# Below this, the reference carries more music than voice and the clone
+# imitates the soundtrack. Measured on this clip: the best window is -3.9 dB.
+MIN_REF_SNR_DB = 8.0
+
+
+def _rms_db(x: np.ndarray) -> float:
+    return 20.0 * float(np.log10(np.sqrt(np.mean(x ** 2) + 1e-12) + 1e-12))
+
 
 def merge_runs(
     windows: list[tuple[float, float]],
@@ -204,7 +212,7 @@ def main() -> None:
 
     print(f"separating {sources[0].name}…")
     left, right = decode_stereo(sources[0], SR)
-    actor_voice, _ = split_center(left, right, SR)
+    actor_voice, residual_music = split_center(left, right, SR)
 
     # Group each speaker's own cues; a reference must come from that actor.
     by_speaker: dict[str, list[tuple[float, float]]] = {}
@@ -236,9 +244,23 @@ def main() -> None:
         import soundfile as sf
 
         clip = actor_voice[int(start * SR): int(end * SR)]
+        bed = residual_music[int(start * SR): int(end * SR)]
         peak = float(np.max(np.abs(clip)) or 0.0)
         if peak < 1e-4:
             print(f"  [{speaker}] reference is silent — skipping")
+            continue
+
+        # A clone copies whatever dominates the reference. Centre separation
+        # leaves score behind, and on this clip the leftover music is *louder*
+        # than the voice, so the model ends up imitating the soundtrack.
+        snr = _rms_db(clip) - _rms_db(bed)
+        if snr < MIN_REF_SNR_DB and os.environ.get("FORCE_CLONE") != "1":
+            print(
+                f"  [{speaker}] reference is {snr:+.1f} dB voice-to-music, "
+                f"below the {MIN_REF_SNR_DB:+.0f} dB a clone needs — skipping.\n"
+                f"      The separated stem still carries the score; cloning it "
+                f"would imitate the music, not the actor."
+            )
             continue
         path = project.work_dir / f"ref_{speaker}.wav"
         path.parent.mkdir(parents=True, exist_ok=True)
