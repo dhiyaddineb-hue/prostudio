@@ -36,6 +36,7 @@ from youtube_auto_dub.clone_tts import (  # noqa: E402
 )
 from youtube_auto_dub.project_dirs import load  # noqa: E402
 from youtube_auto_dub.stem_split import decode_stereo, split_center  # noqa: E402
+from youtube_auto_dub import xtts_clone  # noqa: E402
 
 SR = 44100
 
@@ -171,21 +172,29 @@ def main() -> None:
     if not project.cues:
         raise SystemExit(f"{slug}: no cues in project.json — nothing to clone")
 
-    if not available():
-        raise SystemExit(
-            "F5-TTS weights are not available here.\n"
-            "Install f5-tts on a machine that can reach HuggingFace, or run "
-            "the 'Clone voices and dub' workflow on GitHub Actions."
-        )
-
-    # Two hard checks before spending an hour of synthesis on a bad result.
-    problems = preflight(project)
-    if problems and os.environ.get("FORCE_CLONE") != "1":
-        print("\n".join(problems))
-        raise SystemExit(
-            "Refusing to run: the clone would produce unusable audio.\n"
-            "Set FORCE_CLONE=1 to run anyway."
-        )
+    # XTTS-v2 speaks Arabic and needs no reference transcript, so it is tried
+    # first. F5-TTS only handles this script correctly for non-Arabic text.
+    use_xtts = xtts_clone.available()
+    if use_xtts:
+        known, total = xtts_clone.coverage([c["text"] for c in project.cues])
+        if total:
+            print(f"XTTS-v2 ready — Arabic coverage {known}/{total} characters")
+    else:
+        if not available():
+            raise SystemExit(
+                "No cloning engine available.\n"
+                "Install coqui-tts (XTTS-v2, speaks Arabic) or f5-tts on a "
+                "machine that can reach HuggingFace, or run the workflow on "
+                "GitHub Actions."
+            )
+        print("XTTS-v2 unavailable; falling back to F5-TTS")
+        problems = preflight(project)
+        if problems and os.environ.get("FORCE_CLONE") != "1":
+            print("\n".join(problems))
+            raise SystemExit(
+                "Refusing to run: the clone would produce unusable audio.\n"
+                "Install TTS (XTTS-v2) for Arabic, or set FORCE_CLONE=1."
+            )
 
     sources = sorted(project.source_dir.glob("*.mp4")) or sorted(
         (ROOT / "inbox").glob("*.mp4")
@@ -266,7 +275,12 @@ def main() -> None:
         if ref is None:
             continue
         dest = project.cue_take(int(cue["i"]), speaker)
-        if clone_speak(cue["text"], ref, dest):
+        ok = (
+            xtts_clone.clone_speak(cue["text"], ref.audio_path, dest)
+            if use_xtts
+            else clone_speak(cue["text"], ref, dest)
+        )
+        if ok:
             done += 1
             print(f"  cue {cue['i']:2d} [{speaker}] cloned")
         else:

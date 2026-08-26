@@ -97,13 +97,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install f5-tts
+          # XTTS-v2: the engine that actually speaks Arabic.
+          pip install coqui-tts
 
       - name: Confirm the weights downloaded
+        env:
+          COQUI_TOS_AGREED: "1"
         run: |
           python - <<'PY'
-          from f5_tts.api import F5TTS
-          F5TTS()
-          print("F5-TTS ready")
+          from youtube_auto_dub.xtts_clone import available, MODEL_NAME
+          if available():
+              print(f"XTTS-v2 ready ({MODEL_NAME})")
+          else:
+              from f5_tts.api import F5TTS
+              F5TTS()
+              print("XTTS unavailable; F5-TTS ready")
           PY
 
       - name: Clone each line in the original actor's voice
@@ -111,6 +119,7 @@ jobs:
           PROJECT: ${{ inputs.project }}
           REF_SECONDS: ${{ inputs.ref_seconds }}
           MAX_CUES: ${{ inputs.max_cues }}
+          COQUI_TOS_AGREED: "1"
         run: python scripts/clone_project.py
 
       # Upload the voices before rendering. Cloning costs about an hour, and a

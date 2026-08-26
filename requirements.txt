@@ -21,3 +21,4 @@ praat-parselmouth
 # f5-tts
 pocketsphinx
 piper-tts
+coqui-tts
