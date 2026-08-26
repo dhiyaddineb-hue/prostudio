@@ -22,19 +22,34 @@
   .brand strong{display:block}.brand small{color:var(--muted)}
   nav a{color:var(--muted);text-decoration:none;font-size:14.5px;margin-inline-start:16px}
   nav a:hover,nav a.on{color:var(--gold)}
-  main{max-width:760px;margin:0 auto;padding:22px 6vw 60px}
+  main{max-width:820px;margin:0 auto;padding:22px 6vw 60px}
   h1{font-size:clamp(24px,4vw,36px);margin:14px 0 8px}
-  .lede{color:var(--muted);margin:0 0 26px;font-size:16.5px;line-height:1.8}
-  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px;margin-bottom:18px}
-  .cta{display:block;text-align:center;padding:18px;border-radius:14px;font-size:17px;font-weight:700;
-       background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208;text-decoration:none}
-  .cta:hover{filter:brightness(1.06)}
-  ol{margin:0;padding-inline-start:22px;line-height:2.1;color:var(--muted)}
-  ol b{color:var(--ink)}
-  .note{border-inline-start:3px solid var(--gold);padding:12px 16px;margin-top:18px;
+  .lede{color:var(--muted);margin:0 0 24px;font-size:16.5px;line-height:1.8}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:18px}
+  h2{font-size:17px;margin:0 0 16px}
+  label{display:block;font-size:14.5px;margin:14px 0 7px}
+  label:first-of-type{margin-top:0}
+  select,textarea{width:100%;background:rgba(0,0,0,.32);color:var(--ink);
+    border:1px solid var(--line);border-radius:11px;padding:12px 14px;font-size:15px;
+    font-family:inherit}
+  textarea{resize:vertical;min-height:84px;line-height:1.8}
+  select:focus,textarea:focus{outline:none;border-color:var(--gold)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:640px){.row{grid-template-columns:1fr}}
+  .cta{display:block;width:100%;text-align:center;padding:17px;border-radius:13px;
+       font-size:16.5px;font-weight:700;border:0;cursor:pointer;margin-top:20px;
+       background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208;
+       font-family:inherit;text-decoration:none}
+  .cta:hover{filter:brightness(1.07)}
+  .note{border-inline-start:3px solid var(--gold);padding:13px 16px;margin-top:16px;
         background:rgba(232,184,109,.07);border-radius:0 10px 10px 0;font-size:14.5px;
         color:var(--muted);line-height:1.85}
-  h2{font-size:17px;margin:0 0 14px}
+  .step{display:flex;gap:14px;padding:11px 0;border-bottom:1px solid rgba(244,239,228,.07);
+        font-size:14.5px;line-height:1.75;color:var(--muted)}
+  .step:last-child{border:0}
+  .n{flex:0 0 26px;height:26px;border-radius:50%;background:rgba(232,184,109,.15);
+     color:var(--gold);display:grid;place-items:center;font-weight:700;font-size:13px}
+  .step b{color:var(--ink)}
   table{width:100%;border-collapse:collapse;font-size:14.5px}
   td{padding:9px 0;border-bottom:1px solid var(--line);vertical-align:top}
   td:first-child{color:var(--muted);white-space:nowrap;padding-inline-end:14px}
@@ -59,55 +74,126 @@
 <main>
   <h1>أرسل فيديو لدبلجته</h1>
   <p class="lede">
-    اسحب الفيديو في النموذج، اختر اللهجة والأصوات، وأرسل.
-    يُفتح الطلب على GitHub فتصلني إشعاراً به.
+    اختر الإعدادات هنا، ثم اسحب ملف الفيديو في الصفحة التي تُفتح.
+    GitHub يستضيف الملف بنفسه — لا تحتاج خدمة تخزين خارجية.
   </p>
 
   <div class="panel">
-    <a class="cta"
-       href="https://github.com/dhiyaddineb-hue/prostudio/issues/new?template=dub-request.yml"
-       target="_blank" rel="noopener">افتح نموذج الإرسال ←</a>
+    <h2>إعدادات الدبلجة</h2>
+
+    <div class="row">
+      <div>
+        <label for="dialect">اللهجة</label>
+        <select id="dialect">
+          <option value="مصري">مصري</option>
+          <option value="فصحى">فصحى</option>
+          <option value="خليجي">خليجي</option>
+          <option value="شامي">شامي</option>
+        </select>
+      </div>
+      <div>
+        <label for="voices">الأصوات</label>
+        <select id="voices">
+          <option value="رجل وامرأة (حوار)">رجل وامرأة (حوار)</option>
+          <option value="رجل فقط">رجل فقط</option>
+          <option value="امرأة فقط">امرأة فقط</option>
+          <option value="راوٍ واحد">راوٍ واحد</option>
+        </select>
+      </div>
+    </div>
+
+    <label for="music">الموسيقى الأصلية</label>
+    <select id="music">
+      <option value="نعم — احتفظ بالموسيقى">نعم — احتفظ بالموسيقى</option>
+      <option value="لا — صوت الدبلجة فقط">لا — صوت الدبلجة فقط</option>
+    </select>
+
+    <label for="script">النص العربي (اختياري — يرفع الدقة كثيراً)</label>
+    <textarea id="script" placeholder="اتركه فارغاً ليُستخرج من الترجمة الظاهرة على الفيديو"></textarea>
+
+    <label for="notes">ملاحظات (اختياري)</label>
+    <textarea id="notes" placeholder="صوت عميق وهادئ، إيقاع بطيء…" style="min-height:64px"></textarea>
+
+    <a class="cta" id="go" href="#" target="_blank" rel="noopener">
+      افتح صندوق الرفع ←
+    </a>
 
     <div class="note">
-      يتطلب حساب GitHub (مجاني). النموذج يرفع الفيديو بنفسه — لا تحتاج
-      خدمة تخزين خارجية للملفات حتى ١٠ ميغابايت.
+      <b style="color:var(--ink)">مهم:</b> بعد فتح الصفحة، <b style="color:var(--ink)">اسحب ملف
+      الفيديو وأفلته داخل المربع الكبير</b>. سيرفعه GitHub ويضع رابطه تلقائياً،
+      ثم اضغط <b style="color:var(--ink)">Submit new issue</b>.
     </div>
   </div>
 
   <div class="panel">
     <h2>الخطوات</h2>
-    <ol>
-      <li>اضغط الزر أعلاه — يفتح نموذجاً على GitHub</li>
-      <li><b>اسحب ملف الفيديو</b> وأفلته في خانة «الفيديو»، أو الصق رابطاً</li>
-      <li>اختر <b>اللهجة</b> و<b>الأصوات</b> والإبقاء على الموسيقى من عدمه</li>
-      <li>الصق <b>النص العربي</b> إن كان جاهزاً — يرفع الدقة كثيراً</li>
-      <li>اضغط <b>Submit new issue</b></li>
-    </ol>
-  </div>
-
-  <div class="panel">
-    <h2>ماذا يحدث بعدها</h2>
-    <table>
-      <tr><td>١</td><td>يُستخرج النص من الترجمة الظاهرة على الفيديو، أو يُستخدم نصك</td></tr>
-      <tr><td>٢</td><td>يُعزل الحوار الأصلي عن الموسيقى</td></tr>
-      <tr><td>٣</td><td>يُعاد الحوار باللهجة المطلوبة بمقاطع متصلة تحفظ التنغيم</td></tr>
-      <tr><td>٤</td><td>تُزامن كل جملة على توقيتها ويُمزج الصوت</td></tr>
-      <tr><td>٥</td><td>تصلك النتيجة في نفس الطلب، مع صفحة معاينة</td></tr>
-    </table>
+    <div class="step"><span class="n">١</span><div>اضبط الإعدادات أعلاه واضغط <b>افتح صندوق الرفع</b></div></div>
+    <div class="step"><span class="n">٢</span><div><b>اسحب الفيديو</b> وأفلته في مربع النص الكبير — انتظر اكتمال الرفع</div></div>
+    <div class="step"><span class="n">٣</span><div>اضغط <b>Submit new issue</b></div></div>
+    <div class="step"><span class="n">٤</span><div>تصلك النتيجة في نفس الطلب مع رابط معاينة</div></div>
   </div>
 
   <div class="panel">
     <h2>حدود ينبغي معرفتها</h2>
     <table>
-      <tr><td>حجم الملف</td><td>حتى ١٠ ميغابايت مرفوعاً مباشرة؛ الأكبر يحتاج رابطاً</td></tr>
-      <tr><td>المدة</td><td>الأنسب حتى ٣ دقائق — الأطول يستغرق وقتاً أطول بكثير</td></tr>
+      <tr><td>حجم الملف</td><td>حتى ١٠ ميغابايت مرفوعاً مباشرة؛ الأكبر يحتاج رابطاً خارجياً</td></tr>
+      <tr><td>المدة</td><td>الأنسب حتى ٣ دقائق</td></tr>
       <tr><td>الأصوات</td><td>أصوات تركيبية عالية الجودة، وليست استنساخاً لصوت الممثل</td></tr>
-      <tr><td>أفضل نتيجة</td><td>مقطع حواره واضح والموسيقى فيه غير طاغية</td></tr>
+      <tr><td>أفضل نتيجة</td><td>حوار واضح والموسيقى غير طاغية عليه</td></tr>
+      <tr><td>يتطلب</td><td>حساب GitHub مجاني</td></tr>
     </table>
   </div>
 </main>
 
 <footer>ProStudio · رخصة MIT</footer>
+
+<script>
+// Build a plain new-issue link with the body pre-filled. A ?template= link only
+// works once the form lives on the repository's default branch, so this uses
+// the parameters that work from any branch today.
+const REPO = 'https://github.com/dhiyaddineb-hue/prostudio/issues/new';
+
+function build(){
+  const v = id => document.getElementById(id).value.trim();
+  const body = [
+    '## الفيديو',
+    '',
+    '<!-- اسحب ملف الفيديو وأفلته هنا، أو الصق رابطاً -->',
+    '',
+    '',
+    '## الإعدادات',
+    '',
+    '| | |',
+    '| --- | --- |',
+    `| اللهجة | ${v('dialect')} |`,
+    `| الأصوات | ${v('voices')} |`,
+    `| الموسيقى | ${v('music')} |`,
+    '',
+    '## النص',
+    '',
+    v('script') || '_(يُستخرج تلقائياً من الترجمة الظاهرة على الفيديو)_',
+    '',
+    '## ملاحظات',
+    '',
+    v('notes') || '_(لا شيء)_',
+  ].join('\n');
+
+  const q = new URLSearchParams({
+    title: `[دبلجة] فيديو جديد — ${v('dialect')}`,
+    body,
+    labels: 'dub-request',
+  });
+  return `${REPO}?${q}`;
+}
+
+const go = document.getElementById('go');
+function refresh(){ go.href = build(); }
+document.querySelectorAll('select, textarea').forEach(el => {
+  el.addEventListener('change', refresh);
+  el.addEventListener('input', refresh);
+});
+refresh();
+</script>
 
 </body>
 </html>
