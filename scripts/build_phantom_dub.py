@@ -67,6 +67,7 @@ MAX_TEMPO = 1.12        # gentler than before; past this the read sounds rushed
 TARGET_RATE_MIN = 11.0
 MAX_NATURALISE = 1.6    # cap, so a very short line is not chipmunked
 TAIL_ALLOWANCE = 0.45   # a line may run this far past the next cue's start
+CUE_GUARD_SEC = 0.08    # minimum silence before the next line starts
 DIALOG_LEAD_DB = 11.0
 RESIDUAL_DUCK_DB = -15.0
 
@@ -329,6 +330,21 @@ def main() -> None:
             if dur > budget + TAIL_ALLOWANCE:
                 note += f" (+{dur - budget - TAIL_ALLOWANCE:.2f}s over)"
 
+        # Hard guard: a line must never run into the next speaker's slot.
+        # Slicing a continuous take at its pauses can hand back a piece longer
+        # than its cue, and four lines were overlapping by up to 1.05 s.
+        room = (next_start - start - CUE_GUARD_SEC) if i + 1 < len(CUES) else budget + 3.0
+        room = max(room, 0.35)
+        if len(audio) / SR > room:
+            # Prefer speeding the line up over cutting a word off its end;
+            # only trim if it is still too long after a modest squeeze.
+            factor = min((len(audio) / SR) / room, 1.25)
+            audio = trim(retime(audio, factor))
+            note += f"; fitted x{factor:.2f}"
+            if len(audio) / SR > room:
+                audio = audio[: int(room * SR)]
+                note += "; trimmed"
+
         audio = fade(audio)
         at = int(start * SR)
         stop = min(at + len(audio), len(voice))
@@ -372,10 +388,23 @@ def main() -> None:
     raw = WORK / "mix_raw.wav"
     final = WORK / "mix_final.wav"
     sf.write(raw, mixed, SR)
+
+    # Dialogue polish, measured on this mix rather than guessed:
+    #   highpass 70 Hz  — 7.4% of the voice energy sat below 120 Hz as rumble
+    #   -2 dB @ 8 kHz   — 26% sat above 5 kHz, which reads as harsh sibilance
+    #   +1.5 dB @ 2.5k  — lifts consonants so words cut through the score
+    #   compressor      — gentle only. A 2.5:1 pass squashed the range from
+    #                     10 dB to 7.4, which is flatter than where it started.
+    chain = (
+        "highpass=f=70,"
+        "equalizer=f=2500:t=q:w=1.2:g=1.5,"
+        "equalizer=f=8000:t=q:w=1.0:g=-2,"
+        "acompressor=threshold=-16dB:ratio=1.6:attack=12:release=250:makeup=1,"
+        "loudnorm=I=-16:TP=-1.5:LRA=11"
+    )
     subprocess.run(
         [ffmpeg_exe(), "-y", "-i", str(raw),
-         "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "48000", "-ac", "2",
-         str(final)],
+         "-af", chain, "-ar", "48000", "-ac", "2", str(final)],
         check=True, capture_output=True,
     )
     raw.unlink(missing_ok=True)
