@@ -20,16 +20,20 @@ Timing and script both come from the burned-in subtitles.
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
 
-from youtube_auto_dub.ffmpeg_bin import ensure_ffmpeg_on_path, ffmpeg_exe
-from youtube_auto_dub.project_dirs import load_or_create
-from youtube_auto_dub.stem_split import decode_stereo, split_center
-
 ROOT = Path(__file__).resolve().parent.parent
+# Run correctly as `python scripts/build_phantom_dub.py` from the repo root,
+# without needing PYTHONPATH set. Setting it locally is what hid this from me.
+sys.path.insert(0, str(ROOT))
+
+from youtube_auto_dub.ffmpeg_bin import ensure_ffmpeg_on_path, ffmpeg_exe  # noqa: E402
+from youtube_auto_dub.project_dirs import load_or_create  # noqa: E402
+from youtube_auto_dub.stem_split import decode_stereo, split_center  # noqa: E402
 
 # Everything for this dub lives in one project folder.
 PROJECT = load_or_create(
