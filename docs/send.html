@@ -22,37 +22,28 @@
   .brand strong{display:block}.brand small{color:var(--muted)}
   nav a{color:var(--muted);text-decoration:none;font-size:14.5px;margin-inline-start:16px}
   nav a:hover,nav a.on{color:var(--gold)}
-  main{max-width:640px;margin:0 auto;padding:40px 6vw 60px;text-align:center}
-  h1{font-size:clamp(26px,4.6vw,38px);margin:0 0 10px}
-  .lede{color:var(--muted);margin:0 0 30px;font-size:16.5px;line-height:1.8}
+  main{max-width:620px;margin:0 auto;padding:44px 6vw 60px;text-align:center}
+  h1{font-size:clamp(26px,4.6vw,38px);margin:0 0 12px}
+  .lede{color:var(--muted);margin:0 0 32px;font-size:16.5px;line-height:1.85}
 
-  .drop{display:block;border:2px dashed var(--line);border-radius:20px;
-        padding:64px 28px;cursor:pointer;transition:.18s;background:var(--card)}
-  .drop:hover,.drop.hot{border-color:var(--gold);background:rgba(232,184,109,.07)}
-  .drop.has{border-color:var(--ok);background:rgba(125,206,160,.08)}
-  .icon{font-size:44px;line-height:1;margin-bottom:16px;opacity:.85}
-  .drop strong{display:block;font-size:19px;margin-bottom:8px}
-  .drop em{color:var(--muted);font-style:normal;font-size:14.5px;line-height:1.9}
+  .big{display:block;border:2px dashed var(--line);border-radius:22px;
+       padding:70px 30px;background:var(--card);text-decoration:none;color:var(--ink);
+       transition:.18s}
+  .big:hover{border-color:var(--gold);background:rgba(232,184,109,.08);transform:translateY(-2px)}
+  .icon{font-size:52px;line-height:1;margin-bottom:18px;opacity:.9}
+  .big strong{display:block;font-size:21px;margin-bottom:10px}
+  .big em{color:var(--muted);font-style:normal;font-size:15px;line-height:1.9;display:block}
 
-  .files{margin:18px 0 0;text-align:start;display:none}
-  .files.on{display:block}
-  .file{display:flex;align-items:center;gap:12px;background:var(--card);
-        border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:8px}
-  .file .nm{flex:1;font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .file .sz{color:var(--muted);font-size:13px;white-space:nowrap}
-  .file .x{color:var(--muted);cursor:pointer;font-size:18px;line-height:1;padding:0 4px}
-  .file .x:hover{color:var(--gold)}
+  .steps{margin:30px 0 0;text-align:start;background:var(--card);
+         border:1px solid var(--line);border-radius:16px;padding:22px 24px}
+  .steps h2{font-size:16px;margin:0 0 14px}
+  .steps ol{margin:0;padding-inline-start:22px;line-height:2.15;color:var(--muted);font-size:15px}
+  .steps b{color:var(--ink)}
 
-  .cta{display:block;width:100%;padding:17px;border-radius:13px;font-size:16.5px;
-       font-weight:700;border:0;cursor:pointer;margin-top:22px;font-family:inherit;
-       background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208;text-decoration:none}
-  .cta[hidden]{display:none}
-  .cta:hover{filter:brightness(1.07)}
-
-  .note{border-inline-start:3px solid var(--gold);padding:14px 18px;margin-top:24px;
-        background:rgba(232,184,109,.07);border-radius:0 12px 12px 0;font-size:14.5px;
+  .note{border-inline-start:3px solid var(--ok);padding:14px 18px;margin-top:18px;
+        background:rgba(125,206,160,.08);border-radius:0 12px 12px 0;font-size:14.5px;
         color:var(--muted);line-height:1.9;text-align:start}
-  .note b{color:var(--ink)}
+  .note b{color:var(--ok)}
   footer{color:var(--muted);font-size:13.5px;text-align:center;padding:0 6vw 40px}
 </style>
 </head>
@@ -72,121 +63,45 @@
 
 <main>
   <h1>أرسل ملفك</h1>
-  <p class="lede">فيديو أو صوت — اسحبه أو اختره، وسأتولى الباقي.</p>
+  <p class="lede">فيديو أو صوت — اسحبه في الصفحة التالية وسأتولى الباقي.</p>
 
-  <label class="drop" id="drop">
-    <input id="file" type="file" multiple hidden
-           accept="video/*,audio/*,.mp4,.mkv,.webm,.mov,.m4v,.avi,.mp3,.wav,.m4a,.aac,.ogg,.flac" />
+  <a class="big" id="up"
+     href="https://github.com/dhiyaddineb-hue/prostudio/upload/arena/01a03969-prostudio/inbox"
+     target="_blank" rel="noopener">
     <div class="icon">⬆</div>
-    <strong id="title">اسحب الملف هنا</strong>
-    <em id="hint">أو اضغط للاختيار<br>MP4 · MKV · MOV · MP3 · WAV · M4A</em>
-  </label>
+    <strong>افتح صندوق الرفع</strong>
+    <em>
+      اسحب الملف أو اختره من جهازك<br>
+      MP4 · MKV · MOV · MP3 · WAV · M4A
+    </em>
+  </a>
 
-  <div class="files" id="files"></div>
-
-  <a class="cta" id="go" hidden target="_blank" rel="noopener">إرسال ←</a>
+  <div class="steps">
+    <h2>ثلاث خطوات</h2>
+    <ol>
+      <li>اضغط الصندوق أعلاه — يفتح صفحة الرفع على GitHub</li>
+      <li><b>اسحب ملفك</b> داخلها، أو اضغط <b>choose your files</b></li>
+      <li>انزل لأسفل واضغط <b>Commit changes</b></li>
+    </ol>
+  </div>
 
   <div class="note">
-    <b>مهم — الملف لا يُرفع من هنا.</b> بعد الضغط على «إرسال» تُفتح صفحة GitHub،
-    وهناك:
-    <ol style="margin:10px 0 0;padding-inline-start:20px;line-height:2">
-      <li><b>اسحب الملف داخل مربع النص</b></li>
-      <li>انتظر حتى يظهر رابطه في النص — قد يستغرق ثوانيَ</li>
-      <li>ثم اضغط <b>Submit new issue</b></li>
-    </ol>
-    <div style="margin-top:10px;color:var(--gold)">
-      إن أرسلت قبل ظهور الرابط، يصلني اسم الملف بلا محتواه.
-    </div>
+    <b>لماذا هذه الطريقة؟</b> الملف يُحفظ داخل المستودع مباشرة، فأصل إليه فوراً
+    وأبدأ الدبلجة. المرفقات في الطلبات لا تصلني.
   </div>
 </main>
 
 <footer>ProStudio · رخصة MIT</footer>
 
 <script>
-const $ = id => document.getElementById(id);
-const drop = $('drop'), input = $('file'), box = $('files'), go = $('go');
-let picked = [];
-
-const fmt = b => b < 1048576
-  ? (b / 1024).toFixed(0) + ' كيلوبايت'
-  : (b / 1048576).toFixed(1) + ' ميغابايت';
-
-function render(){
-  if (!picked.length){
-    box.classList.remove('on');
-    box.innerHTML = '';
-    drop.classList.remove('has');
-    $('title').textContent = 'اسحب الملف هنا';
-    $('hint').innerHTML = 'أو اضغط للاختيار<br>MP4 · MKV · MOV · MP3 · WAV · M4A';
-    go.hidden = true;
-    return;
-  }
-
-  box.classList.add('on');
-  box.innerHTML = picked.map((f, i) => `
-    <div class="file">
-      <span class="nm">${f.name}</span>
-      <span class="sz">${fmt(f.size)}</span>
-      <span class="x" data-i="${i}" title="إزالة">×</span>
-    </div>`).join('');
-
-  box.querySelectorAll('.x').forEach(el => {
-    el.onclick = e => {
-      e.preventDefault();
-      e.stopPropagation();
-      picked.splice(+el.dataset.i, 1);
-      render();
-    };
-  });
-
-  drop.classList.add('has');
-  $('title').textContent = picked.length === 1
-    ? 'ملف جاهز للإرسال'
-    : `${picked.length} ملفات جاهزة`;
-  $('hint').textContent = 'اضغط لإضافة المزيد';
-
-  // GitHub hosts the upload itself; the body just names what is coming so the
-  // request is readable before the file finishes attaching.
-  const list = picked.map(f => `- ${f.name} (${fmt(f.size)})`).join('\n');
-  const body = [
-    '<!-- ═══════════════════════════════════════════════ -->',
-    '<!--  اسحب الملف إلى هذا المربع الآن، قبل الإرسال     -->',
-    '<!-- ═══════════════════════════════════════════════ -->',
-    '',
-    '## ⬇ الصق الملف هنا',
-    '',
-    '**اسحب الملف إلى داخل هذا المربع وانتظر ظهور رابطه، ثم احذف هذا السطر.**',
-    '',
-    '',
-    '---',
-    '',
-    '### المطلوب دبلجته',
-    list,
-  ].join('\n');
-
-  const q = new URLSearchParams({
-    title: `[دبلجة] ${picked[0].name}`,
-    body,
-    labels: 'dub-request',
-  });
-  go.href = `https://github.com/dhiyaddineb-hue/prostudio/issues/new?${q}`;
-  go.hidden = false;
-}
-
-function add(list){
-  for (const f of list) picked.push(f);
-  render();
-}
-
-input.addEventListener('change', e => { add(e.target.files); input.value = ''; });
-
-['dragenter','dragover'].forEach(ev =>
-  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('hot'); }));
-['dragleave','drop'].forEach(ev =>
-  drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('hot'); }));
-drop.addEventListener('drop', e => { if (e.dataTransfer.files.length) add(e.dataTransfer.files); });
-
-render();
+// Keep the upload link pointed at whatever branch is publishing this page, so
+// the file always lands where the dub pipeline will look for it.
+(function(){
+  const REPO = 'https://github.com/dhiyaddineb-hue/prostudio';
+  const BRANCH = 'arena/01a03969-prostudio';
+  document.getElementById('up').href =
+    `${REPO}/upload/${BRANCH}/inbox`;
+})();
 </script>
 
 </body>
