@@ -1,0 +1,50 @@
+{
+  "slug": "Vikings-Ragnar-Floki",
+  "title": "Vikings — راغنار وفلوكي",
+  "source_name": "3dde7ebc7c_Instagram.mp4",
+  "lang": "ar",
+  "dialect": "msa",
+  "created_at": "2026-08-26T23:59:44+00:00",
+  "cues": [
+    {
+      "i": 1,
+      "start": 0.6,
+      "end": 2.1,
+      "speaker": "m",
+      "text": "يمكنك فعل ذلك، أليس كذلك يا فلوكي؟"
+    },
+    {
+      "i": 2,
+      "start": 7.5,
+      "end": 8.3,
+      "speaker": "m",
+      "text": "أم أنني مخطئ؟"
+    },
+    {
+      "i": 3,
+      "start": 13.0,
+      "end": 14.1,
+      "speaker": "f",
+      "text": "أستطيع أن أفعل ذلك، راغنار"
+    },
+    {
+      "i": 4,
+      "start": 15.0,
+      "end": 16.1,
+      "speaker": "f",
+      "text": "أنا أستطيع فعل ذلك من أجلك"
+    },
+    {
+      "i": 5,
+      "start": 21.0,
+      "end": 22.6,
+      "speaker": "f",
+      "text": "كل ما أفعله يا راغنار هو من أجلك"
+    }
+  ],
+  "voices": {
+    "m": "راغنار",
+    "f": "فلوكي"
+  },
+  "render": {}
+}
