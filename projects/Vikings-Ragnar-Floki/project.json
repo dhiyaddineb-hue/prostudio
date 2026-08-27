@@ -10,63 +10,98 @@
       "i": 1,
       "start": 0.66,
       "end": 1.88,
-      "speaker": "r",
+      "speaker": "m",
       "text": "أتقدر عليها يا فلوكي؟"
     },
     {
       "i": 2,
       "start": 7.36,
       "end": 8.08,
-      "speaker": "r",
+      "speaker": "m",
       "text": "أم أنا مخطئ؟"
     },
     {
       "i": 3,
       "start": 13.06,
       "end": 13.92,
-      "speaker": "k",
+      "speaker": "f",
       "text": "أستطيع يا راغنار"
     },
     {
       "i": 4,
       "start": 15.14,
       "end": 15.88,
-      "speaker": "k",
+      "speaker": "f",
       "text": "سأفعلها لأجلك"
     },
     {
       "i": 5,
       "start": 20.94,
       "end": 22.46,
-      "speaker": "k",
+      "speaker": "f",
       "text": "كل ما أفعله لأجلك يا راغنار"
     }
   ],
   "voices": {
-    "r": "راغنار (voice-14)",
-    "k": "فلوكي (voice-13)"
+    "m": "راغنار (voice-05)",
+    "f": "فلوكي (voice-00)"
   },
   "render": {
-    "segments": {},
-    "casting": {
-      "measured_actor_f0": {
-        "r": 118,
-        "k": 138
+    "segments": {
+      "seg_A_m": [
+        1,
+        2,
+        null
+      ],
+      "seg_B_f": [
+        3,
+        4,
+        5,
+        null
+      ]
+    },
+    "segments_with_filler": [
+      "seg_A_m",
+      "seg_B_f"
+    ],
+    "spoken": [
+      {
+        "i": 1,
+        "start": 0.66,
+        "end": 2.18,
+        "chars": 18
       },
-      "candidate_f0": {
-        "voice-13": 136,
-        "voice-14": 135,
-        "voice-15": 89,
-        "voice-16": 100
+      {
+        "i": 2,
+        "start": 7.36,
+        "end": 7.99,
+        "chars": 10
       },
-      "chosen": {
-        "r": "voice-14",
-        "k": "voice-13"
+      {
+        "i": 3,
+        "start": 13.06,
+        "end": 14.135,
+        "chars": 14
       },
-      "pitch_error_semitones": {
-        "r": 2.33,
-        "k": 0.25
+      {
+        "i": 4,
+        "start": 15.14,
+        "end": 16.065,
+        "chars": 12
+      },
+      {
+        "i": 5,
+        "start": 20.94,
+        "end": 22.84,
+        "chars": 22
       }
+    ],
+    "measured": {
+      "placed": 5,
+      "cues": 5,
+      "rate": 12.6,
+      "min_gap": 1.005,
+      "overlaps": 0
     }
   }
 }

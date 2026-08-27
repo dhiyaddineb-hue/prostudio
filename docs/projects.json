@@ -8,16 +8,16 @@
       "video": "Vikings-Ragnar-Floki.mp4",
       "srt": "Vikings-Ragnar-Floki.srt",
       "vtt": "Vikings-Ragnar-Floki.vtt",
-      "size": 6608626,
+      "size": 6609305,
       "cast": {
-        "m": "راغنار",
-        "f": "فلوكي"
+        "m": "راغنار (voice-05)",
+        "f": "فلوكي (voice-00)"
       },
       "metrics": {
         "cues": 5,
         "placed": 5,
-        "rate": 13.6,
-        "min_gap": 0.66,
+        "rate": 12.6,
+        "min_gap": 1.005,
         "overlaps": 0,
         "measured": true,
         "speakers": [
@@ -25,7 +25,7 @@
           "m"
         ],
         "duration": 24.75,
-        "peak_dbfs": -4.44,
+        "peak_dbfs": -4.4,
         "clipped": false
       }
     },
