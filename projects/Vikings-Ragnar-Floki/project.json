@@ -8,83 +8,65 @@
   "cues": [
     {
       "i": 1,
-      "start": 0.6,
-      "end": 2.1,
-      "speaker": "m",
-      "text": "يمكنك فعل ذلك، أليس كذلك يا فلوكي؟"
+      "start": 0.66,
+      "end": 1.88,
+      "speaker": "r",
+      "text": "أتقدر عليها يا فلوكي؟"
     },
     {
       "i": 2,
-      "start": 7.5,
-      "end": 8.3,
-      "speaker": "m",
-      "text": "أم أنني مخطئ؟"
+      "start": 7.36,
+      "end": 8.08,
+      "speaker": "r",
+      "text": "أم أنا مخطئ؟"
     },
     {
       "i": 3,
-      "start": 13.0,
-      "end": 14.1,
-      "speaker": "f",
-      "text": "أستطيع أن أفعل ذلك، راغنار"
+      "start": 13.06,
+      "end": 13.92,
+      "speaker": "k",
+      "text": "أستطيع يا راغنار"
     },
     {
       "i": 4,
-      "start": 15.0,
-      "end": 16.1,
-      "speaker": "f",
-      "text": "أنا أستطيع فعل ذلك من أجلك"
+      "start": 15.14,
+      "end": 15.88,
+      "speaker": "k",
+      "text": "سأفعلها لأجلك"
     },
     {
       "i": 5,
-      "start": 21.0,
-      "end": 22.6,
-      "speaker": "f",
-      "text": "كل ما أفعله يا راغنار هو من أجلك"
+      "start": 20.94,
+      "end": 22.46,
+      "speaker": "k",
+      "text": "كل ما أفعله لأجلك يا راغنار"
     }
   ],
   "voices": {
-    "m": "راغنار",
-    "f": "فلوكي"
+    "r": "راغنار (voice-14)",
+    "k": "فلوكي (voice-13)"
   },
   "render": {
-    "spoken": [
-      {
-        "i": 1,
-        "start": 0.6,
-        "end": 3.14,
-        "chars": 28
+    "segments": {},
+    "casting": {
+      "measured_actor_f0": {
+        "r": 118,
+        "k": 138
       },
-      {
-        "i": 2,
-        "start": 7.5,
-        "end": 8.48,
-        "chars": 11
+      "candidate_f0": {
+        "voice-13": 136,
+        "voice-14": 135,
+        "voice-15": 89,
+        "voice-16": 100
       },
-      {
-        "i": 3,
-        "start": 13.0,
-        "end": 14.34,
-        "chars": 22
+      "chosen": {
+        "r": "voice-14",
+        "k": "voice-13"
       },
-      {
-        "i": 4,
-        "start": 15.0,
-        "end": 16.41,
-        "chars": 21
-      },
-      {
-        "i": 5,
-        "start": 21.0,
-        "end": 22.61,
-        "chars": 25
+      "pitch_error_semitones": {
+        "r": 2.33,
+        "k": 0.25
       }
-    ],
-    "measured": {
-      "placed": 5,
-      "cues": 5,
-      "rate": 13.6,
-      "min_gap": 0.66,
-      "overlaps": 0
     }
   }
 }

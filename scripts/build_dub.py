@@ -63,12 +63,18 @@ def _source() -> Path:
     raise SystemExit("no source clip: put one in the project's source/ folder")
 
 SR = 44100
-MAX_TEMPO = 1.12        # gentler than before; past this the read sounds rushed
+MAX_TEMPO = 1.35        # past this the read sounds rushed
 # Natural Arabic speech runs 11-15 characters/second. The synthesised takes come
 # out around 7.4, which reads as sluggish rather than deliberate.
 TARGET_RATE_MIN = 11.0
 MAX_NATURALISE = 1.6    # cap, so a very short line is not chipmunked
-TAIL_ALLOWANCE = 0.45   # a line may run this far past the next cue's start
+# How far a line may outlast the actor's own mouth movement, as a multiple of
+# the caption window. Arabic needs more syllables than English for the same
+# thought, so some overshoot is unavoidable; 1.25x stays under the ~0.2 s that
+# viewers notice on a close-up. It used to be "anything up to the next cue",
+# which let one line run 2.23x and talk over a silent face for 1.30 s.
+MAX_OVERRUN = 1.25
+TAIL_ALLOWANCE = 0.10   # slack before a line counts as overrunning
 CUE_GUARD_SEC = 0.08    # minimum silence before the next line starts
 DIALOG_LEAD_DB = 11.0
 RESIDUAL_DUCK_DB = -15.0
@@ -395,9 +401,15 @@ def place_cues(total: int) -> tuple[np.ndarray, np.ndarray, int, list[dict]]:
             print(f"  cue {i + 1:2d}: MISSING")
             continue
 
-        # A line may use its own slot plus the silence before the next cue.
+        # How long the line may run. The caption's own window is the honest
+        # answer: it is roughly how long the actor's mouth moves. Letting a
+        # line spill into the silence before the next cue is what broke lip
+        # sync — measured on the Vikings clip, cue 1 ran 2.23x the actor's
+        # 1.14 s of speech and was still talking 1.30 s after he closed his
+        # mouth. A small overshoot is inaudible; a doubled one is not.
         next_start = CUES[i + 1][0] if i + 1 < len(CUES) else start + 8.0
-        budget = max(next_start - start - 0.08, end - start)
+        room_to_next = next_start - start - CUE_GUARD_SEC
+        budget = min(max(end - start, 0.35) * MAX_OVERRUN, max(room_to_next, 0.35))
         dur = len(audio) / SR
 
         # The takes are uniformly slow — measured at ~7.4 characters/second
@@ -421,10 +433,9 @@ def place_cues(total: int) -> tuple[np.ndarray, np.ndarray, int, list[dict]]:
             if dur > budget + TAIL_ALLOWANCE:
                 note += f" (+{dur - budget - TAIL_ALLOWANCE:.2f}s over)"
 
-        # Hard guard: a line must never run into the next speaker's slot.
-        # Slicing a continuous take at its pauses can hand back a piece longer
-        # than its cue, and four lines were overlapping by up to 1.05 s.
-        room = (next_start - start - CUE_GUARD_SEC) if i + 1 < len(CUES) else budget + 3.0
+        # Hard guard: a line must never run into the next speaker's slot, nor
+        # keep talking long after this speaker's mouth has stopped.
+        room = min(budget, room_to_next) if i + 1 < len(CUES) else budget
         room = max(room, 0.35)
         if len(audio) / SR > room:
             # Prefer speeding the line up over cutting a word off its end;
