@@ -21,115 +21,141 @@
     background-image:radial-gradient(circle at 15% 8%,rgba(232,184,109,.16),transparent 38%),
                      radial-gradient(circle at 88% 82%,rgba(90,140,255,.10),transparent 34%);
   }
-  header{padding:26px 6vw 0;display:flex;align-items:center;gap:12px}
+  header{padding:26px 6vw 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
   .mark{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
         background:linear-gradient(160deg,var(--gold),#9a6a2c);color:#1a1208;font-weight:700}
-  header strong{display:block;letter-spacing:.03em}
-  header small{color:var(--muted)}
+  .brand strong{display:block;letter-spacing:.03em}
+  .brand small{color:var(--muted)}
+  nav a{color:var(--muted);text-decoration:none;font-size:14.5px;margin-inline-start:16px}
+  nav a:hover,nav a.on{color:var(--gold)}
   main{max-width:1080px;margin:0 auto;padding:26px 6vw 60px}
   h1{font-size:clamp(26px,4.4vw,42px);line-height:1.2;margin:18px 0 8px}
-  .lede{color:var(--muted);font-size:17px;max-width:60ch;margin:0 0 26px}
-  .grid{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:26px;align-items:start}
-  @media(max-width:820px){.grid{grid-template-columns:1fr}}
-  video{width:100%;border-radius:16px;box-shadow:0 26px 60px rgba(0,0,0,.55);background:#000;display:block}
-  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px}
-  .panel h2{margin:0 0 14px;font-size:18px}
-  table{width:100%;border-collapse:collapse;font-size:14.5px}
-  td{padding:9px 0;border-bottom:1px solid var(--line);vertical-align:top}
-  td:first-child{color:var(--muted);white-space:nowrap;padding-inline-end:14px}
-  .ok{color:var(--ok);font-weight:600}
-  .btn{display:inline-block;margin:6px 8px 0 0;padding:11px 18px;border-radius:11px;
-       text-decoration:none;font-weight:600;font-size:14.5px}
+  .lede{color:var(--muted);font-size:17px;max-width:60ch;margin:0 0 30px}
+  h2.sec{font-size:19px;margin:38px 0 16px}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;
+        overflow:hidden;display:flex;flex-direction:column;transition:.18s}
+  .card:hover{border-color:var(--gold);transform:translateY(-2px)}
+  .card video{width:100%;aspect-ratio:16/9;object-fit:cover;background:#000;display:block}
+  .card .body{padding:16px 18px 18px;display:flex;flex-direction:column;gap:10px;flex:1}
+  .card h3{margin:0;font-size:17px}
+  .facts{display:flex;flex-wrap:wrap;gap:6px}
+  .tag{font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .tag.ok{color:var(--ok);border-color:rgba(125,206,160,.35)}
+  .row{display:flex;gap:8px;margin-top:auto;padding-top:6px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:10px 16px;border-radius:10px;
+       text-decoration:none;font-weight:600;font-size:14px}
   .primary{background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208}
   .ghost{border:1px solid var(--line);color:var(--ink)}
-  .steps{margin:0;padding-inline-start:20px;color:var(--muted);line-height:1.85;font-size:14.5px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px 24px}
+  .steps{margin:0;padding-inline-start:20px;color:var(--muted);line-height:1.95;font-size:14.5px}
   .steps b{color:var(--ink)}
   footer{color:var(--muted);font-size:13.5px;padding:0 6vw 40px;text-align:center}
   a{color:var(--gold)}
   code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:6px;font-size:13px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:760px){.two{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 
-<header style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-  <div style="display:flex;align-items:center;gap:12px">
+<header>
+  <div class="brand">
     <span class="mark">PS</span>
     <div><strong>ProStudio</strong><small>دبلجة عربية آلية</small></div>
   </div>
-  <nav style="display:flex;gap:16px">
-    <a href="index.html" style="color:var(--gold);text-decoration:none;font-size:14.5px">الرئيسية</a>
-    <a href="preview.html" style="color:var(--muted);text-decoration:none;font-size:14.5px">المعاينة</a>
-    <a href="send.html" style="color:var(--muted);text-decoration:none;font-size:14.5px">إرسال فيديو</a>
+  <nav>
+    <a href="index.html" class="on">الرئيسية</a>
+    <a href="preview.html">المعاينة</a>
+    <a href="send.html">إرسال فيديو</a>
   </nav>
 </header>
 
 <main>
-  <h1>Phantom Thread — دبلجة مصرية</h1>
+  <h1>الدبلجات الجاهزة</h1>
   <p class="lede">
-    حوار كامل مُعاد بالعامية المصرية، مع عزل الموسيقى عن الحوار الأصلي
-    ومزامنة كل جملة على توقيتها.
+    كل مقطع هنا مبني بالكامل: حوار عربي مُعاد، موسيقى الخلفية محفوظة،
+    وكل جملة مثبّتة على توقيتها. الأرقام تحت كل مقطع مقيسة من الملف نفسه.
   </p>
 
-  <div class="grid">
-    <div>
-      <video controls playsinline preload="metadata"
-             poster=""
-             src="Phantom-Thread.mp4">
-        <track kind="subtitles" srclang="ar" label="العربية" default
-               src="Phantom-Thread.vtt" />
-        متصفحك لا يدعم تشغيل الفيديو.
-      </video>
+  <div class="cards" id="cards">
+    <p style="color:var(--muted)">جارٍ التحميل…</p>
+  </div>
 
-      <a class="btn primary" href="preview.html">معاينة كاملة ←</a>
-      <a class="btn ghost" href="Phantom-Thread.mp4" download>تحميل الفيديو</a>
-      <a class="btn ghost"
-         href="Phantom-Thread.srt"
-         download>الترجمة SRT</a>
-    </div>
+  <h2 class="sec">أرسل مقطعك</h2>
+  <div class="two">
+    <section class="panel">
+      <p style="color:var(--muted);font-size:15px;line-height:1.9;margin:0 0 14px">
+        ارفع فيديو أو ملف صوت، ويرجع لك مدبلجاً بالعربية على هذه الصفحة.
+      </p>
+      <a class="btn primary" href="send.html">إرسال ملف ←</a>
+    </section>
 
-    <div style="display:grid;gap:18px">
-      <section class="panel">
-        <h2>القياسات</h2>
-        <table>
-          <tr><td>الشرائح</td><td><span class="ok">24 / 24</span> موضوعة</td></tr>
-          <tr><td>سرعة الكلام</td><td>10.4 حرف/ثانية <span style="color:var(--muted)">(الطبيعي 11–15)</span></td></tr>
-          <tr><td>تداخل الجُمل</td><td><span class="ok">صفر</span> — أقصر فجوة 0.08 ث</td></tr>
-          <tr><td>كتم الحوار الإنجليزي</td><td>‎−25.8 ديسيبل</td></tr>
-          <tr><td>الصوت الرجالي</td><td>111 هرتز <span style="color:var(--muted)">(الممثل 116)</span></td></tr>
-          <tr><td>الصوت النسائي</td><td>189 هرتز <span style="color:var(--muted)">(الممثلة 190)</span></td></tr>
-          <tr><td>الذروة</td><td>‎−1.40 dBFS بلا قصّ</td></tr>
-        </table>
-      </section>
-
-      <section class="panel">
-        <h2>كيف صُنع</h2>
-        <ol class="steps">
-          <li><b>استخراج النص</b> من الترجمة المحروقة على الصورة</li>
-          <li><b>عزل الموسيقى</b> عن الحوار بفصل القناة المركزية</li>
-          <li><b>إعادة الصياغة</b> إلى العامية المصرية</li>
-          <li><b>توليد الصوت</b> بمقاطع متصلة تحفظ التنغيم</li>
-          <li><b>المزامنة</b> بتقطيع نسبي لطول النص</li>
-        </ol>
-      </section>
-
-      <section class="panel">
-        <h2>تشغيله على مقطع آخر</h2>
-        <p style="color:var(--muted);font-size:14.5px;margin:0 0 12px;line-height:1.8">
-          ضع الفيديو في <code>inbox/</code> ثم:
-        </p>
-        <p style="margin:0"><code>python scripts/build_phantom_dub.py</code></p>
-        <a class="btn ghost" style="margin-top:14px"
-           href="https://github.com/dhiyaddineb-hue/prostudio/tree/arena/01a03969-prostudio">المستودع</a>
-      </section>
-    </div>
+    <section class="panel">
+      <h3 style="margin:0 0 12px;font-size:16px">كيف تُصنع</h3>
+      <ol class="steps">
+        <li><b>استخراج النص</b> من الترجمة أو من الصوت</li>
+        <li><b>عزل الموسيقى</b> عن الحوار بفصل القناة المركزية</li>
+        <li><b>إعادة الصياغة</b> إلى العربية بلهجة المشروع</li>
+        <li><b>توليد الصوت</b> بمقاطع متصلة تحفظ التنغيم</li>
+        <li><b>المزامنة</b> بتقطيع نسبي لطول النص</li>
+      </ol>
+    </section>
   </div>
 </main>
 
 <footer>
   ProStudio · مبني على
   <a href="https://github.com/mangodxd/youtube-auto-dub" target="_blank" rel="noreferrer">youtube-auto-dub</a>
+  · <a href="https://github.com/dhiyaddineb-hue/prostudio/tree/arena/01a03969-prostudio">المستودع</a>
   · رخصة MIT
 </footer>
+
+<script>
+// One source of truth: projects.json is regenerated from the rendered files, so
+// a new dub appears here the moment it is published — no HTML edit, and no
+// number that can drift away from the file it describes.
+fetch('projects.json')
+  .then(r => r.json())
+  .then(({ projects }) => {
+    const box = document.getElementById('cards');
+    if (!projects.length) { box.innerHTML = '<p style="color:var(--muted)">لا توجد دبلجة بعد.</p>'; return; }
+    box.innerHTML = '';
+    projects.forEach(p => {
+      const m = p.metrics;
+      const card = document.createElement('article');
+      card.className = 'card';
+      card.innerHTML = `
+        <video muted playsinline preload="metadata" src="${p.video}#t=0.5"></video>
+        <div class="body">
+          <h3></h3>
+          <div class="facts">
+            <span class="tag">${m.cues} جملة</span>
+            <span class="tag">${Math.round(m.duration)} ثانية</span>
+            ${m.rate ? `<span class="tag">${m.rate} حرف/ث</span>` : ''}
+            <span class="tag ${m.overlaps ? '' : 'ok'}">${m.overlaps ? m.overlaps + ' تداخل' : 'بلا تداخل'}</span>
+            <span class="tag ${m.clipped ? '' : 'ok'}">${m.peak_dbfs} dBFS</span>
+          </div>
+          <div class="row">
+            <a class="btn primary" href="preview.html?p=${encodeURIComponent(p.slug)}">معاينة</a>
+            <a class="btn ghost" href="${p.video}" download>تحميل</a>
+            ${p.srt ? `<a class="btn ghost" href="${p.srt}" download>SRT</a>` : ''}
+          </div>
+        </div>`;
+      card.querySelector('h3').textContent = p.title;
+      const v = card.querySelector('video');
+      card.onmouseenter = () => { v.play().catch(() => {}); };
+      card.onmouseleave = () => { v.pause(); v.currentTime = 0.5; };
+      box.appendChild(card);
+    });
+  })
+  .catch(() => {
+    document.getElementById('cards').innerHTML =
+      '<p style="color:var(--muted)">تعذّر تحميل قائمة المشاريع.</p>';
+  });
+</script>
 
 </body>
 </html>

@@ -47,7 +47,13 @@ OUT_SRT = PROJECT.srt_path
 
 
 def _source() -> Path:
-    """The clip to dub: the project's own copy, else whatever is in inbox/."""
+    """The clip to dub: the project's own copy, else whatever is in inbox/.
+
+    Resolved when rendering starts rather than at import, so the measurement
+    pass below can load this module for a project whose source clip has been
+    archived away. Resolving it eagerly used to hand such a project whatever
+    happened to be sitting in inbox/ — a different film entirely.
+    """
     local = sorted(PROJECT.source_dir.glob("*.mp4"))
     if local:
         return local[0]
@@ -55,9 +61,6 @@ def _source() -> Path:
     if inbox:
         return inbox[0]
     raise SystemExit("no source clip: put one in the project's source/ folder")
-
-
-SRC = _source()
 
 SR = 44100
 MAX_TEMPO = 1.12        # gentler than before; past this the read sounds rushed
@@ -80,7 +83,21 @@ CUES = [
 ]
 
 def _segments() -> dict:
-    """Group consecutive cues by speaker onto whatever seg_*.wav files exist."""
+    """Which cues each seg_*.wav recording covers.
+
+    A stored map in ``render.segments`` wins. Guessing by zipping speaker runs
+    against the sorted filenames only holds when every turn was recorded in
+    order and nothing was re-cut: on the Phantom dub, where three takes carry a
+    trailing filler sentence and the files were recorded out of order, the
+    guess assigns cues to the wrong recordings entirely.
+    """
+    stored = (PROJECT.render or {}).get("segments")
+    if stored:
+        return {
+            name: [None if m in (None, "None") else int(m) for m in members]
+            for name, members in stored.items()
+        }
+
     runs, cur = [], None
     for c in sorted(PROJECT.cues, key=lambda c: c["i"]):
         if cur and cur[0] == c["speaker"]:
@@ -95,8 +112,12 @@ def _segments() -> dict:
     return out
 
 SEGMENTS = _segments()
-SEGMENTS_WITH_FILLER: set = set()
-GROUP_SLICES: dict = {}
+# Takes that end on a throwaway sentence: the model needs somewhere to carry
+# the phrase to, so the kept line does not die on a flat final syllable.
+SEGMENTS_WITH_FILLER: set = set((PROJECT.render or {}).get("segments_with_filler") or [])
+GROUP_SLICES: dict = {
+    int(k): tuple(v) for k, v in ((PROJECT.render or {}).get("group_slices") or {}).items()
+}
 
 def decode(path: Path, sr: int = SR) -> np.ndarray:
     res = subprocess.run(
@@ -267,7 +288,7 @@ def _match_actor(audio: np.ndarray, speaker: str) -> np.ndarray:
         if not windows:
             _ACTOR_CACHE[speaker] = None
         else:
-            left, right = decode_stereo(SRC, SR)
+            left, right = decode_stereo(_source(), SR)
             stem, _ = split_center(left, right, SR)
             span = (min(w[0] for w in windows), max(w[1] for w in windows))
             _ACTOR_CACHE[speaker] = measure(
@@ -355,28 +376,18 @@ def stamp(sec: float) -> str:
     return f"{int(h):02d}:{int(m):02d}:{int(s):02d},{int(round((sec % 1) * 1000)):03d}"
 
 
-def main() -> None:
-    ensure_ffmpeg_on_path()
-    if not SRC.exists():
-        raise SystemExit(f"source clip missing: {SRC}")
+def place_cues(total: int) -> tuple[np.ndarray, np.ndarray, int, list[dict]]:
+    """Lay every take onto a silent timeline of ``total`` samples.
 
-    print("separating stems…")
-    left, right = decode_stereo(SRC, SR)
-    _, separated = split_center(left, right, SR)
-    original = ((left + right) / 2.0).astype(np.float32)
-    total = len(separated)
-
-    # Centre removal is only needed where the original dialogue plays. Measured
-    # on this clip it costs -8.7 dB in the low-mids and -10.6 dB in the presence
-    # band, which guts the body of the score. So the separated stem is used only
-    # under our own dialogue, and the untouched original is restored everywhere
-    # else — the music keeps its full weight between lines.
-    music = separated  # replaced below, once we know where speech lands
-
+    Split out of the render so the same arithmetic can be replayed without the
+    source clip. A project whose source has been archived can then still report
+    honest numbers, instead of the page falling back to caption windows.
+    """
     voice = np.zeros(total + SR, dtype=np.float32)
     gate = np.zeros(total + SR, dtype=np.float32)
     cache: dict = {}
     placed = 0
+    spoken: list[dict] = []
 
     for i, (start, end, speaker, text) in enumerate(CUES):
         audio = cue_audio(i, speaker, cache)
@@ -431,11 +442,54 @@ def main() -> None:
         voice[at:stop] += audio[: stop - at]
         gate[at:stop] = 1.0
         placed += 1
+        # Record where the line actually landed. The subtitle window is a
+        # request, not a result: after naturalising and fitting, a cue can end
+        # well before its caption does, and a rate computed from the caption
+        # then describes a file that does not exist.
+        spoken.append({
+            "i": i + 1,
+            "start": round(start, 3),
+            "end": round(start + len(audio) / SR, 3),
+            "chars": chars,
+        })
         print(f"  cue {i + 1:2d}: {start:6.2f}s  {dur:5.2f}s / {budget:5.2f}s  {note}")
 
     print(f"placed {placed}/{len(CUES)} cues")
-    voice = voice[:total]
-    gate = gate[:total]
+    return voice[:total], gate[:total], placed, spoken
+
+
+def measurements(placed: int, spoken: list[dict]) -> dict:
+    """Rate, tightest gap and overlaps, from where the takes actually landed."""
+    gaps = [b["start"] - a["end"] for a, b in zip(spoken, spoken[1:])]
+    talk = sum(s["end"] - s["start"] for s in spoken)
+    chars = sum(s["chars"] for s in spoken)
+    return {
+        "placed": placed,
+        "cues": len(CUES),
+        "rate": round(chars / talk, 1) if talk > 0 else None,
+        "min_gap": round(min(gaps), 3) if gaps else None,
+        "overlaps": sum(1 for g in gaps if g < 0),
+    }
+
+
+def main() -> None:
+    ensure_ffmpeg_on_path()
+    src = _source()
+    if not src.exists():
+        raise SystemExit(f"source clip missing: {src}")
+
+    print("separating stems…")
+    left, right = decode_stereo(src, SR)
+    _, separated = split_center(left, right, SR)
+    original = ((left + right) / 2.0).astype(np.float32)
+    total = len(separated)
+
+    # Centre removal is only needed where the original dialogue plays. Measured
+    # on this clip it costs -8.7 dB in the low-mids and -10.6 dB in the presence
+    # band, which guts the body of the score. So the separated stem is used only
+    # under our own dialogue, and the untouched original is restored everywhere
+    # else — the music keeps its full weight between lines.
+    voice, gate, placed, spoken = place_cues(total)
 
     win = int(SR * 0.25)
     smooth = np.clip(
@@ -490,7 +544,7 @@ def main() -> None:
     raw.unlink(missing_ok=True)
 
     subprocess.run(
-        [ffmpeg_exe(), "-y", "-i", str(SRC), "-i", str(final),
+        [ffmpeg_exe(), "-y", "-i", str(src), "-i", str(final),
          "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
          "-c:a", "aac", "-b:a", "192k", "-shortest", str(OUT_VIDEO)],
         check=True, capture_output=True,
@@ -501,9 +555,31 @@ def main() -> None:
         for i, (s, e, _speaker, text) in enumerate(CUES, 1):
             fh.write(f"{i}\n{stamp(s)} --> {stamp(e)}\n{text}\n\n")
 
+    # Hand the measurements to whatever publishes this dub. Without them the
+    # web page can only compute a rate from the captions, which describes the
+    # script rather than the rendered audio.
+    PROJECT.render = dict(
+        PROJECT.render or {}, spoken=spoken, measured=measurements(placed, spoken)
+    )
+    PROJECT.save()
+
     print(f"\nvideo     {OUT_VIDEO} ({OUT_VIDEO.stat().st_size} bytes)")
     print(f"subtitles {OUT_SRT}")
 
 
 if __name__ == "__main__":
-    main()
+    if "--measure-only" in sys.argv:
+        # Re-derive the numbers for an already-rendered dub whose source clip
+        # is no longer on disk. No audio is written.
+        ensure_ffmpeg_on_path()
+        span = int((max(c[1] for c in CUES) + 8.0) * SR)
+        _v, _g, _placed, _spoken = place_cues(span)
+        PROJECT.render = dict(
+            PROJECT.render or {},
+            spoken=_spoken,
+            measured=measurements(_placed, _spoken),
+        )
+        PROJECT.save()
+        print(PROJECT.render["measured"])
+    else:
+        main()

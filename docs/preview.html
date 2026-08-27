@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet" />
 <style>
   :root{--bg:#07080c;--ink:#f4efe4;--muted:#b7b0a3;--line:rgba(244,239,228,.12);
-        --card:rgba(16,17,23,.78);--gold:#e8b86d;--ok:#7dcea0}
+        --card:rgba(16,17,23,.78);--gold:#e8b86d;--ok:#7dcea0;--bad:#e88d8d}
   *{box-sizing:border-box}
   body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
        font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;
@@ -24,7 +24,17 @@
   nav a:hover,nav a.on{color:var(--gold)}
   main{max-width:1080px;margin:0 auto;padding:22px 6vw 60px}
   h1{font-size:clamp(24px,4vw,36px);margin:14px 0 6px}
-  .lede{color:var(--muted);margin:0 0 24px;font-size:16.5px}
+  .lede{color:var(--muted);margin:0 0 20px;font-size:16.5px}
+
+  .picker{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 22px}
+  .pick{background:var(--card);border:1px solid var(--line);color:var(--ink);
+        border-radius:12px;padding:10px 16px;font:inherit;font-size:14.5px;cursor:pointer;
+        display:flex;align-items:center;gap:9px;transition:.16s}
+  .pick:hover{border-color:var(--gold)}
+  .pick.on{border-color:var(--gold);background:rgba(232,184,109,.12);color:var(--gold);font-weight:600}
+  .pick span{color:var(--muted);font-size:12.5px;font-weight:400}
+  .pick.on span{color:var(--gold);opacity:.75}
+
   .grid{display:grid;grid-template-columns:minmax(0,360px) minmax(0,1fr);gap:24px;align-items:start}
   @media(max-width:840px){.grid{grid-template-columns:1fr}}
   video{width:100%;border-radius:16px;background:#000;display:block;
@@ -35,6 +45,7 @@
   td{padding:9px 0;border-bottom:1px solid var(--line);vertical-align:top}
   td:first-child{color:var(--muted);white-space:nowrap;padding-inline-end:14px}
   .ok{color:var(--ok);font-weight:600}
+  .bad{color:var(--bad);font-weight:600}
   .btn{display:inline-block;margin:8px 8px 0 0;padding:12px 20px;border-radius:11px;
        text-decoration:none;font-weight:600;font-size:14.5px}
   .primary{background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208}
@@ -46,6 +57,10 @@
   .cue.on{color:var(--gold);font-weight:600}
   .tag{display:inline-block;font-size:12px;padding:3px 9px;border-radius:999px;
        border:1px solid var(--line);color:var(--muted);margin-inline-end:6px}
+  .link{margin:14px 0 0;font-size:13.5px;color:var(--muted);word-break:break-all}
+  .link input{width:100%;margin-top:7px;background:rgba(0,0,0,.35);color:var(--ink);
+              border:1px solid var(--line);border-radius:9px;padding:9px 11px;
+              font:inherit;font-size:13px;direction:ltr;text-align:left}
   footer{color:var(--muted);font-size:13.5px;text-align:center;padding:0 6vw 40px}
   a{color:var(--gold)}
 </style>
@@ -65,22 +80,19 @@
 </header>
 
 <main>
-  <h1>Phantom Thread — دبلجة مصرية</h1>
-  <p class="lede">
-    <span class="tag">24 جملة</span>
-    <span class="tag">عامية مصرية</span>
-    <span class="tag">59 ثانية</span>
-    شاهد قبل التحميل — اضغط أي سطر للانتقال إليه.
-  </p>
+  <div class="picker" id="picker"></div>
+
+  <h1 id="title">…</h1>
+  <p class="lede" id="lede"></p>
 
   <div class="grid">
     <div>
-      <video id="player" controls playsinline preload="metadata" src="Phantom-Thread.mp4">
-        <track kind="subtitles" srclang="ar" label="العربية" default src="Phantom-Thread.vtt" />
-        متصفحك لا يدعم تشغيل الفيديو.
-      </video>
-      <a class="btn primary" href="Phantom-Thread.mp4" download>تحميل الفيديو</a>
-      <a class="btn ghost" href="Phantom-Thread.srt" download>الترجمة SRT</a>
+      <video id="player" controls playsinline preload="metadata"></video>
+      <a class="btn primary" id="dl" download>تحميل الفيديو</a>
+      <a class="btn ghost" id="dlsrt" download>الترجمة SRT</a>
+      <p class="link">رابط مباشر للملف — انسخه وشاركه:
+        <input id="direct" readonly onclick="this.select()" />
+      </p>
     </div>
 
     <div style="display:grid;gap:18px">
@@ -91,13 +103,7 @@
 
       <section class="panel">
         <h2>القياسات</h2>
-        <table>
-          <tr><td>الشرائح</td><td><span class="ok">24 / 24</span></td></tr>
-          <tr><td>تداخل الجُمل</td><td><span class="ok">صفر</span></td></tr>
-          <tr><td>سرعة الكلام</td><td>10.4 حرف/ثانية</td></tr>
-          <tr><td>كتم الإنجليزية</td><td>‎−25.8 ديسيبل</td></tr>
-          <tr><td>الذروة</td><td>‎−1.40 dBFS بلا قصّ</td></tr>
-        </table>
+        <table id="metrics"></table>
       </section>
     </div>
   </div>
@@ -106,55 +112,133 @@
 <footer>ProStudio · رخصة MIT</footer>
 
 <script>
-// Build the transcript from the same VTT the player uses, so the two can never
-// drift apart.
+// The page reads projects.json, which the publish step regenerates from the
+// rendered files themselves. Adding a dub therefore needs no HTML edit, and no
+// number here can drift away from the file sitting beside it.
 const player = document.getElementById('player');
 const box = document.getElementById('cues');
+const here = location.href.replace(/[^/]*$/, '');
 
-function parseTime(t){
-  const [h,m,s] = t.split(':');
-  return (+h)*3600 + (+m)*60 + parseFloat(s);
+const mmss = t => new Date(t * 1000).toISOString().substr(14, 5);
+const parseTime = t => {
+  const p = t.split(':');
+  return (+p[0]) * 3600 + (+p[1]) * 60 + parseFloat(p[2]);
+};
+
+function metricRows(m, cast) {
+  const rows = [];
+  rows.push(['الجُمل', `<span class="ok">${m.cues} / ${m.cues}</span>`]);
+  rows.push(['المدة', `${m.duration} ثانية`]);
+  if (m.rate) rows.push(['سرعة الكلام', `${m.rate} حرف/ثانية <span style="color:var(--muted)">(الطبيعي 11–15)</span>`]);
+  rows.push(['تداخل الجُمل', m.overlaps
+    ? `<span class="bad">${m.overlaps}</span>`
+    : `<span class="ok">صفر</span>${m.min_gap != null ? ` — أقصر فجوة ${m.min_gap} ث` : ''}`]);
+  if (m.peak_dbfs != null) rows.push(['الذروة',
+    `${m.peak_dbfs} dBFS ${m.clipped ? '<span class="bad">فيه قصّ</span>' : '<span class="ok">بلا قصّ</span>'}`]);
+  const names = Object.entries(cast || {}).map(([k, v]) => v).filter(Boolean);
+  if (names.length) rows.push(['الأصوات', names.join(' · ')]);
+  return rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
 }
 
-fetch('Phantom-Thread.vtt')
-  .then(r => r.ok ? r.text() : Promise.reject(r.status))
-  .then(text => {
-    const cues = [];
-    for (const block of text.replace(/\r/g,'').split('\n\n')){
-      const lines = block.split('\n').filter(Boolean);
-      const at = lines.findIndex(l => l.includes('-->'));
-      if (at === -1) continue;
-      const [from] = lines[at].split('-->').map(s => s.trim());
-      const body = lines.slice(at+1).join(' ').trim();
-      if (body) cues.push({ t: parseTime(from), text: body });
-    }
-    if (!cues.length){ box.textContent = 'لا توجد ترجمة.'; return; }
-
-    box.innerHTML = '';
-    cues.forEach((c, i) => {
-      const row = document.createElement('div');
-      row.className = 'cue';
-      row.innerHTML = `<time>${new Date(c.t*1000).toISOString().substr(14,5)}</time><span>${c.text}</span>`;
-      row.onclick = () => { player.currentTime = c.t; player.play(); };
-      box.appendChild(row);
-      c.el = row;
-    });
-
-    let active = -1;
-    player.addEventListener('timeupdate', () => {
-      let i = cues.findIndex((c, n) =>
-        player.currentTime >= c.t && (n+1 === cues.length || player.currentTime < cues[n+1].t));
-      if (i !== active){
-        if (cues[active]) cues[active].el.classList.remove('on');
-        if (cues[i]) {
-          cues[i].el.classList.add('on');
-          cues[i].el.scrollIntoView({ block:'nearest', behavior:'smooth' });
-        }
-        active = i;
+function loadCues(vtt) {
+  box.textContent = 'جارٍ التحميل…';
+  if (!vtt) { box.textContent = 'لا توجد ترجمة.'; return; }
+  fetch(vtt)
+    .then(r => r.ok ? r.text() : Promise.reject(r.status))
+    .then(text => {
+      const cues = [];
+      for (const block of text.replace(/\r/g, '').split('\n\n')) {
+        const lines = block.split('\n').filter(Boolean);
+        const at = lines.findIndex(l => l.includes('-->'));
+        if (at === -1) continue;
+        const [from] = lines[at].split('-->').map(s => s.trim());
+        const body = lines.slice(at + 1).join(' ').trim();
+        if (body) cues.push({ t: parseTime(from), text: body });
       }
+      if (!cues.length) { box.textContent = 'لا توجد ترجمة.'; return; }
+
+      box.innerHTML = '';
+      cues.forEach(c => {
+        const row = document.createElement('div');
+        row.className = 'cue';
+        row.innerHTML = `<time>${mmss(c.t)}</time><span></span>`;
+        row.lastChild.textContent = c.text;
+        row.onclick = () => { player.currentTime = c.t; player.play(); };
+        box.appendChild(row);
+        c.el = row;
+      });
+
+      let active = -1;
+      player.ontimeupdate = () => {
+        const i = cues.findIndex((c, n) =>
+          player.currentTime >= c.t && (n + 1 === cues.length || player.currentTime < cues[n + 1].t));
+        if (i !== active) {
+          if (cues[active]) cues[active].el.classList.remove('on');
+          if (cues[i]) {
+            cues[i].el.classList.add('on');
+            cues[i].el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+          active = i;
+        }
+      };
+    })
+    .catch(() => { box.textContent = 'تعذّر تحميل الترجمة.'; });
+}
+
+function show(p) {
+  document.getElementById('title').textContent = p.title;
+  const mb = (p.size / 1048576).toFixed(1);
+  document.getElementById('lede').innerHTML =
+    `<span class="tag">${p.metrics.cues} جملة</span>` +
+    `<span class="tag">${p.dialect === 'egy' ? 'عامية مصرية' : 'فصحى'}</span>` +
+    `<span class="tag">${Math.round(p.metrics.duration)} ثانية</span>` +
+    `<span class="tag">${mb} م.ب</span>` +
+    'شاهد قبل التحميل — اضغط أي سطر للانتقال إليه.';
+
+  player.pause();
+  player.innerHTML = '';
+  player.src = p.video;
+  if (p.vtt) {
+    const tr = document.createElement('track');
+    tr.kind = 'subtitles'; tr.srclang = 'ar'; tr.label = 'العربية';
+    tr.default = true; tr.src = p.vtt;
+    player.appendChild(tr);
+  }
+  player.load();
+
+  document.getElementById('dl').href = p.video;
+  const s = document.getElementById('dlsrt');
+  if (p.srt) { s.href = p.srt; s.style.display = ''; } else { s.style.display = 'none'; }
+  document.getElementById('direct').value = here + p.video;
+  document.getElementById('metrics').innerHTML = metricRows(p.metrics, p.cast);
+
+  history.replaceState(null, '', '?p=' + encodeURIComponent(p.slug));
+  loadCues(p.vtt);
+}
+
+fetch('projects.json')
+  .then(r => r.json())
+  .then(({ projects }) => {
+    if (!projects.length) { document.getElementById('title').textContent = 'لا توجد دبلجة بعد.'; return; }
+    const picker = document.getElementById('picker');
+    projects.forEach(p => {
+      const b = document.createElement('button');
+      b.className = 'pick';
+      b.innerHTML = `<b></b><span>${p.metrics.cues} جملة · ${Math.round(p.metrics.duration)} ث</span>`;
+      b.firstChild.textContent = p.title;
+      b.onclick = () => {
+        picker.querySelectorAll('.pick').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+        show(p);
+      };
+      picker.appendChild(b);
+      p.btn = b;
     });
+    const want = new URLSearchParams(location.search).get('p');
+    const chosen = projects.find(p => p.slug === want) || projects[0];
+    chosen.btn.click();
   })
-  .catch(() => { box.textContent = 'تعذّر تحميل الترجمة.'; });
+  .catch(() => { document.getElementById('title').textContent = 'تعذّر تحميل قائمة المشاريع.'; });
 </script>
 
 </body>

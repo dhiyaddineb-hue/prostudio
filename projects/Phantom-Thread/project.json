@@ -206,6 +206,211 @@
   "render": {
     "sample_rate": 44100,
     "loudness": "-16 LUFS",
-    "max_tempo": 1.12
+    "max_tempo": 1.12,
+    "spoken": [
+      {
+        "i": 1,
+        "start": 0.4,
+        "end": 1.41,
+        "chars": 11
+      },
+      {
+        "i": 2,
+        "start": 2.4,
+        "end": 4.92,
+        "chars": 30
+      },
+      {
+        "i": 3,
+        "start": 5.0,
+        "end": 6.85,
+        "chars": 21
+      },
+      {
+        "i": 4,
+        "start": 7.7,
+        "end": 8.77,
+        "chars": 12
+      },
+      {
+        "i": 5,
+        "start": 9.7,
+        "end": 11.14,
+        "chars": 18
+      },
+      {
+        "i": 6,
+        "start": 11.3,
+        "end": 12.85,
+        "chars": 17
+      },
+      {
+        "i": 7,
+        "start": 13.4,
+        "end": 15.41,
+        "chars": 22
+      },
+      {
+        "i": 8,
+        "start": 17.3,
+        "end": 18.23,
+        "chars": 9
+      },
+      {
+        "i": 9,
+        "start": 19.2,
+        "end": 20.12,
+        "chars": 11
+      },
+      {
+        "i": 10,
+        "start": 20.5,
+        "end": 22.02,
+        "chars": 20
+      },
+      {
+        "i": 11,
+        "start": 22.1,
+        "end": 23.56,
+        "chars": 16
+      },
+      {
+        "i": 12,
+        "start": 24.8,
+        "end": 25.73,
+        "chars": 11
+      },
+      {
+        "i": 13,
+        "start": 27.4,
+        "end": 28.65,
+        "chars": 16
+      },
+      {
+        "i": 14,
+        "start": 29.4,
+        "end": 30.16,
+        "chars": 9
+      },
+      {
+        "i": 15,
+        "start": 31.1,
+        "end": 32.29,
+        "chars": 13
+      },
+      {
+        "i": 16,
+        "start": 33.0,
+        "end": 33.4,
+        "chars": 4
+      },
+      {
+        "i": 17,
+        "start": 34.7,
+        "end": 35.06,
+        "chars": 4
+      },
+      {
+        "i": 18,
+        "start": 36.5,
+        "end": 37.02,
+        "chars": 5
+      },
+      {
+        "i": 19,
+        "start": 38.1,
+        "end": 40.27,
+        "chars": 21
+      },
+      {
+        "i": 20,
+        "start": 41.1,
+        "end": 43.63,
+        "chars": 28
+      },
+      {
+        "i": 21,
+        "start": 46.4,
+        "end": 48.94,
+        "chars": 28
+      },
+      {
+        "i": 22,
+        "start": 49.2,
+        "end": 49.94,
+        "chars": 8
+      },
+      {
+        "i": 23,
+        "start": 50.9,
+        "end": 52.34,
+        "chars": 17
+      },
+      {
+        "i": 24,
+        "start": 54.8,
+        "end": 55.52,
+        "chars": 8
+      }
+    ],
+    "measured": {
+      "placed": 24,
+      "cues": 24,
+      "rate": 11.3,
+      "min_gap": 0.08,
+      "overlaps": 0
+    },
+    "segments": {
+      "seg_F_f": [
+        1,
+        null
+      ],
+      "seg_G_m": [
+        8,
+        null
+      ],
+      "seg_H_f": [
+        14,
+        null
+      ],
+      "seg_A_m": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "seg_E_f": [
+        7,
+        9,
+        10
+      ],
+      "seg_B_m": [
+        11,
+        12,
+        13
+      ],
+      "seg_D_f": [
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "seg_I_f": [
+        20
+      ],
+      "seg_C_m": [
+        21,
+        22,
+        23,
+        24
+      ]
+    },
+    "segments_with_filler": [
+      "seg_F_f",
+      "seg_G_m",
+      "seg_H_f"
+    ]
   }
 }

@@ -1,0 +1,62 @@
+{
+  "projects": [
+    {
+      "slug": "Vikings-Ragnar-Floki",
+      "title": "Vikings — راغنار وفلوكي",
+      "dialect": "msa",
+      "created_at": "2026-08-26T23:59:44+00:00",
+      "video": "Vikings-Ragnar-Floki.mp4",
+      "srt": "Vikings-Ragnar-Floki.srt",
+      "vtt": "Vikings-Ragnar-Floki.vtt",
+      "size": 6608626,
+      "cast": {
+        "m": "راغنار",
+        "f": "فلوكي"
+      },
+      "metrics": {
+        "cues": 5,
+        "placed": 5,
+        "rate": 13.6,
+        "min_gap": 0.66,
+        "overlaps": 0,
+        "measured": true,
+        "speakers": [
+          "f",
+          "m"
+        ],
+        "duration": 24.75,
+        "peak_dbfs": -4.44,
+        "clipped": false
+      }
+    },
+    {
+      "slug": "Phantom-Thread",
+      "title": "Phantom Thread — دبلجة مصرية",
+      "dialect": "eg",
+      "created_at": "2026-08-25T19:01:07+00:00",
+      "video": "Phantom-Thread.mp4",
+      "srt": "Phantom-Thread.srt",
+      "vtt": "Phantom-Thread.vtt",
+      "size": 4154492,
+      "cast": {
+        "m": "voice-05 (مصري عميق)",
+        "f": "voice-06 (مصرية)"
+      },
+      "metrics": {
+        "cues": 24,
+        "placed": 24,
+        "rate": 11.3,
+        "min_gap": 0.08,
+        "overlaps": 0,
+        "measured": true,
+        "speakers": [
+          "f",
+          "m"
+        ],
+        "duration": 59.2,
+        "peak_dbfs": -4.42,
+        "clipped": false
+      }
+    }
+  ]
+}
