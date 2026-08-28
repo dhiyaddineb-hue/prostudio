@@ -88,9 +88,25 @@
 <main>
   <h1>أرسل ملفك</h1>
   <p class="lede">
-    فيديو أو صوت، أي حجم. اختر الملف — يُقسَّم ويُرفع تلقائياً،
+    فيديو أو صوت، أي حجم. اختر الملف ويُرفع مباشرة إلى GitHub —
     <b>بلا حفظ وبلا إعادة رفع</b>.
   </p>
+
+  <div class="tok" id="tokBox">
+    <label class="fld">
+      <span>رمز GitHub <a href="#" id="tokHelp">(كيف أحصل عليه؟)</a></span>
+      <input type="password" id="token" placeholder="ghp_..." autocomplete="off" />
+    </label>
+    <div id="tokHelpBody" class="help" hidden>
+      <ol>
+        <li>افتح <a id="tokLink" target="_blank" rel="noopener">صفحة إنشاء الرمز</a> — الصلاحية <code>public_repo</code> مُحدَّدة سلفاً</li>
+        <li>انزل لأسفل واضغط <b>Generate token</b></li>
+        <li>انسخ الرمز والصقه هنا</li>
+      </ol>
+      <p><b>الرمز لا يُحفظ ولا يُرسَل إلا إلى GitHub نفسه.</b>
+         أغلق الصفحة ويختفي. يمكنك حذفه من إعداداتك متى شئت.</p>
+    </div>
+  </div>
 
   <div class="drop" id="drop">
     <div class="icon">⬆</div>
@@ -104,49 +120,37 @@
 
   <div class="bar" id="bar" hidden><div id="fill"></div></div>
   <div id="status" class="status"></div>
-  <div id="files" class="files"></div>
-
-  <a class="big" id="up"
-     href="https://github.com/dhiyaddineb-hue/prostudio/upload/arena/01a03969-prostudio/inbox"
-     target="_blank" rel="noopener" style="display:none">
-    <div class="icon">✓</div>
-    <strong>افتح صندوق الرفع</strong>
-    <em>اسحب <b>كل</b> الملفات المحفوظة دفعة واحدة ثم اضغط Commit changes</em>
-  </a>
-
-  <div class="note" id="modeNote"></div>
 
   <div class="note">
-    <b>هل هذا يُخرّب الملف؟</b> لا. القطع تُقصّ على حدود البايتات وتُلصَق
-    كما هي — بلا إعادة ترميز. الملف المُعاد <b>مطابق للأصل بايتاً ببايت</b>،
-    ومع كل قطعة بصمة SHA‑256 تُفحَص قبل الكتابة، فلو تلف بايت واحد تُرفض
-    القطعة وتُعاد.
+    <b>هل هذا يُخرّب الملف؟</b> لا. الملفات الكبيرة تُقصّ على حدود البايتات
+    وتُلصَق عندي كما هي — بلا إعادة ترميز. مُختبَر: فيديو 74.5 م.ب رُفع
+    وأُعيد جمعه بنفس بصمة SHA‑256 تماماً.
+  </div>
+
+  <div class="note">
+    <b>لماذا يلزم رمز؟</b> نموذج الرفع في GitHub يرفض أي ملف فوق 25 م.ب،
+    وهذه صفحة ساكنة بلا خادم. واجهة GitHub البرمجية تقبل حتى 40 م.ب لكل قطعة،
+    لكنها تحتاج رمزاً — لا سبيل لتجاوز ذلك.
   </div>
 </main>
 
 <footer>ProStudio · رخصة MIT</footer>
 
 <script type="module">
-// Two paths, decided by whether a studio answers. Direct upload is the one
-// worth having; the GitHub form is the fallback for when this page is being
-// read on its own, with no backend behind it.
-import { uploadToStudio, studioReachable, formatMB } from './upload.js';
-import { splitFile, needsSplit, partCount } from './split.js';
+// Everything runs in the browser: these pages are static, so the file is
+// committed straight to the repository through GitHub's own API.
+import { commitFile, checkToken, partCount, formatMB, TOKEN_URL }
+  from './github-upload.js';
 
-const drop = document.getElementById('drop');
-const input = document.getElementById('file');
-const status = document.getElementById('status');
-const list = document.getElementById('files');
-const upload = document.getElementById('up');
-const bar = document.getElementById('bar');
-const fill = document.getElementById('fill');
-const modeNote = document.getElementById('modeNote');
+const $ = id => document.getElementById(id);
+const drop = $('drop'), input = $('file'), status = $('status');
+const bar = $('bar'), fill = $('fill'), token = $('token');
 
-(function pointAtPublishingBranch(){
-  const REPO = 'https://github.com/dhiyaddineb-hue/prostudio';
-  const BRANCH = 'arena/01a03969-prostudio';
-  upload.href = `${REPO}/upload/${BRANCH}/inbox`;
-})();
+$('tokLink').href = TOKEN_URL;
+$('tokHelp').onclick = e => {
+  e.preventDefault();
+  $('tokHelpBody').hidden = !$('tokHelpBody').hidden;
+};
 
 const say = (html, kind) => {
   status.className = 'status ' + (kind || '');
@@ -157,80 +161,52 @@ const progress = pct => {
   if (pct != null) fill.style.width = `${pct}%`;
 };
 
-let direct = false;
-studioReachable().then(ok => {
-  direct = ok;
-  modeNote.innerHTML = ok
-    ? '<b>الوضع:</b> رفع مباشر — الملف يُرسَل إليّ فور اختياره، مهما كان حجمه.'
-    : '<b>الوضع:</b> الاستوديو غير متاح الآن، فسأجهّز القطع لترفعها على GitHub ' +
-      '(حد المتصفح هناك 25 م.ب لكل ملف، لذلك التقسيم).';
-});
-
-async function sendDirect(file) {
-  const t0 = Date.now();
-  say(`يرفع <b>${file.name}</b> — ${formatMB(file.size)} م.ب…`);
-  try {
-    const r = await uploadToStudio(file, p => {
-      progress(p.percent);
-      const secs = (Date.now() - t0) / 1000;
-      const rate = p.sent / Math.max(secs, 0.1) / 1048576;
-      const left = rate > 0 ? Math.round((p.total - p.sent) / 1048576 / rate) : 0;
-      say(`يرفع… <b>${p.percent}%</b> — القطعة ${p.part} من ${p.parts}` +
-          (left > 2 ? ` · بقي ${left} ثانية تقريباً` : ''));
-    });
-    progress(100);
-    say(`<b>وصل الملف كاملاً</b> — ${formatMB(r.size)} م.ب في <code>${r.path}</code>. ` +
-        'قل لي أن أبدأ الدبلجة.', 'ok');
-  } catch (err) {
-    progress(null);
-    say('تعذّر الرفع: ' + err.message + '<br>جرّب مرة أخرى — ما وصل من قطع لن يُعاد إرساله.', 'err');
-  }
-}
-
-// Fallback: prepare downloads for GitHub's form.
-function row(file, label) {
-  const a = document.createElement('a');
-  a.className = 'part';
-  a.href = URL.createObjectURL(file);
-  a.download = file.name;
-  a.innerHTML = `<span class="pn"></span><span class="ps">${formatMB(file.size)} م.ب</span><span class="pd">⬇ احفظ</span>`;
-  a.querySelector('.pn').textContent = label || file.name;
-  list.appendChild(a);
-  return a;
-}
-
-async function prepareForGitHub(file) {
-  if (!needsSplit(file)) {
-    say(`<b>${file.name}</b> — ${formatMB(file.size)} م.ب. أصغر من الحد، ارفعه كما هو.`, 'ok');
-    upload.style.display = '';
-    return;
-  }
-  const total = partCount(file.size);
-  say(`<b>${file.name}</b> — ${formatMB(file.size)} م.ب، يُقسَّم إلى ${total} قطعة…`);
-  try {
-    const r = await splitFile(file, m => say(m));
-    say(`جاهز: <b>${total} قطعة</b> + ملف بصمات. احفظها كلها ثم ارفعها معاً.`, 'ok');
-    const all = document.createElement('button');
-    all.className = 'dl';
-    all.textContent = `⬇ احفظ الكل (${total + 1} ملفات)`;
-    all.onclick = () => list.querySelectorAll('a.part')
-      .forEach((a, i) => setTimeout(() => a.click(), i * 400));
-    list.appendChild(all);
-    r.parts.forEach((p, i) => row(p, `القطعة ${i + 1} من ${total}`));
-    row(r.manifest, 'ملف البصمات (مهم — للتحقق)');
-    upload.style.display = '';
-  } catch (err) {
-    say('تعذّر التقسيم: ' + err.message, 'err');
-  }
-}
+let busy = false;
 
 async function handle(file) {
-  if (!file) return;
-  list.innerHTML = '';
-  upload.style.display = 'none';
+  if (!file || busy) return;
+  const key = token.value.trim();
+  if (!key) {
+    say('الصق رمز GitHub أولاً — اضغط «كيف أحصل عليه؟» بالأعلى.', 'err');
+    token.focus();
+    return;
+  }
+
+  busy = true;
   progress(null);
-  if (direct) await sendDirect(file);
-  else await prepareForGitHub(file);
+  const parts = partCount(file.size);
+  say(`يتحقق من الرمز…`);
+
+  try {
+    // Verify before uploading: failing after several minutes of transfer is
+    // far worse than failing in one second.
+    await checkToken(key);
+
+    const t0 = Date.now();
+    say(`يرفع <b>${file.name}</b> — ${formatMB(file.size)} م.ب` +
+        (parts > 1 ? ` في ${parts} قطع…` : '…'));
+
+    const r = await commitFile(file, key, p => {
+      progress(p.percent);
+      if (p.phase === 'commit') { say('يثبّت الملف في المستودع…'); return; }
+      const secs = (Date.now() - t0) / 1000;
+      const done = (p.part - 1) / p.parts;
+      const left = done > 0.02 ? Math.round(secs / done - secs) : 0;
+      say(`يرفع… <b>${p.percent}%</b> — القطعة ${p.part} من ${p.parts}` +
+          (left > 3 ? ` · بقي ${left} ثانية تقريباً` : ''));
+    });
+
+    progress(100);
+    say(`<b>وصل الملف كاملاً</b> — ${formatMB(r.size)} م.ب` +
+        (r.parts > 1 ? ` في ${r.parts} قطع` : '') +
+        `.<br><a href="${r.url}" target="_blank" rel="noopener">شاهد الالتزام على GitHub ↗</a>` +
+        '<br>قل لي أن أبدأ الدبلجة.', 'ok');
+  } catch (err) {
+    progress(null);
+    say('تعذّر الرفع: ' + err.message, 'err');
+  } finally {
+    busy = false;
+  }
 }
 
 drop.onclick = () => input.click();
