@@ -36,8 +36,14 @@ def run(cmd: list[str], **kw) -> subprocess.CompletedProcess:
 def have_venv() -> bool:
     if not PY.is_file():
         return False
+    # Import every module the pipeline actually needs. Checking only a couple
+    # of them let a half-installed environment pass as healthy twice: once
+    # missing parselmouth, once missing espeakng-loader, and both times the
+    # failure surfaced much later as a confusing error mid-task.
     probe = run(
-        [str(PY), "-c", "import numpy, soundfile, parselmouth, vosk"],
+        [str(PY), "-c",
+         "import numpy, soundfile, parselmouth, vosk, librosa, sklearn, "
+         "espeakng_loader, fastapi"],
         capture_output=True,
     )
     return probe.returncode == 0
