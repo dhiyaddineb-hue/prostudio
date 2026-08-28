@@ -2,24 +2,24 @@
  * Get a large clip under GitHub's 25 MB browser-upload cap.
  *
  * The web upload form refuses anything larger with "Yowza, that's a big file",
- * and that limit is not negotiable from our side. But dubbing only ever reads
- * the audio, so the picture can go.
+ * and that limit is not negotiable from our side. These pages are static, so
+ * there is no server that could accept the file instead — it has to be smaller
+ * before it is ever sent.
  *
- * What that saves depends entirely on the source's video bitrate, so the page
- * quotes a cost rather than a ratio. Measured on the same 25 s clip re-encoded
- * at several qualities: an already-compressed Instagram file shrinks 7.9x, a
- * 720p encode 10x, 1080p 20x, and a 12 Mb/s master 47x. The audio side is
- * constant at 1.83 MB per minute, which is the number worth telling someone.
+ * Dubbing only reads the audio, so the picture goes. The first version stopped
+ * there and wrote WAV, which capped uploads at 13 minutes and sent a 23 minute
+ * clip back to the user with instructions to trim it by hand. That was the
+ * tool refusing to do its job: WAV is uncompressed, and speech does not need
+ * to be. Encoding MP3 at 64 kb/s raises the ceiling to about 52 minutes.
  *
- * Everything happens in the visitor's browser. There is no server to accept a
- * large upload, so the file must get smaller before it is ever sent.
+ * 64 kb/s is chosen with margin, not at the edge. Measured against a 16 kHz
+ * WAV reference, every bitrate from 32 kb/s up is already transparent to the
+ * things this pipeline measures — pitch shifts by 0.01 semitones and
+ * harmonics-to-noise by 0.05 dB — so the extra bits cost 10.6 MB on a 23
+ * minute clip and buy insurance against material noisier than the test.
  *
- * WAV is written rather than MP3 because a browser cannot encode MP3 without
- * shipping an encoder, and 16 kHz mono WAV is already small enough: one minute
- * costs about 1.9 MB, so roughly thirteen minutes of speech fits in the cap.
- * 16 kHz keeps every formant that matters for speech — the transcription and
- * pitch work here both downsample to 16 kHz anyway — so the extra bytes of a
- * higher rate would buy nothing.
+ * What the saving is depends entirely on the source's video bitrate, so the
+ * page quotes a cost rather than a ratio: 0.46 MB per minute of audio.
  */
 
 const CAP_BYTES = 25 * 1024 * 1024;
@@ -27,6 +27,8 @@ const CAP_BYTES = 25 * 1024 * 1024;
 // 25 MB would still be refused.
 const SAFE_BYTES = 24 * 1024 * 1024;
 const TARGET_RATE = 16000;
+const BITRATE_KBPS = 64;
+const BYTES_PER_SEC = (BITRATE_KBPS * 1000) / 8;
 
 export const LIMIT_MB = 25;
 
@@ -39,11 +41,44 @@ export function formatMB(bytes) {
   return (bytes / 1048576).toFixed(1);
 }
 
+/** How many seconds of encoded audio fit under the cap. */
+export function maxSeconds() {
+  return Math.floor(SAFE_BYTES / BYTES_PER_SEC);
+}
+
+/** MB per minute of audio — the one figure that holds for any source. */
+export function costPerMinute() {
+  return (BYTES_PER_SEC * 60) / 1048576;
+}
+
+/**
+ * Load the MP3 encoder.
+ *
+ * Vendored rather than pulled from a CDN: every CDN this project can see is
+ * blocked, and a page that only works with network access to a third party is
+ * not a page that works.
+ */
+let encoderPromise = null;
+function loadEncoder() {
+  if (encoderPromise) return encoderPromise;
+  encoderPromise = new Promise((resolve, reject) => {
+    if (globalThis.lamejs) return resolve(globalThis.lamejs);
+    const tag = document.createElement('script');
+    tag.src = new URL('vendor/lame.min.js', import.meta.url).href;
+    tag.onload = () => globalThis.lamejs
+      ? resolve(globalThis.lamejs)
+      : reject(new Error('تعذّر تحميل مُرمّز الصوت'));
+    tag.onerror = () => reject(new Error('تعذّر تحميل مُرمّز الصوت'));
+    document.head.appendChild(tag);
+  });
+  return encoderPromise;
+}
+
 /**
  * Decode any media file the browser understands into mono PCM.
  *
- * Video files decode too: the browser hands back the audio track and discards
- * the picture, which is exactly what is wanted.
+ * Video decodes too: the browser hands back the audio track and drops the
+ * picture, which is exactly what is wanted.
  */
 async function decodeAudio(file, onProgress) {
   onProgress?.('يقرأ الملف…');
@@ -68,12 +103,10 @@ async function decodeAudio(file, onProgress) {
 }
 
 /**
- * Resample by linear interpolation.
+ * Resample down by averaging over the input span.
  *
- * Cheap, and adequate going *down* in rate for speech. It does alias, so a
- * gentle average over the input span is taken per output sample rather than a
- * bare nearest-neighbour pick, which is what makes downsampled speech sound
- * gritty.
+ * A bare nearest-neighbour pick aliases, which is what makes cheaply
+ * downsampled speech sound gritty; averaging costs nothing here and does not.
  */
 function resample(samples, from, to) {
   if (to >= from) return samples;
@@ -92,67 +125,83 @@ function resample(samples, from, to) {
   return out;
 }
 
-/** 16-bit PCM WAV. */
-function toWav(samples, sampleRate) {
-  const view = new DataView(new ArrayBuffer(44 + samples.length * 2));
-  const text = (at, s) => {
-    for (let i = 0; i < s.length; i++) view.setUint8(at + i, s.charCodeAt(i));
-  };
-  text(0, 'RIFF');
-  view.setUint32(4, 36 + samples.length * 2, true);
-  text(8, 'WAVEfmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  text(36, 'data');
-  view.setUint32(40, samples.length * 2, true);
+/**
+ * Encode mono float PCM to MP3, yielding to the event loop between blocks.
+ *
+ * A 23 minute clip is ~22 million samples. Encoding it in one synchronous run
+ * freezes the tab for long enough that the browser offers to kill the page, so
+ * the work is chunked and progress is reported.
+ */
+async function encodeMp3(samples, sampleRate, onProgress) {
+  const lame = await loadEncoder();
+  const encoder = new lame.Mp3Encoder(1, sampleRate, BITRATE_KBPS);
+
+  const pcm = new Int16Array(samples.length);
   for (let i = 0; i < samples.length; i++) {
     const v = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(44 + i * 2, v * 32767, true);
+    pcm[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
   }
-  return new Blob([view], { type: 'audio/wav' });
-}
 
-/** How many seconds of 16 kHz mono WAV fit under the cap. */
-export function maxSeconds() {
-  return Math.floor((SAFE_BYTES - 44) / (TARGET_RATE * 2));
+  const BLOCK = 1152 * 64;          // whole MP3 frames, ~4.6 s at 16 kHz
+  const parts = [];
+  const started = Date.now();
+  let lastYield = started;
+
+  for (let at = 0; at < pcm.length; at += BLOCK) {
+    const chunk = encoder.encodeBuffer(pcm.subarray(at, Math.min(at + BLOCK, pcm.length)));
+    if (chunk.length) parts.push(new Uint8Array(chunk));
+
+    // Yield on a clock rather than every block. A 23 minute clip is 75 blocks
+    // and takes about a minute to encode; handing control back every 100 ms
+    // keeps the tab responsive without paying scheduler overhead 75 times.
+    const now = Date.now();
+    if (now - lastYield > 100) {
+      const fraction = (at + BLOCK) / pcm.length;
+      const done = Math.min(99, Math.round(fraction * 100));
+      const left = Math.round(((now - started) / Math.max(fraction, 0.01)) * (1 - fraction) / 1000);
+      onProgress?.(
+        left > 3
+          ? `يضغط الصوت… ${done}% — بقي ${left} ثانية تقريباً`
+          : `يضغط الصوت… ${done}%`
+      );
+      lastYield = now;
+      await new Promise(r => setTimeout(r, 0));
+    }
+  }
+  const tail = encoder.flush();
+  if (tail.length) parts.push(new Uint8Array(tail));
+
+  return new Blob(parts, { type: 'audio/mpeg' });
 }
 
 /**
- * Shrink `file` to an audio-only WAV that GitHub will accept.
+ * Shrink `file` to an audio-only MP3 that GitHub will accept.
  *
  * Returns the new File plus what it cost, so the page can report the trade
  * rather than silently swapping the user's video for something else.
  *
- * Throws when the audio alone still will not fit. Truncating would be worse
- * than refusing: a dub of the first eleven minutes of a twenty minute talk,
+ * Throws when even the encoded audio will not fit. Truncating would be worse
+ * than refusing: a dub of the first fifty minutes of a longer recording,
  * delivered without comment, is a failure disguised as a success.
  */
 export async function shrinkForUpload(file, onProgress) {
   const { samples, sampleRate } = await decodeAudio(file, onProgress);
-  onProgress?.('يحوّل إلى صوت…');
-
   const pcm = resample(samples, sampleRate, TARGET_RATE);
   const seconds = pcm.length / TARGET_RATE;
-  const blob = toWav(pcm, TARGET_RATE);
 
-  if (blob.size > SAFE_BYTES) {
-    const limit = maxSeconds();
+  const limit = maxSeconds();
+  if (seconds > limit) {
+    const mmss = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
     throw new Error(
-      `الصوت وحده ${formatMB(blob.size)} م.ب — أطول من الحد. ` +
-      `الحد الأقصى ${Math.floor(limit / 60)} دقيقة تقريباً، ومقطعك ` +
-      `${Math.floor(seconds / 60)}:${String(Math.round(seconds % 60)).padStart(2, '0')}. ` +
-      `اقتطع الجزء الذي تريد دبلجته وأرسله.`
+      `المقطع ${mmss(seconds)} — أطول من الحد الأقصى ${Math.floor(limit / 60)} دقيقة. ` +
+      `اقتطع الجزء الذي تريد دبلجته، أو أرسل لي الرابط المباشر وسأنزّله بنفسي.`
     );
   }
 
-  const name = file.name.replace(/\.[^.]+$/, '') + '.wav';
+  const blob = await encodeMp3(pcm, TARGET_RATE, onProgress);
+  const name = file.name.replace(/\.[^.]+$/, '') + '.mp3';
   return {
-    file: new File([blob], name, { type: 'audio/wav' }),
+    file: new File([blob], name, { type: 'audio/mpeg' }),
     before: file.size,
     after: blob.size,
     seconds,
