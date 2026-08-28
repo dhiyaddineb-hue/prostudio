@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>اختر الصوت — ProStudio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--bg:#07080c;--ink:#f4efe4;--muted:#b7b0a3;--line:rgba(244,239,228,.12);
+        --card:rgba(16,17,23,.78);--gold:#e8b86d;--ok:#7dcea0;--warn:#e8c97d}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
+       font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;
+       background-image:radial-gradient(circle at 12% 6%,rgba(232,184,109,.15),transparent 38%),
+                        radial-gradient(circle at 90% 88%,rgba(90,140,255,.10),transparent 34%)}
+  header{padding:24px 6vw 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
+  .mark{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
+        background:linear-gradient(160deg,var(--gold),#9a6a2c);color:#1a1208;font-weight:700}
+  .brand strong{display:block}.brand small{color:var(--muted)}
+  nav a{color:var(--muted);text-decoration:none;font-size:14.5px;margin-inline-start:16px}
+  nav a:hover,nav a.on{color:var(--gold)}
+  main{max-width:960px;margin:0 auto;padding:22px 6vw 60px}
+  h1{font-size:clamp(24px,4vw,34px);margin:14px 0 8px}
+  .lede{color:var(--muted);margin:0 0 26px;font-size:16.5px;line-height:1.85}
+  h2.role{font-size:19px;margin:34px 0 6px;display:flex;align-items:center;gap:10px}
+  h2.role small{color:var(--muted);font-weight:400;font-size:14px}
+
+  .row{background:var(--card);border:1px solid var(--line);border-radius:15px;
+       padding:15px 18px;margin-bottom:11px;display:grid;
+       grid-template-columns:auto 1fr auto;gap:15px;align-items:center;transition:.16s}
+  .row:hover{border-color:rgba(232,184,109,.45)}
+  .row.on{border-color:var(--gold);background:rgba(232,184,109,.10)}
+  .play{width:46px;height:46px;border-radius:50%;border:1px solid var(--line);
+        background:rgba(255,255,255,.05);color:var(--ink);font-size:17px;cursor:pointer;
+        display:grid;place-items:center;flex:0 0 auto;transition:.16s}
+  .play:hover{background:var(--gold);color:#1a1208;border-color:var(--gold)}
+  .info{min-width:0}
+  .name{font-weight:600;font-size:15.5px;margin-bottom:4px}
+  .say{color:var(--muted);font-size:13.5px;line-height:1.7;
+       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .facts{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+  .tag{font-size:11.5px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .tag.ok{color:var(--ok);border-color:rgba(125,206,160,.35)}
+  .tag.warn{color:var(--warn);border-color:rgba(232,201,125,.35)}
+  .pick{padding:10px 18px;border-radius:10px;border:1px solid var(--line);
+        background:transparent;color:var(--ink);font:inherit;font-size:14px;
+        font-weight:600;cursor:pointer;white-space:nowrap;transition:.16s}
+  .pick:hover{border-color:var(--gold);color:var(--gold)}
+  .row.on .pick{background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208;border-color:transparent}
+
+  .out{position:sticky;bottom:16px;margin-top:30px;background:rgba(10,11,16,.96);
+       border:1px solid var(--gold);border-radius:16px;padding:20px 22px;
+       box-shadow:0 18px 44px rgba(0,0,0,.6)}
+  .out h3{margin:0 0 10px;font-size:16px}
+  .out p{margin:0 0 12px;color:var(--muted);font-size:14px;line-height:1.8}
+  .out code{display:block;background:rgba(0,0,0,.45);border:1px solid var(--line);
+            border-radius:9px;padding:12px 14px;font-size:14.5px;color:var(--gold);
+            direction:rtl;text-align:right}
+  footer{color:var(--muted);font-size:13.5px;text-align:center;padding:0 6vw 40px}
+  a{color:var(--gold)}
+  @media(max-width:640px){.row{grid-template-columns:auto 1fr;gap:12px}.pick{grid-column:2;justify-self:start}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="mark">PS</span>
+    <div><strong>ProStudio</strong><small>اختيار الصوت</small></div>
+  </div>
+  <nav>
+    <a href="index.html">الرئيسية</a>
+    <a href="preview.html">المعاينة</a>
+    <a href="voices.html" class="on">الأصوات</a>
+    <a href="send.html">إرسال</a>
+  </nav>
+</header>
+
+<main>
+  <h1>اسمع واختر</h1>
+  <p class="lede">
+    عشر عينات حقيقية — نفس الجملة بأصوات ولهجات مختلفة. اضغط ▶ للاستماع،
+    ثم «اختر». في الأسفل يظهر اختيارك جاهزاً لتنسخه لي.
+    <br />
+    <span style="font-size:14px">
+      <b>CV</b> هو تنوّع النبرة المقيس: تحت 0.18 يقرأ كآلة، فوق 0.30 حيّ.
+      الأصوات التي رفضتَها سابقاً كانت 0.157–0.244.
+    </span>
+  </p>
+
+  <div id="lists">جارٍ التحميل…</div>
+
+  <div class="out">
+    <h3>اختيارك</h3>
+    <p id="hint">لم تختر بعد — اضغط «اختر» عند الصوت الذي يعجبك لكل شخصية.</p>
+    <code id="answer">—</code>
+  </div>
+</main>
+
+<footer>ProStudio · رخصة MIT</footer>
+
+<script>
+// One audio element for the whole page: two clips playing at once makes every
+// voice sound bad, and a viewer comparing takes will click quickly.
+const player = new Audio();
+let playingBtn = null;
+const chosen = {};
+
+function stop() {
+  player.pause();
+  if (playingBtn) { playingBtn.textContent = '▶'; playingBtn = null; }
+}
+player.onended = stop;
+
+function verdict(cv) {
+  if (cv >= 0.30) return ['ok', 'حيّ'];
+  if (cv >= 0.18) return ['warn', 'مسطّح'];
+  return ['', 'آلي'];
+}
+
+function render(samples) {
+  const box = document.getElementById('lists');
+  box.innerHTML = '';
+  for (const role of ['راغنار', 'فلوكي']) {
+    const mine = samples.filter(s => s.role === role);
+    if (!mine.length) continue;
+    const h = document.createElement('h2');
+    h.className = 'role';
+    h.innerHTML = `${role} <small>نبرة الممثل الأصلي ${mine[0].target} هرتز</small>`;
+    box.appendChild(h);
+
+    mine.forEach(s => {
+      const [cls, word] = verdict(s.cv);
+      const off = Math.abs(12 * Math.log2(s.f0 / s.target)).toFixed(1);
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `
+        <button class="play" aria-label="تشغيل">▶</button>
+        <div class="info">
+          <div class="name">${s.voice} · ${s.dialect}</div>
+          <div class="say"></div>
+          <div class="facts">
+            <span class="tag ${cls}">CV ${s.cv} — ${word}</span>
+            <span class="tag">${s.f0} هرتز</span>
+            <span class="tag">فرق ${off} نصف نغمة</span>
+            <span class="tag">${s.dur} ث</span>
+          </div>
+        </div>
+        <button class="pick">اختر</button>`;
+      row.querySelector('.say').textContent = s.text;
+
+      const btn = row.querySelector('.play');
+      btn.onclick = () => {
+        if (playingBtn === btn) { stop(); return; }
+        stop();
+        player.src = s.mp3;
+        player.play().then(() => { btn.textContent = '⏸'; playingBtn = btn; })
+                     .catch(() => { btn.textContent = '⚠'; });
+      };
+
+      row.querySelector('.pick').onclick = () => {
+        box.querySelectorAll('.row').forEach(r => {
+          if (r.dataset.role === role) r.classList.remove('on');
+        });
+        row.classList.add('on');
+        chosen[role] = s;
+        update();
+      };
+      row.dataset.role = role;
+      box.appendChild(row);
+    });
+  }
+}
+
+function update() {
+  const parts = [];
+  for (const role of ['راغنار', 'فلوكي']) {
+    if (chosen[role]) parts.push(`${role} = ${chosen[role].voice} ${chosen[role].dialect}`);
+  }
+  const done = parts.length === 2;
+  document.getElementById('hint').textContent = done
+    ? 'انسخ السطر التالي وأرسله لي، وسأبني الدبلجة به.'
+    : 'اخترت واحداً — اختر للشخصية الأخرى أيضاً.';
+  document.getElementById('answer').textContent = parts.length ? parts.join(' ، ') : '—';
+}
+
+fetch('samples.json')
+  .then(r => r.json())
+  .then(d => render(d.samples))
+  .catch(() => { document.getElementById('lists').textContent = 'تعذّر تحميل العينات.'; });
+</script>
+
+</body>
+</html>

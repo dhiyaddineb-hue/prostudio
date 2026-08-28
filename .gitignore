@@ -55,3 +55,8 @@ projects/*/source/
 !docs/*.mp4
 !docs/*.srt
 !docs/*.vtt
+# Voice audition clips. The directory has to be unignored before the files
+# inside it can be: git will not look inside an excluded directory, so listing
+# only "!docs/samples/*.mp3" silently keeps them all out.
+!docs/samples/
+!docs/samples/*.mp3

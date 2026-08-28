@@ -1,0 +1,128 @@
+{
+  "samples": [
+    {
+      "id": "F1_voice00_fusha",
+      "mp3": "samples/F1_voice00_fusha.mp3",
+      "role": "فلوكي",
+      "voice": "voice-00",
+      "dialect": "فصحى",
+      "text": "أستطيع يا راغنار. سأفعلها لأجلك. كل ما أفعله لأجلك يا راغنار.",
+      "dur": 8.84,
+      "f0": 133,
+      "cv": 0.408,
+      "target": 138
+    },
+    {
+      "id": "F2_voice00_masri",
+      "mp3": "samples/F2_voice00_masri.mp3",
+      "role": "فلوكي",
+      "voice": "voice-00",
+      "dialect": "مصرية",
+      "text": "أقدر يا راغنار. هعملها عشانك. كل اللي بعمله ده عشانك يا راغنار.",
+      "dur": 8.0,
+      "f0": 108,
+      "cv": 0.388,
+      "target": 138
+    },
+    {
+      "id": "F3_voice00_shami",
+      "mp3": "samples/F3_voice00_shami.mp3",
+      "role": "فلوكي",
+      "voice": "voice-00",
+      "dialect": "شامية",
+      "text": "بقدر يا راغنار. رح أعملها لأجلك. كل شي بعملو لأجلك يا راغنار.",
+      "dur": 7.52,
+      "f0": 125,
+      "cv": 0.391,
+      "target": 138
+    },
+    {
+      "id": "F4_voice05_masri",
+      "mp3": "samples/F4_voice05_masri.mp3",
+      "role": "فلوكي",
+      "voice": "voice-05",
+      "dialect": "مصرية",
+      "text": "أقدر يا راغنار. هعملها عشانك. كل اللي بعمله ده عشانك يا راغنار.",
+      "dur": 6.84,
+      "f0": 130,
+      "cv": 0.42,
+      "target": 138
+    },
+    {
+      "id": "F5_voice13_masri",
+      "mp3": "samples/F5_voice13_masri.mp3",
+      "role": "فلوكي",
+      "voice": "voice-13",
+      "dialect": "مصرية",
+      "text": "أقدر يا راغنار. هعملها عشانك. كل اللي بعمله ده عشانك يا راغنار.",
+      "dur": 6.59,
+      "f0": 102,
+      "cv": 0.361,
+      "target": 138
+    },
+    {
+      "id": "R1_voice05_fusha",
+      "mp3": "samples/R1_voice05_fusha.mp3",
+      "role": "راغنار",
+      "voice": "voice-05",
+      "dialect": "فصحى",
+      "text": "أتقدر عليها يا فلوكي؟ أم أنا مخطئ؟ أجبني الآن.",
+      "dur": 5.16,
+      "f0": 124,
+      "cv": 0.456,
+      "target": 118
+    },
+    {
+      "id": "R2_voice05_masri",
+      "mp3": "samples/R2_voice05_masri.mp3",
+      "role": "راغنار",
+      "voice": "voice-05",
+      "dialect": "مصرية",
+      "text": "تقدر تعملها يا فلوكي؟ ولا أنا غلطان؟ ردّ عليا دلوقتي.",
+      "dur": 4.44,
+      "f0": 123,
+      "cv": 0.287,
+      "target": 118
+    },
+    {
+      "id": "R3_voice05_shami",
+      "mp3": "samples/R3_voice05_shami.mp3",
+      "role": "راغنار",
+      "voice": "voice-05",
+      "dialect": "شامية",
+      "text": "فيك تعملها يا فلوكي؟ ولا أنا غلطان؟ جاوبني هلق.",
+      "dur": 5.24,
+      "f0": 105,
+      "cv": 0.469,
+      "target": 118
+    },
+    {
+      "id": "R4_voice00_masri",
+      "mp3": "samples/R4_voice00_masri.mp3",
+      "role": "راغنار",
+      "voice": "voice-00",
+      "dialect": "مصرية",
+      "text": "تقدر تعملها يا فلوكي؟ ولا أنا غلطان؟ ردّ عليا دلوقتي.",
+      "dur": 5.28,
+      "f0": 176,
+      "cv": 0.291,
+      "target": 118
+    },
+    {
+      "id": "R5_voice09_masri",
+      "mp3": "samples/R5_voice09_masri.mp3",
+      "role": "راغنار",
+      "voice": "voice-09",
+      "dialect": "مصرية",
+      "text": "تقدر تعملها يا فلوكي؟ ولا أنا غلطان؟ ردّ عليا دلوقتي.",
+      "dur": 4.86,
+      "f0": 91,
+      "cv": 0.183,
+      "target": 118
+    }
+  ],
+  "actors": {
+    "راغنار": 118,
+    "فلوكي": 138
+  }
+}
