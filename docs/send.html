@@ -45,6 +45,17 @@
         color:var(--muted);line-height:1.9;text-align:start}
   .note b{color:var(--ok)}
   footer{color:var(--muted);font-size:13.5px;text-align:center;padding:0 6vw 40px}
+  .drop{display:block;border:2px dashed var(--line);border-radius:22px;
+       padding:56px 30px;background:var(--card);cursor:pointer;transition:.18s;text-align:center}
+  .drop:hover,.drop.over{border-color:var(--gold);background:rgba(232,184,109,.08);transform:translateY(-2px)}
+  .drop strong{display:block;font-size:21px;margin-bottom:10px}
+  .drop em{color:var(--muted);font-style:normal;font-size:15px;line-height:1.9;display:block}
+  .status{margin:18px 0 0;font-size:15px;line-height:1.9;color:var(--muted);min-height:24px}
+  .status.ok{color:var(--ink)}
+  .status.err{color:#e88d8d}
+  .dl{display:inline-block;margin-top:12px;padding:12px 22px;border-radius:11px;
+      background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208;
+      text-decoration:none;font-weight:600;font-size:15px}
 </style>
 </head>
 <body>
@@ -65,45 +76,117 @@
 
 <main>
   <h1>أرسل ملفك</h1>
-  <p class="lede">فيديو أو صوت — اسحبه في الصفحة التالية وسأتولى الباقي.</p>
+  <p class="lede">
+    فيديو أو صوت. لو كان أكبر من 25 م.ب سأصغّره هنا في متصفحك أولاً —
+    ملفك لا يُرفع إلى أي خادم وسيط.
+  </p>
+
+  <div class="drop" id="drop">
+    <div class="icon">⬆</div>
+    <strong>اختر ملفك</strong>
+    <em>
+      اسحبه هنا أو اضغط<br>
+      MP4 · MKV · MOV · MP3 · WAV · M4A
+    </em>
+    <input type="file" id="file" accept="audio/*,video/*" hidden />
+  </div>
+
+  <div id="status" class="status"></div>
 
   <a class="big" id="up"
      href="https://github.com/dhiyaddineb-hue/prostudio/upload/arena/01a03969-prostudio/inbox"
-     target="_blank" rel="noopener">
-    <div class="icon">⬆</div>
+     target="_blank" rel="noopener" style="display:none">
+    <div class="icon">✓</div>
     <strong>افتح صندوق الرفع</strong>
-    <em>
-      اسحب الملف أو اختره من جهازك<br>
-      MP4 · MKV · MOV · MP3 · WAV · M4A
-    </em>
+    <em>اسحب الملف الجاهز داخله ثم اضغط Commit changes</em>
   </a>
 
   <div class="steps">
     <h2>ثلاث خطوات</h2>
     <ol>
-      <li>اضغط الصندوق أعلاه — يفتح صفحة الرفع على GitHub</li>
-      <li><b>اسحب ملفك</b> داخلها، أو اضغط <b>choose your files</b></li>
+      <li><b>اختر ملفك</b> أعلاه — يُجهَّز فوراً إن لزم</li>
+      <li>اضغط <b>افتح صندوق الرفع</b> واسحب الملف الجاهز داخله</li>
       <li>انزل لأسفل واضغط <b>Commit changes</b></li>
     </ol>
   </div>
 
   <div class="note">
-    <b>لماذا هذه الطريقة؟</b> الملف يُحفظ داخل المستودع مباشرة، فأصل إليه فوراً
-    وأبدأ الدبلجة. المرفقات في الطلبات لا تصلني.
+    <b>لماذا التصغير؟</b> GitHub يرفض أي ملف فوق 25 م.ب عبر المتصفح
+    («Yowza, that's a big file»). الدبلجة تقرأ الصوت فقط، فيُستخرج وحده:
+    التكلفة <b>1.83 م.ب لكل دقيقة</b> مهما كانت جودة الفيديو الأصلي.
+    مقياساً: مقطع إنستغرام صار أصغر 8×، وفيديو 1080p أصغر 20×.
+  </div>
+
+  <div class="note">
+    <b>ملف أطول من الحد؟</b> إن تجاوز الصوت وحده 25 م.ب (نحو 13 دقيقة)،
+    اقتطع الجزء الذي تريد دبلجته وأرسله. أو أرسل لي رابطه المباشر وسأنزّله بنفسي.
   </div>
 </main>
 
 <footer>ProStudio · رخصة MIT</footer>
 
-<script>
-// Keep the upload link pointed at whatever branch is publishing this page, so
-// the file always lands where the dub pipeline will look for it.
-(function(){
+<script type="module">
+// The file is prepared here, in the browser, because there is no server to
+// send a large upload to -- these pages are static files on GitHub Pages.
+import { needsShrink, shrinkForUpload, formatMB, LIMIT_MB } from './shrink.js';
+
+const drop = document.getElementById('drop');
+const input = document.getElementById('file');
+const status = document.getElementById('status');
+const upload = document.getElementById('up');
+
+(function pointAtPublishingBranch(){
   const REPO = 'https://github.com/dhiyaddineb-hue/prostudio';
   const BRANCH = 'arena/01a03969-prostudio';
-  document.getElementById('up').href =
-    `${REPO}/upload/${BRANCH}/inbox`;
+  upload.href = `${REPO}/upload/${BRANCH}/inbox`;
 })();
+
+function say(html, kind) {
+  status.className = 'status ' + (kind || '');
+  status.innerHTML = html;
+}
+
+// A prepared file cannot be pushed into GitHub's form programmatically -- the
+// browser forbids scripting another origin's file input -- so it is offered as
+// a download and the user drags that into the upload box.
+function offer(file, note) {
+  const url = URL.createObjectURL(file);
+  say(`${note}<br><a class="dl" href="${url}" download="${file.name}">⬇ احفظ الملف الجاهز (${file.name})</a>`, 'ok');
+  upload.style.display = '';
+}
+
+async function handle(file) {
+  if (!file) return;
+  upload.style.display = 'none';
+
+  if (!needsShrink(file)) {
+    say(`<b>${file.name}</b> — ${formatMB(file.size)} م.ب. جاهز للرفع كما هو.`, 'ok');
+    upload.style.display = '';
+    return;
+  }
+
+  say(`<b>${file.name}</b> — ${formatMB(file.size)} م.ب، أكبر من ${LIMIT_MB} م.ب. يُصغَّر الآن…`);
+  try {
+    const r = await shrinkForUpload(file, step => say(step));
+    const mins = Math.floor(r.seconds / 60);
+    const secs = String(Math.round(r.seconds % 60)).padStart(2, '0');
+    offer(r.file,
+      `تم: <b>${formatMB(r.before)} → ${formatMB(r.after)} م.ب</b> ` +
+      `(أصغر ${r.ratio.toFixed(0)}× · ${mins}:${secs} صوت كامل)`);
+  } catch (err) {
+    say(err.message, 'err');
+  }
+}
+
+drop.onclick = () => input.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => {
+  e.preventDefault();
+  drop.classList.remove('over');
+  handle(e.dataTransfer.files[0]);
+};
+input.onchange = () => handle(input.files[0]);
 </script>
 
 </body>
