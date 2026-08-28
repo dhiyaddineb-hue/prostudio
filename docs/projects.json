@@ -1,6 +1,35 @@
 {
   "projects": [
     {
+      "slug": "Bob-Proctor-5min-2v",
+      "title": "Bob Proctor — أول 5 دقائق (صوتان)",
+      "dialect": "msa",
+      "created_at": "2026-08-28T18:44:21+00:00",
+      "video": "Bob-Proctor-5min-2v.mp4",
+      "srt": "Bob-Proctor-5min-2v.srt",
+      "vtt": "Bob-Proctor-5min-2v.vtt",
+      "size": 15887045,
+      "cast": {
+        "p": "بوب بروكتور (voice-19)",
+        "i": "المُحاور (voice-20)"
+      },
+      "metrics": {
+        "cues": 52,
+        "placed": 52,
+        "rate": 10.1,
+        "min_gap": 0.08,
+        "overlaps": 0,
+        "measured": true,
+        "speakers": [
+          "i",
+          "p"
+        ],
+        "duration": 309.99,
+        "peak_dbfs": -4.25,
+        "clipped": false
+      }
+    },
+    {
       "slug": "Bob-Proctor-Sample",
       "title": "Bob Proctor — عيّنة",
       "dialect": "msa",
