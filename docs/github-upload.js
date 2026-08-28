@@ -35,6 +35,43 @@ export function formatMB(bytes) {
   return (bytes / 1048576).toFixed(1);
 }
 
+// ── remembering the token ───────────────────────────────────────────────
+// Retyping a 40-character secret for every upload is the kind of friction
+// that makes a tool not worth using, so it is kept in localStorage.
+//
+// The trade is stated rather than hidden. localStorage is scoped to this
+// origin, which is the whole of dhiyaddineb-hue.github.io — so any script on
+// any page under that subdomain can read it. That is acceptable here because
+// the origin only serves this project's own files and the token is limited to
+// public_repo, but it is the reason `forgetToken` exists and why the page
+// offers it plainly. On a shared computer, forget it when you are done.
+
+const STORE_KEY = 'prostudio.github.token';
+
+export function loadToken() {
+  try {
+    return localStorage.getItem(STORE_KEY) || '';
+  } catch {
+    // Private browsing modes throw on localStorage rather than returning null.
+    return '';
+  }
+}
+
+export function saveToken(token) {
+  try {
+    localStorage.setItem(STORE_KEY, token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function forgetToken() {
+  try {
+    localStorage.removeItem(STORE_KEY);
+  } catch { /* nothing stored to begin with */ }
+}
+
 export function partCount(size) {
   return Math.max(1, Math.ceil(size / PART_BYTES));
 }

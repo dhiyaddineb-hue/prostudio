@@ -93,18 +93,23 @@
   </p>
 
   <div class="tok" id="tokBox">
-    <label class="fld">
+    <div id="tokSaved" class="saved" hidden>
+      <span>✓ الرمز محفوظ في هذا المتصفح — لن تحتاج إدخاله مرة أخرى.</span>
+      <button type="button" id="tokForget" class="linkbtn">انسَ الرمز</button>
+    </div>
+    <label class="fld" id="tokField">
       <span>رمز GitHub <a href="#" id="tokHelp">(كيف أحصل عليه؟)</a></span>
       <input type="password" id="token" placeholder="ghp_..." autocomplete="off" />
     </label>
     <div id="tokHelpBody" class="help" hidden>
       <ol>
-        <li>افتح <a id="tokLink" target="_blank" rel="noopener">صفحة إنشاء الرمز</a> — الصلاحية <code>public_repo</code> مُحدَّدة سلفاً</li>
+        <li>افتح <a id="tokLink" target="_blank" rel="noopener">صفحة إنشاء الرمز</a></li>
+        <li>في <b>Select scopes</b> ضع علامة على <code>public_repo</code> وحدها</li>
         <li>انزل لأسفل واضغط <b>Generate token</b></li>
-        <li>انسخ الرمز والصقه هنا</li>
+        <li>انسخ السلسلة التي تبدأ بـ <code>ghp_</code> والصقها هنا</li>
       </ol>
-      <p><b>الرمز لا يُحفظ ولا يُرسَل إلا إلى GitHub نفسه.</b>
-         أغلق الصفحة ويختفي. يمكنك حذفه من إعداداتك متى شئت.</p>
+      <p><b>يُحفظ في متصفحك وحده</b> — لا خادم لي يستقبله، ولا يُرسَل إلا إلى
+         GitHub نفسه. اضغط «انسَ الرمز» لمسحه، أو احذفه من إعدادات GitHub.</p>
     </div>
   </div>
 
@@ -139,8 +144,10 @@
 <script type="module">
 // Everything runs in the browser: these pages are static, so the file is
 // committed straight to the repository through GitHub's own API.
-import { commitFile, checkToken, partCount, formatMB, TOKEN_URL }
-  from './github-upload.js';
+import {
+  commitFile, checkToken, partCount, formatMB, TOKEN_URL,
+  loadToken, saveToken, forgetToken,
+} from './github-upload.js';
 
 const $ = id => document.getElementById(id);
 const drop = $('drop'), input = $('file'), status = $('status');
@@ -161,13 +168,30 @@ const progress = pct => {
   if (pct != null) fill.style.width = `${pct}%`;
 };
 
+// A remembered token collapses the field out of the way; the page should not
+// keep asking for something it already has.
+function showTokenState() {
+  const saved = !!loadToken();
+  $('tokSaved').hidden = !saved;
+  $('tokField').hidden = saved;
+  if (saved) $('tokHelpBody').hidden = true;
+}
+$('tokForget').onclick = () => {
+  forgetToken();
+  token.value = '';
+  showTokenState();
+  say('نُسي الرمز من هذا المتصفح.', 'ok');
+};
+showTokenState();
+
 let busy = false;
 
 async function handle(file) {
   if (!file || busy) return;
-  const key = token.value.trim();
+  const key = (token.value.trim() || loadToken()).trim();
   if (!key) {
     say('الصق رمز GitHub أولاً — اضغط «كيف أحصل عليه؟» بالأعلى.', 'err');
+    $('tokField').hidden = false;
     token.focus();
     return;
   }
@@ -179,8 +203,10 @@ async function handle(file) {
 
   try {
     // Verify before uploading: failing after several minutes of transfer is
-    // far worse than failing in one second.
+    // far worse than failing in one second. Only remember a token that has
+    // just proved it works, so a typo is never stored.
     await checkToken(key);
+    if (saveToken(key)) { token.value = ''; showTokenState(); }
 
     const t0 = Date.now();
     say(`يرفع <b>${file.name}</b> — ${formatMB(file.size)} م.ب` +
@@ -203,6 +229,13 @@ async function handle(file) {
         '<br>قل لي أن أبدأ الدبلجة.', 'ok');
   } catch (err) {
     progress(null);
+    // A rejected token is worth clearing: leaving a dead one saved would make
+    // every later upload fail with no obvious cause.
+    if (/الرمز غير صالح|صلاحية/.test(err.message)) {
+      forgetToken();
+      showTokenState();
+      $('tokField').hidden = false;
+    }
     say('تعذّر الرفع: ' + err.message, 'err');
   } finally {
     busy = false;

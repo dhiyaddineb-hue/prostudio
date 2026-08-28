@@ -60,5 +60,39 @@ ok(BRANCH === 'arena/01a03969-prostudio', 'commits land on the session branch');
 ok(OWNER === 'dhiyaddineb-hue' && REPO === 'prostudio', 'points at the right repo');
 ok(formatMB(74.5 * MB) === '74.5', 'formats sizes for display');
 
+// ── remembering the token ───────────────────────────────────────────────
+// Retyping a 40-character secret per upload is friction that makes a tool not
+// worth using. What must not happen is a bad token being remembered, or a
+// stored one surviving a "forget".
+const { loadToken, saveToken, forgetToken } = await import('../../docs/github-upload.js');
+
+const store = new Map();
+globalThis.localStorage = {
+  getItem: k => (store.has(k) ? store.get(k) : null),
+  setItem: (k, v) => store.set(k, String(v)),
+  removeItem: k => store.delete(k),
+};
+
+ok(loadToken() === '', 'nothing is remembered before anything is saved');
+ok(saveToken('ghp_example') === true, 'saving reports success');
+ok(loadToken() === 'ghp_example', 'a saved token is read back');
+forgetToken();
+ok(loadToken() === '', 'forgetting really removes it');
+
+// Private browsing throws on localStorage rather than returning null, and an
+// upload page that crashes there would be worse than one that just asks again.
+const working = globalThis.localStorage;
+globalThis.localStorage = {
+  getItem() { throw new Error('denied'); },
+  setItem() { throw new Error('denied'); },
+  removeItem() { throw new Error('denied'); },
+};
+ok(loadToken() === '', 'a blocked store reads as empty instead of throwing');
+ok(saveToken('x') === false, 'a blocked store reports failure instead of throwing');
+let threw = false;
+try { forgetToken(); } catch { threw = true; }
+ok(!threw, 'forgetting on a blocked store does not throw');
+globalThis.localStorage = working;
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
