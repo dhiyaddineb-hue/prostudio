@@ -63,11 +63,24 @@ def _source() -> Path:
     raise SystemExit("no source clip: put one in the project's source/ folder")
 
 SR = 44100
-MAX_TEMPO = 1.35        # past this the read sounds rushed
+# Time-stretching is not free: measured on these takes it costs harmonics.
+#   x1.05 -> -0.07 dB HNR      x1.20 -> -1.10 dB
+#   x1.10 -> -0.41 dB          x1.29 -> -1.29 dB
+# That loss is most of what makes a dub sound synthetic, and no stretcher
+# available here does better -- rubberband measured -2.54 dB at the same
+# factor, worse than atempo. So the cap is set where the damage is still
+# inaudible, and a line that will not fit is reported for rewriting rather
+# than crushed into place.
+MAX_TEMPO = 1.10
+STRETCH_WARN = 1.06     # past this, say so in the build log
 # Natural Arabic speech runs 11-15 characters/second. The synthesised takes come
 # out around 7.4, which reads as sluggish rather than deliberate.
 TARGET_RATE_MIN = 11.0
-MAX_NATURALISE = 1.6    # cap, so a very short line is not chipmunked
+# Was 1.6, which let the naturalise pass alone stretch a line 1.51x before the
+# fitting pass had even run -- over a decibel of harmonics gone in the step
+# meant to *improve* the read. A slow line is a smaller fault than a synthetic
+# one, so this now shares the same budget as every other stretch.
+MAX_NATURALISE = 1.10
 # How far a line may outlast the actor's own mouth movement, as a multiple of
 # the caption window. Arabic needs more syllables than English for the same
 # thought, so some overshoot is unavoidable; 1.25x stays under the ~0.2 s that
@@ -417,21 +430,31 @@ def place_cues(total: int) -> tuple[np.ndarray, np.ndarray, int, list[dict]]:
         # delivery drag. Speed each line toward a natural rate for its own text
         # before worrying about whether it fits the slot.
         chars = len([c for c in text if not c.isspace()])
+        stretch = 1.0
         if chars >= 3 and dur > 0.2:
             rate = chars / dur
             if rate < TARGET_RATE_MIN:
                 factor = min(TARGET_RATE_MIN / rate, MAX_NATURALISE)
                 audio = trim(retime(audio, factor))
                 dur = len(audio) / SR
+                stretch *= factor
 
         note = "natural"
         if dur > budget + TAIL_ALLOWANCE:
-            factor = min(dur / (budget + TAIL_ALLOWANCE), MAX_TEMPO)
+            wanted = dur / (budget + TAIL_ALLOWANCE)
+            factor = min(wanted, MAX_TEMPO)
             audio = trim(retime(audio, factor))
             dur = len(audio) / SR
+            stretch *= factor
             note = f"atempo x{factor:.3f}"
-            if dur > budget + TAIL_ALLOWANCE:
-                note += f" (+{dur - budget - TAIL_ALLOWANCE:.2f}s over)"
+            if wanted > MAX_TEMPO:
+                # Refusing to squeeze further is deliberate. The line needs to
+                # be shorter, and saying so is more useful than delivering a
+                # crushed take that sounds synthetic.
+                short_by = dur - budget - TAIL_ALLOWANCE
+                need = int(chars * (1 - (budget + TAIL_ALLOWANCE) / dur)) + 1
+                note += (f" — TOO LONG by {short_by:.2f}s, "
+                         f"cut ~{need} chars from the text")
 
         # Hard guard: a line must never run into the next speaker's slot, nor
         # keep talking long after this speaker's mouth has stopped.
@@ -439,13 +462,21 @@ def place_cues(total: int) -> tuple[np.ndarray, np.ndarray, int, list[dict]]:
         room = max(room, 0.35)
         if len(audio) / SR > room:
             # Prefer speeding the line up over cutting a word off its end;
-            # only trim if it is still too long after a modest squeeze.
-            factor = min((len(audio) / SR) / room, 1.25)
-            audio = trim(retime(audio, factor))
-            note += f"; fitted x{factor:.2f}"
+            # only trim if it is still too long after a modest squeeze. The
+            # squeeze is bounded by the same MAX_TEMPO budget as above, since
+            # stacking two stretches multiplies the harmonic damage.
+            headroom = max(MAX_TEMPO / stretch, 1.0)
+            factor = min((len(audio) / SR) / room, headroom)
+            if factor > 1.001:
+                audio = trim(retime(audio, factor))
+                stretch *= factor
+                note += f"; fitted x{factor:.2f}"
             if len(audio) / SR > room:
                 audio = audio[: int(room * SR)]
                 note += "; trimmed"
+
+        if stretch > STRETCH_WARN:
+            note += f"  [stretch x{stretch:.2f}]"
 
         audio = fade(audio)
         at = int(start * SR)
