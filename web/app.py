@@ -833,3 +833,95 @@ async def voice_clone(
             "وليست استنساخاً عصبياً للهوية — أوزان نماذج الاستنساخ محجوبة عن هذه البيئة."
         ),
     }
+
+
+# ── direct upload ───────────────────────────────────────────────────────
+# Splitting a file in the browser and then asking the user to save every piece
+# and drag it back into GitHub's form is busywork the machine should be doing.
+# When the studio is running, the browser can post the parts straight here and
+# they are reassembled on arrival -- no saving, no re-uploading, no size cap.
+
+INBOX_DIR = ROOT.parent / "inbox"
+
+
+def _safe_upload_name(name: str) -> str:
+    """Reduce a client-supplied filename to something safe to write.
+
+    ``Path(name).name`` strips POSIX directories but leaves a Windows-style
+    ``..\\evil.bin`` untouched, since a backslash is an ordinary character
+    here. Both separators are normalised before the basename is taken, and
+    anything that is still a traversal token or a dotfile is refused rather
+    than silently rewritten -- a caller who sends a path is confused about the
+    protocol, and quietly renaming their file hides that.
+    """
+    candidate = Path(str(name).replace("\\", "/")).name.strip()
+    if not candidate or candidate.startswith(".") or set(candidate) == {"."}:
+        raise HTTPException(400, "bad filename")
+    return candidate
+
+
+@app.get("/api/upload/status/{name}")
+async def upload_status(name: str) -> Dict[str, Any]:
+    """Which parts of ``name`` have already arrived.
+
+    Lets a resumed upload skip what is already here instead of starting the
+    whole file again.
+    """
+    safe = _safe_upload_name(name)
+    staging = TEMP_DIR / "uploads" / safe
+    have = sorted(int(p.stem) for p in staging.glob("*.part")) if staging.is_dir() else []
+    return {"name": safe, "have": have, "complete": (INBOX_DIR / safe).exists()}
+
+
+@app.post("/api/upload/part")
+async def upload_part(
+    chunk: UploadFile = File(...),
+    name: str = Form(...),
+    index: int = Form(...),
+    total: int = Form(...),
+    sha256: str = Form(""),
+) -> Dict[str, Any]:
+    """Receive one part of a split upload.
+
+    Parts land in a staging folder keyed by filename and are only assembled
+    once every index is present, so they may arrive in any order and a dropped
+    connection costs one part rather than the whole file.
+    """
+    import hashlib
+
+    safe = _safe_upload_name(name)
+    if not (1 <= index <= total):
+        raise HTTPException(400, f"part {index} outside 1..{total}")
+
+    staging = TEMP_DIR / "uploads" / safe
+    staging.mkdir(parents=True, exist_ok=True)
+
+    payload = await chunk.read()
+    if sha256:
+        got = hashlib.sha256(payload).hexdigest()
+        if got != sha256:
+            # Refusing costs one part; accepting corrupts the whole video and
+            # only shows up as a broken dub much later.
+            raise HTTPException(422, f"part {index} corrupt in transit")
+
+    (staging / f"{index:05d}.part").write_bytes(payload)
+    have = sorted(int(p.stem) for p in staging.glob("*.part"))
+
+    if len(have) < total:
+        return {"received": index, "have": len(have), "total": total, "complete": False}
+
+    INBOX_DIR.mkdir(parents=True, exist_ok=True)
+    dest = INBOX_DIR / safe
+    with dest.open("wb") as out:
+        for i in range(1, total + 1):
+            out.write((staging / f"{i:05d}.part").read_bytes())
+    shutil.rmtree(staging, ignore_errors=True)
+
+    return {
+        "received": index,
+        "have": total,
+        "total": total,
+        "complete": True,
+        "path": f"inbox/{safe}",
+        "size": dest.stat().st_size,
+    }

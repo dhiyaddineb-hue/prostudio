@@ -88,8 +88,8 @@
 <main>
   <h1>أرسل ملفك</h1>
   <p class="lede">
-    فيديو أو صوت، أي حجم. الملفات الكبيرة تُقسَّم هنا في متصفحك
-    ثم أجمعها عندي — <b>الصورة والصوت يصلان كاملين بلا أي تغيير</b>.
+    فيديو أو صوت، أي حجم. اختر الملف — يُقسَّم ويُرفع تلقائياً،
+    <b>بلا حفظ وبلا إعادة رفع</b>.
   </p>
 
   <div class="drop" id="drop">
@@ -102,6 +102,7 @@
     <input type="file" id="file" accept="audio/*,video/*" hidden />
   </div>
 
+  <div class="bar" id="bar" hidden><div id="fill"></div></div>
   <div id="status" class="status"></div>
   <div id="files" class="files"></div>
 
@@ -113,42 +114,33 @@
     <em>اسحب <b>كل</b> الملفات المحفوظة دفعة واحدة ثم اضغط Commit changes</em>
   </a>
 
-  <div class="steps">
-    <h2>الخطوات</h2>
-    <ol>
-      <li><b>اختر ملفك</b> أعلاه</li>
-      <li><b>احفظ</b> كل الأجزاء التي تظهر (زر لكل جزء، أو «احفظ الكل»)</li>
-      <li>اضغط <b>افتح صندوق الرفع</b> واسحبها <b>كلها معاً</b></li>
-      <li>انزل لأسفل واضغط <b>Commit changes</b></li>
-    </ol>
-  </div>
+  <div class="note" id="modeNote"></div>
 
   <div class="note">
-    <b>هل التقسيم يُخرّب الملف؟</b> لا. القطع تُقصّ على حدود البايتات وتُلصَق
-    عندي كما هي — بلا إعادة ترميز. الملف المُعاد <b>مطابق للأصل بايتاً ببايت</b>،
-    ومع كل قطعة بصمة SHA‑256 أتحقق منها قبل الجمع، فلو تلف بايت واحد أرفض
-    الملف بدل تسليم دبلجة معطوبة.
-  </div>
-
-  <div class="note">
-    <b>لماذا التقسيم أصلاً؟</b> GitHub يرفض أي ملف فوق 25 م.ب عبر المتصفح
-    («Yowza, that's a big file»). القطع 20 م.ب لكل واحدة، فتمرّ كلها.
+    <b>هل هذا يُخرّب الملف؟</b> لا. القطع تُقصّ على حدود البايتات وتُلصَق
+    كما هي — بلا إعادة ترميز. الملف المُعاد <b>مطابق للأصل بايتاً ببايت</b>،
+    ومع كل قطعة بصمة SHA‑256 تُفحَص قبل الكتابة، فلو تلف بايت واحد تُرفض
+    القطعة وتُعاد.
   </div>
 </main>
 
 <footer>ProStudio · رخصة MIT</footer>
 
 <script type="module">
-// Splitting happens in the browser because these pages are static: there is no
-// server that could accept a file over GitHub's 25 MB form limit.
-import { splitFile, needsSplit, partCount, formatMB, PART_MB, LIMIT_MB }
-  from './split.js';
+// Two paths, decided by whether a studio answers. Direct upload is the one
+// worth having; the GitHub form is the fallback for when this page is being
+// read on its own, with no backend behind it.
+import { uploadToStudio, studioReachable, formatMB } from './upload.js';
+import { splitFile, needsSplit, partCount } from './split.js';
 
 const drop = document.getElementById('drop');
 const input = document.getElementById('file');
 const status = document.getElementById('status');
 const list = document.getElementById('files');
 const upload = document.getElementById('up');
+const bar = document.getElementById('bar');
+const fill = document.getElementById('fill');
+const modeNote = document.getElementById('modeNote');
 
 (function pointAtPublishingBranch(){
   const REPO = 'https://github.com/dhiyaddineb-hue/prostudio';
@@ -160,15 +152,46 @@ const say = (html, kind) => {
   status.className = 'status ' + (kind || '');
   status.innerHTML = html;
 };
+const progress = pct => {
+  bar.hidden = pct == null;
+  if (pct != null) fill.style.width = `${pct}%`;
+};
 
-// A file cannot be pushed into GitHub's form by script -- the browser forbids
-// touching another origin's file input -- so each piece is offered as a
-// download and the user drags them across.
+let direct = false;
+studioReachable().then(ok => {
+  direct = ok;
+  modeNote.innerHTML = ok
+    ? '<b>الوضع:</b> رفع مباشر — الملف يُرسَل إليّ فور اختياره، مهما كان حجمه.'
+    : '<b>الوضع:</b> الاستوديو غير متاح الآن، فسأجهّز القطع لترفعها على GitHub ' +
+      '(حد المتصفح هناك 25 م.ب لكل ملف، لذلك التقسيم).';
+});
+
+async function sendDirect(file) {
+  const t0 = Date.now();
+  say(`يرفع <b>${file.name}</b> — ${formatMB(file.size)} م.ب…`);
+  try {
+    const r = await uploadToStudio(file, p => {
+      progress(p.percent);
+      const secs = (Date.now() - t0) / 1000;
+      const rate = p.sent / Math.max(secs, 0.1) / 1048576;
+      const left = rate > 0 ? Math.round((p.total - p.sent) / 1048576 / rate) : 0;
+      say(`يرفع… <b>${p.percent}%</b> — القطعة ${p.part} من ${p.parts}` +
+          (left > 2 ? ` · بقي ${left} ثانية تقريباً` : ''));
+    });
+    progress(100);
+    say(`<b>وصل الملف كاملاً</b> — ${formatMB(r.size)} م.ب في <code>${r.path}</code>. ` +
+        'قل لي أن أبدأ الدبلجة.', 'ok');
+  } catch (err) {
+    progress(null);
+    say('تعذّر الرفع: ' + err.message + '<br>جرّب مرة أخرى — ما وصل من قطع لن يُعاد إرساله.', 'err');
+  }
+}
+
+// Fallback: prepare downloads for GitHub's form.
 function row(file, label) {
-  const url = URL.createObjectURL(file);
   const a = document.createElement('a');
   a.className = 'part';
-  a.href = url;
+  a.href = URL.createObjectURL(file);
   a.download = file.name;
   a.innerHTML = `<span class="pn"></span><span class="ps">${formatMB(file.size)} م.ب</span><span class="pd">⬇ احفظ</span>`;
   a.querySelector('.pn').textContent = label || file.name;
@@ -176,42 +199,38 @@ function row(file, label) {
   return a;
 }
 
-async function handle(file) {
-  if (!file) return;
-  list.innerHTML = '';
-  upload.style.display = 'none';
-
+async function prepareForGitHub(file) {
   if (!needsSplit(file)) {
-    say(`<b>${file.name}</b> — ${formatMB(file.size)} م.ب. أصغر من الحد، ` +
-        'ارفعه كما هو بلا تقسيم.', 'ok');
+    say(`<b>${file.name}</b> — ${formatMB(file.size)} م.ب. أصغر من الحد، ارفعه كما هو.`, 'ok');
     upload.style.display = '';
     return;
   }
-
   const total = partCount(file.size);
-  say(`<b>${file.name}</b> — ${formatMB(file.size)} م.ب، ` +
-      `يُقسَّم إلى ${total} قطعة…`);
-
+  say(`<b>${file.name}</b> — ${formatMB(file.size)} م.ب، يُقسَّم إلى ${total} قطعة…`);
   try {
     const r = await splitFile(file, m => say(m));
-    say(`جاهز: <b>${total} قطعة</b> + ملف بصمات. ` +
-        '<b>احفظها كلها</b> ثم ارفعها معاً في صندوق واحد.', 'ok');
-
+    say(`جاهز: <b>${total} قطعة</b> + ملف بصمات. احفظها كلها ثم ارفعها معاً.`, 'ok');
     const all = document.createElement('button');
     all.className = 'dl';
     all.textContent = `⬇ احفظ الكل (${total + 1} ملفات)`;
-    all.onclick = () => {
-      // Browsers throttle rapid successive downloads, so they are spaced out.
-      list.querySelectorAll('a.part').forEach((a, i) => setTimeout(() => a.click(), i * 400));
-    };
+    all.onclick = () => list.querySelectorAll('a.part')
+      .forEach((a, i) => setTimeout(() => a.click(), i * 400));
     list.appendChild(all);
-
     r.parts.forEach((p, i) => row(p, `القطعة ${i + 1} من ${total}`));
     row(r.manifest, 'ملف البصمات (مهم — للتحقق)');
     upload.style.display = '';
   } catch (err) {
     say('تعذّر التقسيم: ' + err.message, 'err');
   }
+}
+
+async function handle(file) {
+  if (!file) return;
+  list.innerHTML = '';
+  upload.style.display = 'none';
+  progress(null);
+  if (direct) await sendDirect(file);
+  else await prepareForGitHub(file);
 }
 
 drop.onclick = () => input.click();
