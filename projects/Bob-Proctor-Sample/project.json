@@ -1,0 +1,74 @@
+{
+  "slug": "Bob-Proctor-Sample",
+  "title": "Bob Proctor — عيّنة",
+  "source_name": "",
+  "lang": "ar",
+  "dialect": "msa",
+  "created_at": "2026-08-28T15:56:32+00:00",
+  "cues": [
+    {
+      "i": 1,
+      "start": 1.1,
+      "end": 4.16,
+      "speaker": "m",
+      "text": "إذا لم تعجبني النتائج التي أحصل عليها في حياتي"
+    },
+    {
+      "i": 2,
+      "start": 4.48,
+      "end": 7.48,
+      "speaker": "m",
+      "text": "أنا من عليه أن يتغيّر، لأنها نتائجي أنا"
+    },
+    {
+      "i": 3,
+      "start": 8.38,
+      "end": 11.74,
+      "speaker": "m",
+      "text": "عليك أن تجد شيئاً ما في داخلك أنت، وتغيّره"
+    }
+  ],
+  "voices": {
+    "m": "بوب بروكتور (voice-19)"
+  },
+  "render": {
+    "segments": {
+      "seg_A_m": [
+        1,
+        2,
+        3,
+        null
+      ]
+    },
+    "segments_with_filler": [
+      "seg_A_m"
+    ],
+    "spoken": [
+      {
+        "i": 1,
+        "start": 1.1,
+        "end": 4.29,
+        "chars": 38
+      },
+      {
+        "i": 2,
+        "start": 4.48,
+        "end": 7.38,
+        "chars": 32
+      },
+      {
+        "i": 3,
+        "start": 8.38,
+        "end": 11.26,
+        "chars": 34
+      }
+    ],
+    "measured": {
+      "placed": 3,
+      "cues": 3,
+      "rate": 11.6,
+      "min_gap": 0.19,
+      "overlaps": 0
+    }
+  }
+}

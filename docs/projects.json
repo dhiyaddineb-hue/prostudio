@@ -1,6 +1,33 @@
 {
   "projects": [
     {
+      "slug": "Bob-Proctor-Sample",
+      "title": "Bob Proctor — عيّنة",
+      "dialect": "msa",
+      "created_at": "2026-08-28T15:56:32+00:00",
+      "video": "Bob-Proctor-Sample.mp4",
+      "srt": "Bob-Proctor-Sample.srt",
+      "vtt": "Bob-Proctor-Sample.vtt",
+      "size": 782611,
+      "cast": {
+        "m": "بوب بروكتور (voice-19)"
+      },
+      "metrics": {
+        "cues": 3,
+        "placed": 3,
+        "rate": 11.6,
+        "min_gap": 0.19,
+        "overlaps": 0,
+        "measured": true,
+        "speakers": [
+          "m"
+        ],
+        "duration": 13.01,
+        "peak_dbfs": -4.5,
+        "clipped": false
+      }
+    },
+    {
       "slug": "Vikings-Ragnar-Floki",
       "title": "Vikings — راغنار وفلوكي",
       "dialect": "msa",
