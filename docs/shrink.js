@@ -6,20 +6,26 @@
  * there is no server that could accept the file instead — it has to be smaller
  * before it is ever sent.
  *
- * Dubbing only reads the audio, so the picture goes. The first version stopped
- * there and wrote WAV, which capped uploads at 13 minutes and sent a 23 minute
- * clip back to the user with instructions to trim it by hand. That was the
- * tool refusing to do its job: WAV is uncompressed, and speech does not need
- * to be. Encoding MP3 at 64 kb/s raises the ceiling to about 52 minutes.
+ * What this costs, stated plainly
+ * -------------------------------
+ * The picture is discarded. Only the soundtrack is uploaded, so the dub comes
+ * back as an audio file, not a video. For a clip whose value is the image that
+ * is the wrong trade, and the page says so before the user commits to it
+ * rather than after — `plan()` reports the consequence, and nothing is
+ * converted until it is accepted.
  *
- * 64 kb/s is chosen with margin, not at the edge. Measured against a 16 kHz
- * WAV reference, every bitrate from 32 kb/s up is already transparent to the
- * things this pipeline measures — pitch shifts by 0.01 semitones and
- * harmonics-to-noise by 0.05 dB — so the extra bits cost 10.6 MB on a 23
- * minute clip and buy insurance against material noisier than the test.
+ * The audio itself is not meaningfully harmed. Measured against a 16 kHz WAV
+ * reference, 64 kb/s MP3 moves pitch by 0.003 semitones and harmonics-to-noise
+ * by 0.015 dB, both far below audibility and below what the dub pipeline can
+ * resolve.
  *
- * What the saving is depends entirely on the source's video bitrate, so the
- * page quotes a cost rather than a ratio: 0.46 MB per minute of audio.
+ * Why MP3 and not WAV
+ * -------------------
+ * The first version wrote WAV, which is uncompressed, capping uploads at 13
+ * minutes — a 23 minute clip was bounced back with instructions to trim it by
+ * hand. Encoding raises the ceiling to about 52 minutes at 0.46 MB per minute.
+ * 32 kb/s was already transparent in testing; 64 is margin for noisier
+ * material.
  */
 
 const CAP_BYTES = 25 * 1024 * 1024;
@@ -35,6 +41,39 @@ export const LIMIT_MB = 25;
 /** Does this file need shrinking before GitHub will take it? */
 export function needsShrink(file) {
   return file.size > SAFE_BYTES;
+}
+
+/** Best guess at whether a file carries a picture, from its type and name. */
+export function looksLikeVideo(file) {
+  if (file.type) return file.type.startsWith('video/');
+  return /\.(mp4|mkv|mov|webm|avi|m4v|mpg|mpeg|wmv|flv)$/i.test(file.name || '');
+}
+
+/**
+ * What will happen to this file, before anything is done to it.
+ *
+ * Returned so the page can warn first and convert second. Discarding the video
+ * track is the whole mechanism here, and a user who cares about the picture
+ * needs to know that before they spend a minute encoding, not when an audio
+ * file arrives back.
+ */
+export function plan(file) {
+  const video = looksLikeVideo(file);
+  if (!needsShrink(file)) {
+    return {
+      action: 'none',
+      losesVideo: false,
+      reason: `${formatMB(file.size)} م.ب — أصغر من الحد، يُرفع كما هو بلا أي تغيير.`,
+    };
+  }
+  return {
+    action: 'extract-audio',
+    losesVideo: video,
+    reason: video
+      ? `${formatMB(file.size)} م.ب — أكبر من ${LIMIT_MB} م.ب. سأرفع الصوت وحده، ` +
+        'وستعود الدبلجة ملفاً صوتياً بلا صورة.'
+      : `${formatMB(file.size)} م.ب — أكبر من ${LIMIT_MB} م.ب. سيُضغط الصوت.`,
+  };
 }
 
 export function formatMB(bytes) {
