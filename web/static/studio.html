@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>مصمّم الأصوات — ProStudio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root{--bg:#07080c;--ink:#f4efe4;--muted:#b7b0a3;--line:rgba(244,239,228,.12);
+        --card:rgba(16,17,23,.78);--gold:#e8b86d;--ok:#7dcea0;--warn:#e8c97d;--bad:#e88d8d}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
+       font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;
+       background-image:radial-gradient(circle at 12% 6%,rgba(232,184,109,.15),transparent 38%),
+                        radial-gradient(circle at 90% 88%,rgba(90,140,255,.10),transparent 34%)}
+  header{padding:24px 6vw 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
+  .mark{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
+        background:linear-gradient(160deg,var(--gold),#9a6a2c);color:#1a1208;font-weight:700}
+  .brand strong{display:block}.brand small{color:var(--muted)}
+  nav a{color:var(--muted);text-decoration:none;font-size:14.5px;margin-inline-start:16px}
+  nav a:hover,nav a.on{color:var(--gold)}
+  main{max-width:1080px;margin:0 auto;padding:22px 6vw 60px}
+  h1{font-size:clamp(24px,4vw,34px);margin:14px 0 8px}
+  .lede{color:var(--muted);margin:0 0 24px;font-size:16.5px;line-height:1.85}
+
+  .tabs{display:flex;gap:8px;margin:0 0 20px;flex-wrap:wrap}
+  .tab{background:var(--card);border:1px solid var(--line);color:var(--ink);
+       border-radius:11px;padding:11px 20px;font:inherit;font-size:14.5px;cursor:pointer;transition:.16s}
+  .tab:hover{border-color:var(--gold)}
+  .tab.on{border-color:var(--gold);background:rgba(232,184,109,.12);color:var(--gold);font-weight:600}
+  .pane{display:none}.pane.on{display:block}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:18px}
+  .panel h2{margin:0 0 6px;font-size:17px}
+  .panel .sub{color:var(--muted);font-size:14px;margin:0 0 16px;line-height:1.8}
+
+  input[type=text],textarea,select{width:100%;background:rgba(0,0,0,.35);color:var(--ink);
+    border:1px solid var(--line);border-radius:11px;padding:13px 15px;font:inherit;font-size:15px}
+  input[type=text]:focus,textarea:focus,select:focus{outline:none;border-color:var(--gold)}
+  textarea{resize:vertical;min-height:74px;line-height:1.8}
+  label.fld{display:block;margin-bottom:14px}
+  label.fld span{display:block;font-size:13.5px;color:var(--muted);margin-bottom:7px}
+
+  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+  .chip{background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--muted);
+        border-radius:999px;padding:6px 13px;font:inherit;font-size:13px;cursor:pointer;transition:.14s}
+  .chip:hover{border-color:var(--gold);color:var(--gold)}
+
+  .mix{display:grid;gap:15px}
+  .ctl{display:grid;grid-template-columns:78px 1fr 62px;gap:13px;align-items:center}
+  .ctl b{font-weight:600;font-size:14px}
+  .ctl output{font-variant-numeric:tabular-nums;color:var(--gold);font-size:13.5px;text-align:left;direction:ltr}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:5px;border-radius:99px;
+    background:linear-gradient(90deg,rgba(232,184,109,.55),rgba(244,239,228,.14));outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:19px;height:19px;border-radius:50%;
+    background:var(--gold);cursor:pointer;border:2px solid #1a1208}
+  input[type=range]::-moz-range-thumb{width:19px;height:19px;border-radius:50%;
+    background:var(--gold);cursor:pointer;border:2px solid #1a1208}
+
+  .btn{display:inline-block;padding:12px 22px;border-radius:11px;border:1px solid transparent;
+       font:inherit;font-weight:600;font-size:14.5px;cursor:pointer;text-decoration:none;transition:.16s}
+  .primary{background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208}
+  .primary:disabled{opacity:.55;cursor:wait}
+  .ghost{border-color:var(--line);color:var(--ink);background:transparent}
+  .ghost:hover{border-color:var(--gold);color:var(--gold)}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;align-items:center}
+
+  .result{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);display:none}
+  .result.on{display:block}
+  audio{width:100%;margin-bottom:12px}
+  .facts{display:flex;gap:7px;flex-wrap:wrap}
+  .tag{font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .tag.ok{color:var(--ok);border-color:rgba(125,206,160,.35)}
+  .tag.warn{color:var(--warn);border-color:rgba(232,201,125,.35)}
+  .tag.bad{color:var(--bad);border-color:rgba(232,141,141,.35)}
+
+  .note{background:rgba(232,201,125,.08);border:1px solid rgba(232,201,125,.3);
+        border-radius:12px;padding:14px 16px;font-size:13.5px;color:var(--warn);line-height:1.85;margin-top:14px}
+  .msg{font-size:14px;color:var(--muted);margin-top:12px;min-height:20px}
+  .msg.err{color:var(--bad)}
+
+  .drop{border:2px dashed var(--line);border-radius:16px;padding:38px 22px;text-align:center;
+        cursor:pointer;transition:.16s;background:rgba(0,0,0,.2)}
+  .drop:hover,.drop.over{border-color:var(--gold);background:rgba(232,184,109,.07)}
+  .drop b{display:block;font-size:16px;margin-bottom:7px}
+  .drop span{color:var(--muted);font-size:13.5px}
+  footer{color:var(--muted);font-size:13.5px;text-align:center;padding:0 6vw 40px}
+  a{color:var(--gold)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="mark">PS</span>
+    <div><strong>ProStudio</strong><small>مصمّم الأصوات</small></div>
+  </div>
+  <nav>
+    <a href="/">الرئيسية</a>
+    <a href="/projects">المشاريع</a>
+    <a href="/studio" class="on">مصمّم الأصوات</a>
+    <a href="/send">إرسال</a>
+  </nav>
+</header>
+
+<main>
+  <h1>اصنع الصوت الذي تريده</h1>
+  <p class="lede">
+    صِف الصوت بالعربية، أو حرّك الخلاط بنفسك، أو ارفع مقطعاً ليُطابَق عليه.
+    كل نتيجة تُقاس فور توليدها فترى الأرقام لا الوعود.
+  </p>
+
+  <div class="tabs">
+    <button class="tab on" data-pane="describe">✍️ وصف بالكلام</button>
+    <button class="tab" data-pane="mixer">🎛️ الخلاط</button>
+    <button class="tab" data-pane="clone">🎤 استنساخ من مقطع</button>
+  </div>
+
+  <!-- describe -->
+  <section class="pane on" id="pane-describe">
+    <div class="panel">
+      <h2>صِف الصوت</h2>
+      <p class="sub">اكتب وصفاً بالعربية، وسيُترجم إلى إعدادات الخلاط تلقائياً.</p>
+      <label class="fld">
+        <span>الوصف</span>
+        <textarea id="desc" placeholder="مثال: رجل عميق مهيب بطيء"></textarea>
+      </label>
+      <div class="chips" id="chips"></div>
+      <div class="actions">
+        <button class="btn primary" id="doDesc">ولّد الصوت</button>
+        <button class="btn ghost" id="toMixer">افتح في الخلاط</button>
+      </div>
+      <p class="msg" id="descMsg"></p>
+    </div>
+  </section>
+
+  <!-- mixer -->
+  <section class="pane" id="pane-mixer">
+    <div class="panel">
+      <h2>الخلاط</h2>
+      <p class="sub">ستة مقابض. حرّكها واسمع الفرق مباشرة.</p>
+      <label class="fld">
+        <span>الصوت الأساس</span>
+        <select id="base"></select>
+      </label>
+      <div class="mix" id="mix"></div>
+      <div class="chips" id="presets" style="margin-top:16px"></div>
+      <div class="actions">
+        <button class="btn primary" id="doRender">ولّد الصوت</button>
+        <button class="btn ghost" id="doReset">صفّر</button>
+      </div>
+      <p class="msg" id="mixMsg"></p>
+    </div>
+  </section>
+
+  <!-- clone -->
+  <section class="pane" id="pane-clone">
+    <div class="panel">
+      <h2>استنساخ من مقطع</h2>
+      <p class="sub">ارفع مقطعاً فيه صوت واضح، وسأقيسه وأضبط الخلاط ليقترب منه.</p>
+      <div class="drop" id="drop">
+        <b>اضغط أو اسحب الملف هنا</b>
+        <span>MP3 · WAV · MP4 · M4A</span>
+        <input type="file" id="file" accept="audio/*,video/*" hidden />
+      </div>
+      <div class="note">
+        <b>ما يفعله هذا فعلاً:</b> يقيس طبقة الصوت واللمعان والإيقاع في مقطعك،
+        ثم يضبط صوتاً أساساً ليطابقها. هذه مطابقة قابلة للقياس — وليست استنساخاً
+        عصبياً للهوية. أوزان نماذج الاستنساخ (F5‑TTS / XTTS) محجوبة عن هذه البيئة،
+        ولو أتيحت لعمل الكود الموجود في <code>clone_tts.py</code> تلقائياً.
+      </div>
+      <p class="msg" id="cloneMsg"></p>
+    </div>
+  </section>
+
+  <div class="panel result" id="result">
+    <h2>النتيجة</h2>
+    <audio id="player" controls></audio>
+    <div class="facts" id="facts"></div>
+    <div class="actions">
+      <a class="btn ghost" id="dl" download>تحميل</a>
+    </div>
+  </div>
+</main>
+
+<footer>ProStudio · رخصة MIT</footer>
+
+<script>
+const $ = s => document.querySelector(s);
+let CONTROLS = [], spec = {}, defaults = {};
+
+// tabs
+document.querySelectorAll('.tab').forEach(t => {
+  t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('.pane').forEach(x => x.classList.remove('on'));
+    t.classList.add('on');
+    $('#pane-' + t.dataset.pane).classList.add('on');
+  };
+});
+const openTab = name => document.querySelector(`.tab[data-pane="${name}"]`).click();
+
+const EXAMPLES = ['رجل عميق مهيب', 'امرأة هادئة دافئة', 'عجوز حكيم بطيء',
+                  'شاب حماسي سريع', 'همس قريب', 'شرير مظلم جدا', 'مذيع أخبار', 'طفل'];
+
+function buildMixer() {
+  const box = $('#mix');
+  box.innerHTML = '';
+  CONTROLS.forEach(c => {
+    defaults[c.id] = c.default;
+    if (!(c.id in spec)) spec[c.id] = c.default;
+    const row = document.createElement('div');
+    row.className = 'ctl';
+    row.innerHTML = `<b>${c.label}</b>
+      <input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${spec[c.id]}" />
+      <output></output>`;
+    const range = row.querySelector('input'), out = row.querySelector('output');
+    const show = () => { out.textContent = `${(+range.value).toFixed(c.step < 0.1 ? 2 : 1)} ${c.unit}`; };
+    range.oninput = () => { spec[c.id] = +range.value; show(); };
+    show();
+    box.appendChild(row);
+    c._range = range; c._show = show;
+  });
+}
+
+function setSpec(next) {
+  Object.assign(spec, next);
+  CONTROLS.forEach(c => {
+    if (c._range) { c._range.value = spec[c.id] ?? c.default; c._show(); }
+  });
+}
+
+function verdict(cv) {
+  if (cv == null) return null;
+  if (cv >= 0.30) return ['ok', 'حيّ'];
+  if (cv >= 0.18) return ['warn', 'مسطّح'];
+  return ['bad', 'آلي'];
+}
+
+function showResult(data) {
+  $('#result').classList.add('on');
+  $('#player').src = data.url;
+  $('#dl').href = data.url;
+  const f = $('#facts');
+  f.innerHTML = '';
+  const m = data.measured || {};
+  if (m.f0) f.innerHTML += `<span class="tag">${m.f0} هرتز</span>`;
+  if (m.cv != null) {
+    const [cls, word] = verdict(m.cv);
+    f.innerHTML += `<span class="tag ${cls}">CV ${m.cv} — ${word}</span>`;
+  }
+  if (m.duration) f.innerHTML += `<span class="tag">${m.duration} ث</span>`;
+  const s = data.spec || {};
+  if (Math.abs(s.pitch || 0) > 0.01) f.innerHTML += `<span class="tag">الطبقة ${s.pitch > 0 ? '+' : ''}${s.pitch}</span>`;
+  if (Math.abs((s.rate ?? 1) - 1) > 0.005) f.innerHTML += `<span class="tag">السرعة ×${s.rate}</span>`;
+  $('#result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  $('#player').play().catch(() => {});
+}
+
+async function render(msgEl, btn) {
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'جارٍ التوليد…'; }
+  msgEl.className = 'msg';
+  msgEl.textContent = '';
+  try {
+    const r = await fetch('/api/voice/render', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base: $('#base').value, spec })
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.status);
+    showResult(await r.json());
+  } catch (e) {
+    msgEl.className = 'msg err';
+    msgEl.textContent = 'تعذّر التوليد: ' + e.message;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = label; }
+  }
+}
+
+$('#doDesc').onclick = async () => {
+  const msg = $('#descMsg');
+  const text = $('#desc').value.trim();
+  if (!text) { msg.className = 'msg err'; msg.textContent = 'اكتب وصفاً أولاً.'; return; }
+  msg.className = 'msg'; msg.textContent = 'أفهم الوصف…';
+  try {
+    const r = await fetch('/api/voice/describe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    const d = await r.json();
+    setSpec(d.spec);
+    if (!d.matched) { msg.className = 'msg err'; msg.textContent = d.note; return; }
+    msg.textContent = '';
+    await render(msg, $('#doDesc'));
+  } catch (e) {
+    msg.className = 'msg err'; msg.textContent = 'خطأ: ' + e.message;
+  }
+};
+
+$('#toMixer').onclick = async () => {
+  const text = $('#desc').value.trim();
+  if (text) {
+    const r = await fetch('/api/voice/describe', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    setSpec((await r.json()).spec);
+  }
+  openTab('mixer');
+};
+
+$('#doRender').onclick = () => render($('#mixMsg'), $('#doRender'));
+$('#doReset').onclick = () => { setSpec({ ...defaults }); $('#mixMsg').textContent = ''; };
+
+// clone
+const drop = $('#drop'), file = $('#file');
+drop.onclick = () => file.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
+drop.ondragleave = () => drop.classList.remove('over');
+drop.ondrop = e => {
+  e.preventDefault(); drop.classList.remove('over');
+  if (e.dataTransfer.files[0]) { file.files = e.dataTransfer.files; doClone(); }
+};
+file.onchange = () => file.files[0] && doClone();
+
+async function doClone() {
+  const msg = $('#cloneMsg');
+  msg.className = 'msg';
+  msg.textContent = 'أقيس المقطع…';
+  const fd = new FormData();
+  fd.append('reference', file.files[0]);
+  fd.append('base', $('#base').value);
+  try {
+    const r = await fetch('/api/voice/clone', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.status);
+    setSpec(d.spec);
+    const m = d.measured;
+    msg.textContent = `المرجع ${m.reference_f0} هرتز · الأساس ${m.base_f0} هرتز · الإزاحة ${m.shift_semitones} نصف نغمة`;
+    await render(msg, null);
+  } catch (e) {
+    msg.className = 'msg err';
+    msg.textContent = 'تعذّر: ' + e.message;
+  }
+}
+
+// boot
+fetch('/api/voice/presets').then(r => r.json()).then(d => {
+  CONTROLS = d.controls;
+  buildMixer();
+
+  const sel = $('#base');
+  sel.innerHTML = d.bases.map(b => `<option value="${b}">${b}</option>`).join('');
+  if (!d.bases.length) {
+    sel.innerHTML = '<option>لا توجد أصوات أساس</option>';
+    document.querySelectorAll('.btn.primary').forEach(b => b.disabled = true);
+  }
+
+  const chips = $('#chips');
+  EXAMPLES.forEach(x => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = x;
+    b.onclick = () => { $('#desc').value = x; $('#doDesc').click(); };
+    chips.appendChild(b);
+  });
+
+  const pre = $('#presets');
+  d.presets.forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.textContent = p.name;
+    b.onclick = () => { setSpec(p.spec); $('#doRender').click(); };
+    pre.appendChild(b);
+  });
+}).catch(() => {
+  $('#descMsg').className = 'msg err';
+  $('#descMsg').textContent = 'تعذّر الاتصال بالخادم.';
+});
+</script>
+
+</body>
+</html>

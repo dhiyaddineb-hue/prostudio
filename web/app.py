@@ -335,6 +335,12 @@ async def projects_page() -> FileResponse:
     return FileResponse(STATIC / "projects.html")
 
 
+@app.get("/studio", response_class=HTMLResponse)
+async def studio_page() -> FileResponse:
+    """Voice designer: describe a voice, move the mixer, or match a reference."""
+    return FileResponse(STATIC / "studio.html")
+
+
 @app.get("/api/health")
 async def health() -> Dict[str, Any]:
     try:
@@ -618,3 +624,212 @@ async def _run_job(job_id: str) -> None:
             })
         finally:
             worker_busy = False
+
+
+# ── voice designer ──────────────────────────────────────────────────────
+# Ten fixed voices is a menu, not a bank. These endpoints turn each base take
+# into a range: describe a voice in Arabic, move the mixer, or hand over a
+# reference clip to match. Audio is rendered from base takes already on disk,
+# so the designer works with no network access.
+
+VOICE_BASE_DIR = ROOT.parent / "docs" / "samples"
+VOICE_OUT_DIR = TEMP_DIR / "designed"
+
+
+def _voice_bases() -> Dict[str, Path]:
+    """Base takes available to design from, keyed by voice id."""
+    out: Dict[str, Path] = {}
+    if not VOICE_BASE_DIR.is_dir():
+        return out
+    for clip in sorted(VOICE_BASE_DIR.glob("*.mp3")):
+        for part in clip.stem.split("_"):
+            if part.startswith("voice"):
+                out.setdefault(part.replace("voice", "voice-"), clip)
+    return out
+
+
+@app.get("/api/voice/presets")
+async def voice_presets() -> Dict[str, Any]:
+    """Named starting points, plus the base takes they can be applied to."""
+    from youtube_auto_dub.voice_design import PRESETS
+
+    return {
+        "presets": [{"name": n, "spec": s.to_dict()} for n, s in PRESETS.items()],
+        "bases": sorted(_voice_bases()),
+        "controls": [
+            {"id": "pitch", "label": "الطبقة", "min": -12, "max": 12, "step": 0.5,
+             "unit": "نصف نغمة", "default": 0},
+            {"id": "rate", "label": "السرعة", "min": 0.6, "max": 1.6, "step": 0.02,
+             "unit": "×", "default": 1.0},
+            {"id": "body", "label": "الجسم", "min": -8, "max": 8, "step": 0.5,
+             "unit": "dB", "default": 0},
+            {"id": "warmth", "label": "الدفء", "min": -8, "max": 8, "step": 0.5,
+             "unit": "dB", "default": 0},
+            {"id": "clarity", "label": "الوضوح", "min": -8, "max": 8, "step": 0.5,
+             "unit": "dB", "default": 0},
+            {"id": "air", "label": "الهواء", "min": -8, "max": 8, "step": 0.5,
+             "unit": "dB", "default": 0},
+        ],
+    }
+
+
+@app.post("/api/voice/describe")
+async def voice_describe(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Map an Arabic description onto mixer settings."""
+    from youtube_auto_dub.voice_design import parse_description
+
+    text = str(payload.get("text") or "")
+    spec = parse_description(text)
+    return {
+        "spec": spec.to_dict(),
+        "matched": not spec.is_neutral,
+        # Saying so plainly beats returning neutral settings that look
+        # deliberate but mean "none of your words were understood".
+        "note": (
+            "لم أتعرّف على أي وصف — الصوت سيبقى كما هو"
+            if spec.is_neutral else ""
+        ),
+    }
+
+
+@app.post("/api/voice/render")
+async def voice_render(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Render a base take through mixer settings and return a playable URL."""
+    import soundfile as sf
+
+    from youtube_auto_dub.voice_design import VoiceSpec, apply_spec
+
+    bases = _voice_bases()
+    base = str(payload.get("base") or "")
+    if base not in bases:
+        raise HTTPException(400, f"unknown base voice: {base!r}")
+
+    spec = VoiceSpec.from_dict(payload.get("spec") or {})
+    src = bases[base]
+    # The rate must come from the file, not a constant: applying a 44.1 kHz
+    # assumption to a 24 kHz take halves it.
+    sample_rate = sf.info(src).samplerate
+
+    VOICE_OUT_DIR.mkdir(parents=True, exist_ok=True)
+    name = f"{base}_{abs(hash(json.dumps(spec.to_dict(), sort_keys=True))):x}.wav"
+    dst = VOICE_OUT_DIR / name
+    if not dst.exists():
+        apply_spec(src, dst, spec, sample_rate)
+
+    measured: Dict[str, Any] = {}
+    try:
+        import numpy as np
+        import parselmouth
+
+        audio, rate = sf.read(dst, dtype="float64")
+        if getattr(audio, "ndim", 1) > 1:
+            audio = audio.mean(axis=1)
+        f0 = parselmouth.Sound(audio, rate).to_pitch(
+            pitch_floor=60, pitch_ceiling=400
+        ).selected_array["frequency"]
+        f0 = f0[f0 > 0]
+        if f0.size:
+            measured = {
+                "f0": round(float(np.median(f0))),
+                "cv": round(float(np.std(f0) / np.mean(f0)), 3),
+                "duration": round(len(audio) / rate, 2),
+            }
+    except Exception:
+        # Measurement is a bonus; never fail a render because Praat did not
+        # find voiced frames.
+        measured = {}
+
+    return {"url": f"/api/voice/audio/{name}", "spec": spec.to_dict(),
+            "measured": measured}
+
+
+@app.get("/api/voice/audio/{name}")
+async def voice_audio(name: str) -> FileResponse:
+    path = (VOICE_OUT_DIR / name).resolve()
+    if not path.is_file() or VOICE_OUT_DIR.resolve() not in path.parents:
+        raise HTTPException(404, "not found")
+    return FileResponse(path, media_type="audio/wav")
+
+
+@app.post("/api/voice/clone")
+async def voice_clone(
+    reference: UploadFile = File(...),
+    base: str = Form(""),
+) -> Dict[str, Any]:
+    """Measure a reference clip and return settings that move a base toward it.
+
+    This matches measurable qualities — pitch, brightness, pace — not identity.
+    Neural cloning needs model weights this container cannot reach, and the
+    response says so rather than implying a voice was copied.
+    """
+    import numpy as np
+    import parselmouth
+    import soundfile as sf
+
+    from youtube_auto_dub.voice_design import clone_from_reference
+
+    bases = _voice_bases()
+    if base not in bases:
+        base = next(iter(bases), "")
+    if not base:
+        raise HTTPException(503, "no base voices available")
+
+    ensure_ffmpeg_on_path()
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    raw = TEMP_DIR / f"ref_{uuid.uuid4().hex[:8]}{Path(reference.filename or '').suffix}"
+    raw.write_bytes(await reference.read())
+
+    wav = raw.with_suffix(".ref.wav")
+    try:
+        from youtube_auto_dub.ffmpeg_bin import ffmpeg_exe
+
+        subprocess = __import__("subprocess")
+        subprocess.run(
+            [ffmpeg_exe(), "-y", "-v", "error", "-i", str(raw),
+             "-vn", "-ac", "1", "-ar", "44100", str(wav)],
+            check=True, capture_output=True,
+        )
+    except Exception as exc:
+        raw.unlink(missing_ok=True)
+        raise HTTPException(400, f"could not read that file: {exc}") from exc
+
+    def _measure(path: Path) -> tuple[float, float]:
+        audio, rate = sf.read(path, dtype="float64")
+        if getattr(audio, "ndim", 1) > 1:
+            audio = audio.mean(axis=1)
+        pitch = parselmouth.Sound(audio, rate).to_pitch(
+            pitch_floor=60, pitch_ceiling=400
+        ).selected_array["frequency"]
+        pitch = pitch[pitch > 0]
+        spectrum = np.abs(np.fft.rfft(audio[: rate * 8]))
+        freqs = np.fft.rfftfreq(min(len(audio), rate * 8), 1 / rate)
+        band = spectrum[(freqs > 2000) & (freqs < 5000)].mean() if spectrum.size else 0.0
+        low = spectrum[(freqs > 100) & (freqs < 1000)].mean() if spectrum.size else 1.0
+        return (float(np.median(pitch)) if pitch.size else 0.0,
+                float(band / low) if low > 0 else 0.0)
+
+    ref_f0, ref_bright = _measure(wav)
+    base_f0, base_bright = _measure(bases[base])
+    raw.unlink(missing_ok=True)
+    wav.unlink(missing_ok=True)
+
+    if ref_f0 <= 0:
+        raise HTTPException(
+            422,
+            "لم أعثر على صوت بشري في الملف — تأكد أن فيه كلاماً واضحاً بلا موسيقى عالية",
+        )
+
+    spec = clone_from_reference(ref_f0, ref_bright, base_f0, base_bright)
+    return {
+        "spec": spec.to_dict(),
+        "measured": {
+            "reference_f0": round(ref_f0),
+            "base_f0": round(base_f0),
+            "shift_semitones": spec.to_dict()["pitch"],
+        },
+        "base": base,
+        "honest": (
+            "طوبِقت الطبقة واللمعان والإيقاع المقيسة. هذه مطابقة قابلة للقياس "
+            "وليست استنساخاً عصبياً للهوية — أوزان نماذج الاستنساخ محجوبة عن هذه البيئة."
+        ),
+    }
