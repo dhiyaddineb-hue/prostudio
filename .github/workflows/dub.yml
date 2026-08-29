@@ -227,7 +227,7 @@ jobs:
       - name: Download and verify XTTS-v2
         if: inputs.tts_engine == 'xtts'
         run: |
-          pip install torchaudio "transformers>=4.57,<5" coqui-tts
+          pip install torchaudio "transformers>=4.57,<5" "coqui-tts[codec]"
           COQUI_TOS_AGREED=1 python - <<'PY'
           from TTS.api import TTS
           TTS("tts_models/multilingual/multi-dataset/xtts_v2")
