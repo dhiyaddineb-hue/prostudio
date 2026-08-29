@@ -196,6 +196,7 @@ jobs:
           pip install -U yt-dlp
           pip install -r requirements.txt
           pip install faster-whisper edge-tts
+          pip install gradio_client
 
       # Download the selected Whisper weights on the GitHub runner. The cache
       # makes later runs fast while keeping all model files inside GitHub.
@@ -277,6 +278,23 @@ jobs:
             -o output \
             "${extra[@]}"
           ls -lh output
+
+      - name: Enhance voice with Seed-VC
+        if: inputs.tts_engine == 'xtts'
+        env:
+          SOURCE_PATH: ${{ inputs.source_path }}
+        run: |
+          set -euo pipefail
+          dubbed=$(find output -maxdepth 1 -type f -name 'Output_dub*.mp4' -print -quit)
+          if [ -z "$dubbed" ]; then
+            echo "No dubbed video found for Seed-VC" >&2
+            exit 1
+          fi
+          python scripts/seed_vc_enhance.py \
+            --original "$SOURCE_PATH" \
+            --dubbed "$dubbed" \
+            --output output/seedvc-enhanced.mp4
+          rm -f "$dubbed"
 
       - name: Upload the dubbed video
         uses: actions/upload-artifact@v4
