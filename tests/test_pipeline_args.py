@@ -17,6 +17,18 @@ def test_build_args_edge_voice():
     assert args.voice_theme is None
 
 
+def test_build_args_arabic_source_english_dub():
+    args = build_args(
+        "video.mp4",
+        lang="en",
+        source_lang="ar",
+        mode="dub",
+    )
+    assert args.lang == "en"
+    assert args.lang_dub == "en"
+    assert args.source_lang == "ar"
+
+
 def test_arabic_preferred_voices():
     assert pick_voice("ar", "male") == "ar-SA-HamedNeural"
     assert pick_voice("ar", "female") == "ar-EG-SalmaNeural"

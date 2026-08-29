@@ -493,13 +493,13 @@ async def download_srt(job_id: str) -> FileResponse:
 async def create_job(
     url: str = Form(""),
     lang: str = Form("ar"),
+    source_lang: str = Form("auto"),
     gender: str = Form("male"),
     mode: str = Form("both"),
     model: str = Form("tiny"),
     voice: str = Form(""),
     bg_music: str = Form("true"),
     transcript: str = Form(""),
-    source_lang: str = Form(""),
     file: Optional[UploadFile] = File(None),
 ) -> Dict[str, Any]:
     source = (url or "").strip()

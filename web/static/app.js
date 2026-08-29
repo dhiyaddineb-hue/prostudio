@@ -36,8 +36,13 @@ function renderStages(active) {
 }
 
 function fillLanguages() {
+  const languages = state.meta.languages || [];
+  const source = $("source_lang");
+  source.innerHTML = [`<option value="auto">تلقائي (كشف تلقائي)</option>`, ...languages.map((lang) => {
+    return `<option value="${lang.code}">${lang.label} (${lang.code})</option>`;
+  })].join("");
   const select = $("lang");
-  select.innerHTML = (state.meta.languages || []).map((lang) => {
+  select.innerHTML = languages.map((lang) => {
     const selected = lang.code === "ar" ? "selected" : "";
     return `<option value="${lang.code}" ${selected}>${lang.label} (${lang.code})</option>`;
   }).join("");
