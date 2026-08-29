@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 from pathlib import Path
 
 from rich.table import Table
@@ -41,6 +42,21 @@ from youtube_auto_dub import xtts_clone
 from youtube_auto_dub.youtube import load_source
 
 log = logging.getLogger(__name__)
+
+
+def _polish_english_dialogue(text: str) -> str:
+    """Make machine translation sound conversational without changing meaning."""
+    replacements = (
+        (r"\bI am\b", "I'm"), (r"\bI have\b", "I've"),
+        (r"\bdo not\b", "don't"), (r"\bdoes not\b", "doesn't"),
+        (r"\bcannot\b", "can't"), (r"\bit is\b", "it's"),
+        (r"\byou are\b", "you're"), (r"\bwe are\b", "we're"),
+        (r"\bthat is\b", "that's"), (r"\bthere is\b", "there's"),
+    )
+    polished = text.strip()
+    for pattern, replacement in replacements:
+        polished = re.sub(pattern, replacement, polished, flags=re.IGNORECASE)
+    return polished
 
 
 def _report(progress, step: str, message: str, percent: int) -> None:
@@ -207,7 +223,12 @@ async def run(args, progress=None) -> Path:
                 )
                 await xl.close()
             for i, seg in enumerate(project.segments):
-                seg.translated_text_dub = dub_out[i].strip() or seg.source_text
+                translated = dub_out[i].strip() or seg.source_text
+                seg.translated_text_dub = (
+                    _polish_english_dialogue(translated)
+                    if dub_lang.lower() in ("en", "en-us", "english")
+                    else translated
+                )
 
         console.success("Translation done")
 
