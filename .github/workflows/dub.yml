@@ -59,7 +59,7 @@ on:
         required: false
         default: "xtts"
         type: choice
-        options: [xtts, edge]
+        options: [xtts, edge, voxcpm]
       target_lang:
         description: "dub: target language"
         required: false
@@ -280,7 +280,7 @@ jobs:
           ls -lh output
 
       - name: Enhance voice with Seed-VC
-        if: inputs.tts_engine == 'xtts'
+        if: inputs.tts_engine == 'xtts' || inputs.tts_engine == 'voxcpm'
         env:
           SOURCE_PATH: ${{ inputs.source_path }}
         run: |
@@ -291,10 +291,15 @@ jobs:
             echo "No dubbed video found for Seed-VC" >&2
             exit 1
           fi
+          extra=()
+          if [ "${{ inputs.bg_music }}" = "true" ]; then
+            extra+=(--keep-background)
+          fi
           python scripts/seed_vc_enhance.py \
             --original "$SOURCE_PATH" \
             --dubbed "$dubbed" \
-            --output output/seedvc-enhanced.mp4
+            --output output/seedvc-enhanced.mp4 \
+            "${extra[@]}"
           rm -f "$dubbed"
 
       - name: Upload the dubbed video

@@ -48,7 +48,7 @@ def _parser() -> argparse.ArgumentParser:
 
     # ── Engine ────────────────────────────────────────────────────────
     eng = p.add_argument_group("Engine")
-    eng.add_argument("-e", "--tts-engine", choices=["edge", "xtts", "qwen"], default=DEFAULT_TTS_ENGINE,
+    eng.add_argument("-e", "--tts-engine", choices=["edge", "xtts", "voxcpm", "qwen"], default=DEFAULT_TTS_ENGINE,
                      help=f"TTS engine (default: {DEFAULT_TTS_ENGINE})")
     eng.add_argument("--voice",
                      help="Edge-TTS voice (e.g. ar-SA-HamedNeural) or Qwen persona")
@@ -80,8 +80,8 @@ def main():
     # Normalise internal attribute names for core.py
     args.lang_sub = args.sub_lang
     args.lang_dub = args.dub_lang
-    # --voice is an Edge-TTS ShortName unless the Qwen engine is selected
-    if args.tts_engine == "qwen":
+    # --voice is an Edge-TTS ShortName unless a model-driven engine is selected
+    if args.tts_engine in ("qwen", "voxcpm"):
         args.voice_theme = args.voice
         args.edge_voice = None
     else:

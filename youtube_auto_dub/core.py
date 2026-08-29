@@ -38,6 +38,7 @@ from youtube_auto_dub.voice import (
     speak_edge,
     speak_qwen,
 )
+from youtube_auto_dub.voxcpm_tts import speak_voxcpm
 from youtube_auto_dub import xtts_clone
 from youtube_auto_dub.youtube import load_source
 
@@ -240,6 +241,8 @@ async def run(args, progress=None) -> Path:
             # Resolve voice source
             sample = ref_txt = None
             xtts_reference = None
+            if tts_engine == "voxcpm":
+                console.step("VoxCPM-Demo: generating clean target-language speech")
 
             if tts_engine == "xtts":
                 # XTTS needs a few seconds of the original speaker. Use the
@@ -297,6 +300,13 @@ async def run(args, progress=None) -> Path:
                 seg.tts_audio_path = TEMP_DIR / f"tts_{i}.wav"
                 if tts_engine == "xtts" and xtts_reference:
                     tasks.append(synth_xtts_or_edge(seg))
+                elif tts_engine == "voxcpm":
+                    tasks.append(speak_voxcpm(
+                        seg.translated_text_dub,
+                        seg.tts_audio_path,
+                        language=dub_lang,
+                        control=getattr(args, "voice_theme", None) or "A natural, clear, warm English documentary narrator",
+                    ))
                 elif tts_engine == "qwen":
                     tasks.append(speak_qwen(
                         seg.translated_text_dub, seg.tts_audio_path,
