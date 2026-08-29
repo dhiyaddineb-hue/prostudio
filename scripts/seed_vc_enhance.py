@@ -50,6 +50,8 @@ def main() -> None:
     cleaned_ref = work / "clean-reference.wav"
     converted_wav = work / "seed-converted.wav"
     timed_wav = work / "seed-timed.wav"
+    background_wav = work / "background.wav"
+    final_audio = work / "final-mixed.wav"
 
     # Clean the reference without destroying the speaker's pitch or cadence.
     run(["ffmpeg", "-y", "-i", args.original, "-vn", "-ac", "1", "-ar", "22050",
@@ -57,6 +59,12 @@ def main() -> None:
     run(["ffmpeg", "-y", "-i", str(original_wav), "-af",
          "highpass=f=80,lowpass=f=9000,afftdn=nr=12:nf=-25,dynaudnorm=f=150:g=7",
          "-ar", "22050", "-ac", "1", str(cleaned_ref)])
+    # Remove the phantom centre channel: dialogue is normally centred while
+    # music/effects live in the sides. This background is mixed back only after
+    # Seed-VC, never fed into the voice converter.
+    run(["ffmpeg", "-y", "-i", args.original, "-af",
+         "pan=stereo|c0=FL-FC|c1=FR-FC,volume=0.45",
+         "-ar", "24000", str(background_wav)])
     run(["ffmpeg", "-y", "-i", args.dubbed, "-vn", "-ac", "1", "-ar", "22050",
          str(dubbed_wav)])
 
@@ -91,10 +99,19 @@ def main() -> None:
     else:
         timed_wav = converted_wav
 
+    # Restore the cleaned music/effects bed after voice conversion. The prior
+    # implementation converted the already-mixed dub, which caused the exact
+    # metallic distortion reported by the user.
+    run(["ffmpeg", "-y", "-i", str(timed_wav), "-i", str(background_wav),
+         "-filter_complex",
+         "[1:a]atrim=0:{0:.3f},asetpts=PTS-STARTPTS[bg];"
+         "[0:a][bg]amix=inputs=2:duration=first:normalize=0[out]".format(target_duration),
+         "-map", "[out]", "-ar", "24000", "-ac", "1", str(final_audio)])
+
     # Keep video untouched, pad only tiny tails, and never let a long VC result
     # truncate the last words or extend beyond the original video.
     run([
-        "ffmpeg", "-y", "-i", args.dubbed, "-i", str(timed_wav),
+        "ffmpeg", "-y", "-i", args.dubbed, "-i", str(final_audio),
         "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
         "-af", "apad", "-t", f"{target_duration:.3f}",
         "-c:a", "aac", "-b:a", "160k", args.output,
