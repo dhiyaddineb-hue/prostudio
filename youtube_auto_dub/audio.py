@@ -198,15 +198,24 @@ def align_segments(
             continue
         start_samp = int(s["start"] * sr)
         is_last = i + 1 >= len(valid)
-        slot = (
-            (valid[i + 1]["start"] - s["start"] - gap_ms / 1000)
-            if not is_last
-            else (source_duration - s["start"])
-        )
-        budget = max(slot, 0.35)
+        # Prefer the original subtitle window for this exact line. Using the
+        # next line's start as the budget lets a long translated line drift
+        # into the following speaker turn and creates audible desynchronisation.
+        declared = float(s.get("target_dur") or 0.0)
+        if declared > 0.0:
+            slot = declared
+        else:
+            slot = (
+                (valid[i + 1]["start"] - s["start"] - gap_ms / 1000)
+                if not is_last
+                else (source_duration - s["start"])
+            )
+        budget = max(min(slot, source_duration - s["start"]), 0.35)
         ratio = actual / budget
 
         if mode == "auto" and ratio > TEMPO_OVERBUDGET_RATIO:
+            # Stretch against the line's own window, preserving the excellent
+            # VoxCPM/Seed-VC timbre while preventing line-to-line drift.
             audio = _stretch(
                 s["wav_path"],
                 min(ratio, max_speed),
