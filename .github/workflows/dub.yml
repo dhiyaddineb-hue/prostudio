@@ -285,7 +285,8 @@ jobs:
           SOURCE_PATH: ${{ inputs.source_path }}
         run: |
           set -euo pipefail
-          dubbed=$(find output -maxdepth 1 -type f -name 'Output_dub*.mp4' -print -quit)
+          # The renderer names outputs as Output_both_L-*_D-*.mp4; choose the newest one.
+          dubbed=$(find output -maxdepth 1 -type f -name 'Output_*.mp4' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
           if [ -z "$dubbed" ]; then
             echo "No dubbed video found for Seed-VC" >&2
             exit 1
