@@ -43,7 +43,7 @@ PREFERRED_VOICES = {
         "female": "ar-EG-SalmaNeural",
     },
     "en": {
-        "male": "en-US-GuyNeural",
+        "male": "en-US-AndrewMultilingualNeural",
         "female": "en-US-JennyNeural",
     },
 }

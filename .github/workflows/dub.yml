@@ -49,6 +49,11 @@ on:
         required: false
         default: "ar"
         type: string
+      voice:
+        description: "dub: Edge-TTS voice short name"
+        required: false
+        default: "en-US-AndrewMultilingualNeural"
+        type: string
       target_lang:
         description: "dub: target language"
         required: false
@@ -241,6 +246,7 @@ jobs:
             --lang "${{ inputs.target_lang }}" \
             --dub-lang "${{ inputs.target_lang }}" \
             --source-lang "${{ inputs.source_lang }}" \
+            --voice "${{ inputs.voice }}" \
             --mode "${{ inputs.mode }}" \
             --gender "${{ inputs.gender }}" \
             --model "${{ inputs.model }}" \
