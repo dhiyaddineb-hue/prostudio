@@ -28,6 +28,8 @@ def _parser() -> argparse.ArgumentParser:
                       help="Subtitle language (overrides --lang)")
     lang.add_argument("-d", "--dub-lang",
                       help="Dubbing language (overrides --lang)")
+    lang.add_argument("--source-lang", default="auto",
+                      help="Source audio language (default: auto)")
 
 
     # ── Mode ──────────────────────────────────────────────────────────

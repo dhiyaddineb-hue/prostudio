@@ -35,9 +35,19 @@ on:
         default: "0"
         type: string
       youtube_url:
-        description: "dub: video URL"
+        description: "dub: video URL (leave empty when using source_path)"
         required: false
         default: ""
+        type: string
+      source_path:
+        description: "dub: path to a video already in this repository"
+        required: false
+        default: "samples/ProStudio_Arabic_Demo.mp4"
+        type: string
+      source_lang:
+        description: "dub: original audio language"
+        required: false
+        default: "ar"
         type: string
       target_lang:
         description: "dub: target language"
@@ -176,6 +186,26 @@ jobs:
           pip install -r requirements.txt
           pip install faster-whisper edge-tts
 
+      # Download the selected Whisper weights on the GitHub runner. The cache
+      # makes later runs fast while keeping all model files inside GitHub.
+      - name: Cache Whisper model weights
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-faster-whisper-${{ inputs.model }}-v1
+
+      - name: Download and verify Whisper model
+        env:
+          WHISPER_MODEL: ${{ inputs.model }}
+        run: |
+          python - <<'PY'
+          import os
+          from faster_whisper import WhisperModel
+          model_name = os.environ["WHISPER_MODEL"]
+          WhisperModel(model_name, device="cpu", compute_type="int8")
+          print(f"Whisper model ready: {model_name}")
+          PY
+
       - name: Write YouTube cookies
         env:
           YT_COOKIES: ${{ secrets.YT_COOKIES }}
@@ -195,12 +225,22 @@ jobs:
           YAD_COOKIES_FILE: cookies.txt
         run: |
           set -euo pipefail
+          source="${{ inputs.youtube_url }}"
+          if [ -z "$source" ]; then
+            source="${{ inputs.source_path }}"
+          fi
+          if [ -z "$source" ] || [ ! -e "$source" ] && [[ "$source" != http* ]]; then
+            echo "No valid youtube_url or source_path was supplied" >&2
+            exit 1
+          fi
           extra=()
           if [ "${{ inputs.bg_music }}" = "true" ]; then
             extra+=(--bg-music)
           fi
-          python -m youtube_auto_dub "${{ inputs.youtube_url }}" \
+          python -m youtube_auto_dub "$source" \
             --lang "${{ inputs.target_lang }}" \
+            --dub-lang "${{ inputs.target_lang }}" \
+            --source-lang "${{ inputs.source_lang }}" \
             --mode "${{ inputs.mode }}" \
             --gender "${{ inputs.gender }}" \
             --model "${{ inputs.model }}" \
