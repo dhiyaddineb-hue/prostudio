@@ -21,7 +21,7 @@ def _generate_sync(
     control: str = "",
     reference_audio: Path | None = None,
 ) -> None:
-    from gradio_client import Client
+    from gradio_client import Client, handle_file
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     client = Client(SPACE)
@@ -31,7 +31,7 @@ def _generate_sync(
     result = client.predict(
         text,
         control,
-        str(reference_audio) if reference_audio else None,
+        handle_file(str(reference_audio)) if reference_audio else None,
         False,
         "",
         2.0,
