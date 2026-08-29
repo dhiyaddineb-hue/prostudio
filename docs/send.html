@@ -67,6 +67,32 @@
        border-radius:9px;padding:12px 14px;margin:10px 0;font-size:12.5px;
        direction:ltr;text-align:left;line-height:1.8;color:var(--gold);
        white-space:pre-wrap;word-break:break-all}
+  /* ── Token field ── */
+  .tok{margin:0 0 24px;text-align:start}
+  .tok .saved{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ok);
+              background:rgba(125,206,160,.08);border:1px solid rgba(125,206,160,.25);
+              border-radius:12px;padding:12px 18px}
+  .tok .saved .linkbtn{background:none;border:none;color:var(--gold);cursor:pointer;
+                       font:inherit;text-decoration:underline;padding:0;margin-inline-start:6px}
+  .tok .fld{display:flex;flex-direction:column;gap:6px}
+  .tok .fld span{font-size:14px;color:var(--muted)}
+  .tok .fld span a{color:var(--gold)}
+  .tok .fld input{background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:10px;
+                  padding:12px 16px;color:var(--ink);font:inherit;font-size:15px;
+                  direction:ltr;text-align:start;outline:none;transition:.18s}
+  .tok .fld input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(232,184,109,.15)}
+  .tok .help{text-align:start;background:var(--card);border:1px solid var(--line);
+             border-radius:14px;padding:18px 22px;margin-top:10px;font-size:14.5px;
+             color:var(--muted);line-height:2}
+  .tok .help ol{margin:0;padding-inline-start:20px}
+  .tok .help a{color:var(--gold)}
+  .tok .help code{background:rgba(232,184,109,.12);padding:2px 6px;border-radius:5px;
+                  font-size:13px}
+  /* ── Progress bar ── */
+  .bar{height:6px;border-radius:3px;background:rgba(244,239,228,.1);margin:16px 0 0;overflow:hidden}
+  .bar #fill{height:100%;width:0;border-radius:3px;
+             background:linear-gradient(90deg,var(--gold),#c98f3f);
+             transition:width .3s ease}
 </style>
 </head>
 <body>
