@@ -57,11 +57,18 @@ def group_segments(raw: List[dict]) -> List[SubtitleSegment]:
         prev = buf[-1]
         gap = cur["start"] - prev["end"]
         dur = cur["end"] - buf[0]["start"]
-        if gap > SEGMENT_GAP_THRESHOLD or dur > SEGMENT_MAX_DURATION:
+        speaker_changed = (
+            cur.get("speaker") is not None
+            and prev.get("speaker") is not None
+            and cur.get("speaker") != prev.get("speaker")
+        )
+        if gap > SEGMENT_GAP_THRESHOLD or dur > SEGMENT_MAX_DURATION or speaker_changed:
             out.append(SubtitleSegment(
                 start=buf[0]["start"],
                 end=buf[-1]["end"],
                 source_text=" ".join(s["text"] for s in buf).strip(),
+                speaker=buf[0].get("speaker"),
+                confidence=min(float(s.get("confidence", 1.0)) for s in buf),
             ))
             buf = [cur]
         else:

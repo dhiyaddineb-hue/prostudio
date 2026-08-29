@@ -39,6 +39,7 @@ from youtube_auto_dub.voice import (
     speak_qwen,
 )
 from youtube_auto_dub.voxcpm_tts import speak_voxcpm
+from youtube_auto_dub.emotion import infer_emotion
 from youtube_auto_dub import xtts_clone
 from youtube_auto_dub.youtube import load_source
 
@@ -305,7 +306,10 @@ async def run(args, progress=None) -> Path:
                         seg.translated_text_dub,
                         seg.tts_audio_path,
                         language=dub_lang,
-                        control=getattr(args, "voice_theme", None) or "A natural, clear, warm English documentary narrator",
+                        control=(
+                            (getattr(args, "voice_theme", None) or "A natural, clear, warm English documentary narrator")
+                            + "; delivery: " + infer_emotion(seg.translated_text_dub)
+                        ),
                         reference_audio=project.audio_path,
                     ))
                 elif tts_engine == "qwen":

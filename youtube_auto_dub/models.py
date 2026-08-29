@@ -210,6 +210,10 @@ class SubtitleSegment:
     translated_text_sub: Optional[str] = None
     translated_text_dub: Optional[str] = None
     tts_audio_path: Optional[Path] = None
+    # Populated only from reliable diarization; never inferred from voice alone.
+    speaker: Optional[str] = None
+    emotion: Optional[str] = None
+    confidence: float = 1.0
     index: int = 0
 
     @property
