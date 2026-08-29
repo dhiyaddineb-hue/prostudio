@@ -3,21 +3,64 @@
 > ## ⚠️ قواعد ثابتة من المستخدم — اقرأها أولاً في كل جلسة
 > 1. **الفرع الأساسي للمستخدم هو `arena/01a03969-prostudio` دائماً** — كل العمل يجب أن يصل إليه في النهاية.
 > 2. **GitHub Pages يعمل من هذا الفرع تحديداً** (المسار `/docs`) — أي تعديل على الموقع يجب أن يصل لهذا الفرع حتى يظهر.
-> 3. كل جلسة أرينا جديدة قد تنشئ **فرع جلسة** منسوخاً من الفرع الذي يختاره المستخدم، لكن في هذه المهمة تم التحقق مباشرة من الفرع الدائم نفسه: `arena/01a03969-prostudio`.
->    **لا تغيّر الفرع خلف المستخدم**؛ يجب تنفيذ العمل على الفرع المحدد صراحةً.
-> 4. **سير العمل الإلزامي**: العمل على فرع الجلسة → دفعه → فتح PR إلى `arena/01a03969-prostudio` → دمجه حتى يتحدث فرع المستخدم وموقع Pages.
+> 3. **حقيقة تقنية لا يمكن تجاوزها**: كل جلسة أرينا تُنشئ **فرع جلسة** مرتبطاً بالمنصة نفسها
+>    (الجلسة الحالية مربوطة بـ `arena/01a04ec9-prostudio`)، ولا يستطيع الوكيل تحويل
+>    الجلسة إلى فرع آخر أو الدفع إلى فرع غير فرع جلسته. هذا قيد من المنصة وليس تفضيلاً.
+> 4. **سير العمل الإلزامي** (وهو الطريقة الوحيدة للوصول لفرع المستخدم):
+>    `git fetch` ← `git merge --ff-only origin/arena/01a03969-prostudio` ← العمل ← الدفع لفرع الجلسة
+>    ← فتح PR إلى `arena/01a03969-prostudio` ← الدمج ← Pages يعيد البناء تلقائياً.
+>    مثال سابق: **PR #4** من `arena/01a04ec2-prostudio` دُمج في 2026-08-29 18:24.
 > 5. المستخدم يعتبر GitHub هو المشغّل والبيئة، والوكيل هو العقل الذي يصدر الأوامر له.
 
 ## الفرع: arena/01a03969-prostudio (فرع المستخدم الدائم)
 
-### حالة التحقق الأخيرة
-- المستودع: `https://github.com/dhiyaddineb-hue/prostudio`
-- الفرع الفعّال: `arena/01a03969-prostudio`
-- التتبع: `origin/arena/01a03969-prostudio`
-- حالة التحقق: الفرع نظيف ومتزامن مع الأصل عند آخر مراجعة.
-- GitHub Pages: `https://dhiyaddineb-hue.github.io/prostudio/`
-- صفحة الإرسال: `https://dhiyaddineb-hue.github.io/prostudio/send.html`
+### حالة التحقق الأخيرة — 2026-08-29
+
+| البند | القيمة المُخرَجة |
+|---|---|
+| المستودع | `https://github.com/dhiyaddineb-hue/prostudio` |
+| فرع الجلسة (مربوط بالمنصة) | `arena/01a04ec9-prostudio` |
+| فرع المستخدم | `origin/arena/01a03969-prostudio` |
+| رأس فرع المستخدم | **`ea677a7`** — «ci: تثبيت Whisper وتشغيل الدبلجة داخل GitHub» (2026-08-29 18:31:50) |
+| الكوميت السابق | `0025771` — «fix: لا تستخدم التفريغ الإنجليزي للكشف التلقائي» |
+| `main` | `f63835f` — «Create dub.yml» |
+| علاقة فرع الجلسة بفرع المستخدم | **متطابقان** — فرع الجلسة مُمرَّر fast-forward إلى `ea677a7` (`git rev-list --left-right --count` = `0  0` بعد الدمج) |
+| GitHub Pages | `https://dhiyaddineb-hue.github.io/prostudio/` — الحالة `built` |
+| مصدر Pages | الفرع `arena/01a03969-prostudio`، المسار `/docs`، `build_type: legacy`، HTTPS مفروض |
+| آخر بناء Pages | من `ea677a7` في `2026-08-29T18:32:34Z` — ناجح، مدته 41 ثانية في البناء السابق |
+| صفحة الإرسال | `https://dhiyaddineb-hue.github.io/prostudio/send.html` |
+
+> ⚠️ **تحقّق دائماً بـ `git ls-remote --heads origin`** — فرع المستخدم يتحرك بين
+> الجلسات. في مراجعة 2026-08-29 تبيّن أنه تقدّم من `0025771` إلى `ea677a7` أثناء
+> الجلسة نفسها، فدُمج fast-forward قبل أي تعديل.
+
 - ملاحظة: المشروع الحالي **ProStudio للدبلجة والترجمة** وليس مشروع لعبة؛ لا يوجد وصف لعبة محدد في الطلب الحالي، لذلك لم تُنشأ لعبة أو بنية Babylon/WebDev اعتباطية.
+
+### ✅ نتيجة الفحص الفعلي — 2026-08-29
+
+```
+$ .venv/bin/python -m pytest -q
+171 passed, 3 skipped, 0 failed        (5.29s)
+
+$ for f in tests/browser/*.mjs; do node "$f"; done
+github-upload 32 · shrink 12 · split 26 · voice-design 36  → 106 تأكيداً، 0 فشل
+```
+
+- اختبارات `.mjs` سكربتات قائمة بذاتها: `node tests/browser/shrink.test.mjs`
+  (وليس `node --test tests/browser/` — هذا يفشل).
+- الاختبارات تحتاج بيئة افتراضية: بايثون النظام هنا محكوم بـ PEP 668.
+  ```
+  python3 -m venv .venv
+  .venv/bin/python -m pip install pytest pytest-asyncio numpy fastapi uvicorn \
+      python-multipart aiofiles httpx rich pydub beautifulsoup4 yt-dlp soundfile \
+      imageio-ffmpeg requests edge-tts librosa praat-parselmouth espeakng-loader
+  ```
+  بدون `edge-tts` و`librosa` و`praat-parselmouth` يفشل **جمع** 5 ملفات اختبار.
+- **عُيِّن وإصلاح**: `tests/test_pipeline_args.py::test_build_args_arabic_source_english_dub`
+  كان فاشلاً لأنه يتوقع `args.lang_dub == "en"` بينما `build_args` يبقيه `None`
+  عمداً؛ الحسم يحدث في `core.py:53` بـ `dub_lang = args.lang_dub or base_lang`،
+  و`core.py:310` يعتمد على كونه `None` لإضافة لاحقة `_D-<lang>` لاسم الناتج.
+  عُدِّل الاختبار ليصف العقد الحقيقي، وأُضيف `test_build_args_explicit_dub_lang_is_kept`.
 
 ---
 
@@ -32,6 +75,7 @@
 | `core.py` | **الخط الأنبوبي الرئيسي**: تنزيل → تفريغ → ترجمة → TTS → مزج → تصدير |
 | `models.py` | **كل الإعدادات والثوابت**: مسارات، عينات الصوت، إعدادات Whisper/VAD/TTS/FFmpeg، شخصيات صوتية |
 | `speech.py` | تفريغ الصوت بـ Faster-Whisper + VAD |
+| `speech_windows.py` | **نوافذ الكلام الفعلية** — يقيس متى يتكلم الممثل من القناة المركزية بدل الاعتماد على مدة الترجمة الظاهرة (كانت أوسع من حركة الفم: 1.50s مقابل 1.14s في مقطع Vikings) |
 | `vosk_asr.py` | تفريغ بـ Vosk (أوفلاين، إنجليزي) — يحمل الموديل من GitHub |
 | `offline_asr.py` | تفريغ بـ PocketSphinx (أوفلاين، إنجليزي، دقيقته ضعيفة) |
 | `voice.py` | **محرك TTS متعدد**: Edge-TTS (أساسي) + Qwen3-TTS (Chatterbox) + استنساخ صوتي |
@@ -84,7 +128,7 @@
 | `split.js` | تقسيم الملفات الكبيرة في المتصفح |
 | `shrink.js` | ضغط الملفات قبل الرفع |
 | `voice-design.js` | منطق مصمم الأصوات |
-| `github-actions/` | قوالب workflows |
+| `github-actions/` | قوالب workflows — **يوجد `ci.yml` و`dub.yml` فقط** |
 | `projects.json` | بيانات المشاريع |
 | `samples.json` | بيانات العينات الصوتية |
 | `samples/` | عينات صوتية (F1-F5, R1-R5) |
@@ -126,7 +170,8 @@ projects/<اسم>/
 | `transcribe.py` | تفريغ مستقل |
 
 ### 6. الاختبارات (`tests/`)
-25+ ملف اختبار يغطون كل المكونات.
+**31 ملفاً** (مُخرج من `git ls-files tests`): 26 وحدة اختبار Python + `__init__.py`
++ 4 ملفات `.mjs` تحت `tests/browser/` تختبر منطق `docs/` مباشرة.
 
 ### 7. ملفات أخرى
 | الملف | الوظيفة |
@@ -148,20 +193,53 @@ projects/<اسم>/
 - **الفرع**: `arena/01a03969-prostudio` (المصدر الرسمي لـ Pages من مسار `/docs`)
 
 ## ⚙️ القدرات الحالية في البيئة
-- ✅ Python 3.11 + PyTorch 2.13 (CPU فقط)
-- ✅ Faster-Whisper (مثبت لكن يحتاج تحميل موديل من HuggingFace — محجوب)
-- ✅ Vosk + موديل إنجليزي (محمّل من GitHub)
-- ✅ PocketSphinx (مثبت، إنجليزي فقط)
-- ✅ Edge-TTS (مثبت لكن speech.platform.bing.com محجوب)
-- ✅ eSpeak NG (مثبت، يشتغل أوفلاين، صوت روبوتي)
-- ✅ TTS (Coqui) + XTTS-v2 (مثبت لكن يحتاج تحميل موديل من HuggingFace — محجوب)
-- ✅ Piper TTS (مثبت لكن يحتاج موديل)
-- ✅ Praat/parselmouth (مثبت)
-- ✅ librosa (مثبت)
-- ✅ FFmpeg عبر imageio-ffmpeg
-- ❌ GPU غير متاح
-- ❌ HuggingFace محجوب (ما يقدر يحمل موديلات Whisper/XTTS/F5)
-- ❌ Edge-TTS servers محجوبة
+
+> **تصحيح مهم (2026-08-29)**: الجدول القديم في هذا القسم كان يصف **صندوق رمل سابقاً**
+> وقد تحقّق أنه لم يعد صحيحاً هنا. بايثون النظام كان فيه 3 حزم فقط (`pip`,
+> `setuptools`, `wheel`) ولا `.venv` قبل هذه الجلسة. الأرقام أدناه هي **مُخرج فعلي**
+> من مسبار المشروع نفسه `youtube_auto_dub.runtime.capabilities()` في هذا الصندوق:
+
+```json
+{"ffmpeg": true, "device": "cpu", "torch": false, "whisper": false,
+ "whisper_installed": false, "whisper_models_cached": [], "model_hub": false,
+ "offline_asr": false, "edge_tts": false, "espeak": true, "studio_voices": 5,
+ "can_dub": true, "needs_transcript": true}
+```
+
+| المكوّن | الحالة هنا | الدليل |
+|---|---|---|
+| Python | 3.11.2 | `python3 -V` |
+| FFmpeg | ✅ متاح | `ffmpeg_bin.ffmpeg_exe()` عبر `imageio-ffmpeg` |
+| GPU | ❌ CPU فقط | `pick_device() == "cpu"` |
+| `torch` | ❌ **غير مثبّت** | `have_module("torch") → False` |
+| Faster-Whisper | ❌ **غير مثبّت** | `whisper_installed: false` |
+| Vosk / PocketSphinx | ❌ **غير مثبّتة** | `have_module → False`، لذا `offline_asr: false` |
+| Piper / Coqui (XTTS-v2) | ❌ **غير مثبّتة** | `have_module("piper"/"TTS") → False` |
+| Edge-TTS | ⚠️ الحزمة مثبّتة **لكن الخادم محجوب** | `speech.platform.bing.com` يفشل مصافحة TLS |
+| eSpeak NG | ✅ يعمل أوفلاين (صوت روبوتي) | `espeak: true` |
+| أصوات الاستوديو الجاهزة | ✅ **5 مقاطع** في `samples/voices/` | `studio_takes() == 5` |
+| librosa / praat-parselmouth | ✅ مثبّتان (ثبّتهما الوكيل للتشغيل) | `have_module → True` |
+
+**قواعد الاستدلال في `runtime.capabilities()`** (مقروءة من الشيفرة، لا مُخمَّنة):
+- `whisper` = الحزمة مثبّتة **و** (أوزان مخزّنة محلياً **أو** `huggingface.co` قابل للوصول).
+- `edge_tts` = **قابلية وصول** `speech.platform.bing.com`، لا مجرد تثبيت الحزمة.
+- `can_dub = ffmpeg and (edge_tts or espeak or studio_voices > 0)` → `true` هنا.
+- `needs_transcript = not (whisper or offline_asr)` → `true` هنا، أي أن **الصق النص مطلوب**.
+
+**فحص الشبكة** (`host_reachable` يُكمل مصافحة TLS حقيقية):
+
+| المضيف | النتيجة |
+|---|---|
+| `github.com:443` | ✅ متاح |
+| `pypi.org:443` | ✅ متاح (لذلك أمكن `pip install`) |
+| `huggingface.co:443` | ❌ محجوب → لا Whisper ولا XTTS ولا F5 |
+| `speech.platform.bing.com:443` | ❌ محجوب → Edge-TTS لا يعمل |
+| `dhiyaddineb-hue.github.io:443` | ❌ محجوب من الصندوق (`curl` يفشل بـ `SSL_ERROR_SYSCALL`) — **الموقع نفسه سليم**؛ تحقّق من خارج الصندوق أرجع HTTP 200 ومحتوى الصفحة |
+
+> **النتيجة العملية**: كل تفريغ آلي معطّل هنا، فالدبلجة تحتاج نصاً ملصوقاً،
+> والصوت يُولَّد محلياً بـ eSpeak أو من مقاطع `samples/voices/`. أما الاستنساخ
+> العصبي (F5/XTTS) فيحتاج أوزاناً من HuggingFace → يُشغَّل على **مشغّلات GitHub**
+> عبر `.github/workflows/dub.yml`، وهذا هو سبب وجوده أصلاً.
 
 ## 📥 الملفات في inbox/
 1. `3dde7ebc7c_Instagram.mp4` (6.0 MB)
@@ -170,3 +248,40 @@ projects/<اسم>/
 4. `AQPHPkqUueg_...(1).mp4` (2.9 MB) — نسخة مكررة
 5. `Phantom Thread...mp4` (3.1 MB)
 6. `Do You Know who You Are_ _ Bob Proctor` (4 أجزاء، 61.8 MB)
+
+كلها **متتبَّعة في Git** (`git ls-files inbox` = 10 مدخلات مع `.gitkeep`)، أي أن
+المستودع يحمل ~85 ميغابايت من الفيديو الخام. هذا مقصود في التصميم الحالي لأن
+`scripts/fetch_inbox.py` و`scripts/join_parts.py` يعتمدان على وصولها من GitHub.
+
+---
+
+## 🔎 ملاحظات مفتوحة اكتُشفت في مراجعة 2026-08-29
+
+1. **`README.md:92-93` يشير إلى ملف غير موجود**: يأمر بـ
+   `cp docs/github-actions/clone.yml .github/workflows/clone.yml`، بينما المجلد
+   يحتوي `ci.yml` و`dub.yml` فقط. النسخ **سيفشل**. لكن `dub.yml` نفسه يضم مهمة
+   `clone` داخله (`inputs.task: clone`)، فالأمر الصحيح هو تشغيل
+   **Actions → Run YouTube Auto Dub → task: clone** لا نسخ ملف مستقل.
+   لم يُعدَّل الـREADME لأنه توثيق سلوك، ويحتاج قراراً من المستخدم.
+2. **`docs/github-actions/dub.yml` نسخة قديمة** — التعديلات التي أضافها المستخدم في
+   `ea677a7` (مدخلات `source_path` و`source_lang` وتحميل أوزان Whisper) طُبِّقت على
+   `.github/workflows/dub.yml` **فقط**، لا على القالب في `docs/`. أي مستخدم ينسخ
+   القالب من `docs/` سيحصل على النسخة القديمة.
+3. **`web/app.py:317` يستخدم `@app.on_event("startup")`** المهجور في FastAPI؛
+   يظهر كتحذير `DeprecationWarning` عند كل تشغيل للاختبارات.
+4. **`ci.yml` يثبّت `.[dev]` فقط، و`librosa` ناقص من `pyproject.toml`** —
+   تحقّق تجريبي (2026-08-29): بإزالة `librosa` فعلياً من البيئة (وليس مجرد
+   `pip uninstall` الذي يخلّف مجلد `librosa` بمسار namespace فارغ) يفشل اختباران:
+   ```
+   FAILED tests/test_diarize.py::test_training_separates_two_distinct_voices - ModuleNotFoundError
+   FAILED tests/test_diarize.py::test_too_few_seeds_is_refused              - ModuleNotFoundError
+   2 failed, 169 passed, 3 skipped
+   ```
+   `librosa` يُستورد بتأخير داخل `youtube_auto_dub/diarize.py:57` و`audio.py:304`،
+   وهو **غير مذكور** في `[project.dependencies]` (المذكور فيها: faster-whisper,
+   torch, yt-dlp, pydub, edge-tts, httpx, beautifulsoup4, numpy, rich, soundfile,
+   imageio-ffmpeg, fastapi, uvicorn, python-multipart, aiofiles, espeakng-loader,
+   praat-parselmouth, pocketsphinx, piper-tts). لذا `pip install .[dev]` في CI
+   **سيفشل بهذين الاختبارين**. الإصلاح: إضافة `librosa>=0.10` إلى `dependencies`
+   أو `pip install -r requirements.txt` في `ci.yml`.
+   (تصحيح لنسخة سابقة من هذه المذكرة: `edge-tts` **موجود** في التبعيات، فلم يكن هو المشكلة.)
