@@ -37,6 +37,7 @@ from youtube_auto_dub.voice import (
     speak_edge,
     speak_qwen,
 )
+from youtube_auto_dub import xtts_clone
 from youtube_auto_dub.youtube import load_source
 
 log = logging.getLogger(__name__)
@@ -217,6 +218,25 @@ async def run(args, progress=None) -> Path:
 
             # Resolve voice source
             sample = ref_txt = None
+            xtts_reference = None
+
+            if tts_engine == "xtts":
+                # XTTS needs a few seconds of the original speaker. Use the
+                # first available speech window, not the translated text, so
+                # the cloned timbre is genuine and language-independent.
+                import soundfile as sf
+
+                source_audio, source_sr = sf.read(project.audio_path, dtype="float32")
+                if getattr(source_audio, "ndim", 1) > 1:
+                    source_audio = source_audio.mean(axis=1)
+                ref_end = min(len(source_audio) / source_sr, xtts_clone.REF_MAX_SEC)
+                xtts_reference = xtts_clone.write_reference(
+                    source_audio, source_sr, 0.0, ref_end,
+                    TEMP_DIR / "xtts_reference.wav",
+                )
+                if not xtts_reference or not xtts_clone.available():
+                    console.warning("XTTS-v2 unavailable; falling back to Edge-TTS")
+                    tts_engine = "edge"
 
             if tts_engine == "qwen" and do_clone:
                 srt_path = TEMP_DIR / "ref.srt"
@@ -231,11 +251,32 @@ async def run(args, progress=None) -> Path:
                 )
                 console.step(f"Persona: {persona}")
 
+            async def synth_xtts_or_edge(seg):
+                ok = await asyncio.to_thread(
+                    xtts_clone.clone_speak,
+                    seg.translated_text_dub,
+                    xtts_reference,
+                    seg.tts_audio_path,
+                    dub_lang,
+                    device,
+                )
+                if not ok:
+                    voice = pick_voice(
+                        dub_lang, args.gender,
+                        voice=getattr(args, "edge_voice", None),
+                    )
+                    await speak_edge(
+                        seg.translated_text_dub, voice, seg.tts_audio_path,
+                        lang=dub_lang, gender=args.gender,
+                    )
+
             # Generate TTS per segment
             tasks = []
             for i, seg in enumerate(project.segments):
                 seg.tts_audio_path = TEMP_DIR / f"tts_{i}.wav"
-                if tts_engine == "qwen":
+                if tts_engine == "xtts" and xtts_reference:
+                    tasks.append(synth_xtts_or_edge(seg))
+                elif tts_engine == "qwen":
                     tasks.append(speak_qwen(
                         seg.translated_text_dub, seg.tts_audio_path,
                         voice_sample=Path(sample) if sample else None,

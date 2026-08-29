@@ -54,6 +54,12 @@ on:
         required: false
         default: "en-US-AndrewMultilingualNeural"
         type: string
+      tts_engine:
+        description: "dub: speech engine (xtts clones the source voice)"
+        required: false
+        default: "xtts"
+        type: choice
+        options: [xtts, edge]
       target_lang:
         description: "dub: target language"
         required: false
@@ -211,6 +217,23 @@ jobs:
           print(f"Whisper model ready: {model_name}")
           PY
 
+      - name: Cache XTTS-v2 model
+        if: inputs.tts_engine == 'xtts'
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/tts
+          key: coqui-xtts-v2-v1
+
+      - name: Download and verify XTTS-v2
+        if: inputs.tts_engine == 'xtts'
+        run: |
+          pip install "transformers>=4.57,<5" coqui-tts
+          COQUI_TOS_AGREED=1 python - <<'PY'
+          from TTS.api import TTS
+          TTS("tts_models/multilingual/multi-dataset/xtts_v2")
+          print("XTTS-v2 ready")
+          PY
+
       - name: Write YouTube cookies
         env:
           YT_COOKIES: ${{ secrets.YT_COOKIES }}
@@ -247,6 +270,7 @@ jobs:
             --dub-lang "${{ inputs.target_lang }}" \
             --source-lang "${{ inputs.source_lang }}" \
             --voice "${{ inputs.voice }}" \
+            --tts-engine "${{ inputs.tts_engine }}" \
             --mode "${{ inputs.mode }}" \
             --gender "${{ inputs.gender }}" \
             --model "${{ inputs.model }}" \

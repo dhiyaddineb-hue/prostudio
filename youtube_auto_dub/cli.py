@@ -48,7 +48,7 @@ def _parser() -> argparse.ArgumentParser:
 
     # ── Engine ────────────────────────────────────────────────────────
     eng = p.add_argument_group("Engine")
-    eng.add_argument("-e", "--tts-engine", choices=["edge", "qwen"], default=DEFAULT_TTS_ENGINE,
+    eng.add_argument("-e", "--tts-engine", choices=["edge", "xtts", "qwen"], default=DEFAULT_TTS_ENGINE,
                      help=f"TTS engine (default: {DEFAULT_TTS_ENGINE})")
     eng.add_argument("--voice",
                      help="Edge-TTS voice (e.g. ar-SA-HamedNeural) or Qwen persona")
