@@ -1,5 +1,14 @@
 # مذكرة المشروع — ProStudio
-## الفرع: arena/01a03969-prostudio
+
+> ## ⚠️ قواعد ثابتة من المستخدم — اقرأها أولاً في كل جلسة
+> 1. **الفرع الأساسي للمستخدم هو `arena/01a03969-prostudio` دائماً** — كل العمل يجب أن يصل إليه في النهاية.
+> 2. **GitHub Pages يعمل من هذا الفرع تحديداً** (المسار `/docs`) — أي تعديل على الموقع يجب أن يصل لهذا الفرع حتى يظهر.
+> 3. كل جلسة أرينا جديدة تنشئ **فرع جلسة** منسوخاً حرفياً من الفرع الذي يختاره المستخدم
+>    (هذه الجلسة: `arena/01a04ec2-prostudio` منسوخ من `1ecf06d` نفسه). **الفرع لا يُغيَّر خلف المستخدم** — هو نسخة مطابقة.
+> 4. **سير العمل الإلزامي**: العمل على فرع الجلسة → دفعه → فتح PR إلى `arena/01a03969-prostudio` → دمجه حتى يتحدث فرع المستخدم وموقع Pages.
+> 5. المستخدم يعتبر GitHub هو المشغّل والبيئة، والوكيل هو العقل الذي يصدر الأوامر له.
+
+## الفرع: arena/01a03969-prostudio (فرع المستخدم الدائم)
 
 ---
 
@@ -62,6 +71,11 @@
 | `voices.html` | عرض الأصوات |
 | `studio.html` | مصمم الأصوات |
 | `github-upload.js` | **محرك الرفع**: تقسيم ملفات كبيرة → blobs → commit واحد |
+| `upload.js` | رفع بسيط للملفات |
+| `split.js` | تقسيم الملفات الكبيرة في المتصفح |
+| `shrink.js` | ضغط الملفات قبل الرفع |
+| `voice-design.js` | منطق مصمم الأصوات |
+| `github-actions/` | قوالب workflows |
 | `projects.json` | بيانات المشاريع |
 | `samples.json` | بيانات العينات الصوتية |
 | `samples/` | عينات صوتية (F1-F5, R1-R5) |
@@ -92,6 +106,7 @@ projects/<اسم>/
 | `build_demo.py` | بناء عرض تجريبي |
 | `build_dub.py` | بناء دبلجة |
 | `build_phantom_dub.py` | بناء دبلجة Phantom Thread |
+| `build_pro_demo.py` | بناء عرض تجريبي احترافي |
 | `clone_project.py` | استنساخ أصوات مشروع |
 | `fetch_asr_model.py` | **تحميل موديل Vosk من GitHub** |
 | `fetch_inbox.py` | جلب ملفات من inbox |
@@ -119,8 +134,9 @@ projects/<اسم>/
 ## 🔗 الروابط المهمة
 - **المستودع**: https://github.com/dhiyaddineb-hue/prostudio
 - **GitHub Pages**: https://dhiyaddineb-hue.github.io/prostudio/
-- **صفحة الإرسال**: https://dhiyaddineb-hue.github.io/prostudio/send.html
-- **الفرع**: `arena/01a03969-prostudio`
+- **صفحة الإرسال (رفع ملف)**: https://dhiyaddineb-hue.github.io/prostudio/send.html
+- **فرع المستخدم على GitHub**: https://github.com/dhiyaddineb-hue/prostudio/tree/arena/01a03969-prostudio
+- **الفرع**: `arena/01a03969-prostudio` (المصدر الرسمي لـ Pages من مسار `/docs`)
 
 ## ⚙️ القدرات الحالية في البيئة
 - ✅ Python 3.11 + PyTorch 2.13 (CPU فقط)
