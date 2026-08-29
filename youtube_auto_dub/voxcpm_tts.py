@@ -15,7 +15,12 @@ log = logging.getLogger(__name__)
 SPACE = "openbmb/VoxCPM-Demo"
 
 
-def _generate_sync(text: str, dest: Path, control: str = "") -> None:
+def _generate_sync(
+    text: str,
+    dest: Path,
+    control: str = "",
+    reference_audio: Path | None = None,
+) -> None:
     from gradio_client import Client
 
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -26,12 +31,12 @@ def _generate_sync(text: str, dest: Path, control: str = "") -> None:
     result = client.predict(
         text,
         control,
-        None,
+        str(reference_audio) if reference_audio else None,
         False,
         "",
         2.0,
         True,
-        False,
+        bool(reference_audio),
         api_name="/generate",
     )
     path = result.get("path") if isinstance(result, dict) else result
@@ -52,12 +57,15 @@ async def speak_voxcpm(
     dest: Path,
     language: str = "en",
     control: str = "A natural, clear, warm English documentary narrator",
+    reference_audio: Path | None = None,
 ) -> None:
     """Generate one line with VoxCPM-Demo, with bounded retry and clean output."""
     last: Exception | None = None
     for attempt in range(2):
         try:
-            await asyncio.to_thread(_generate_sync, text, dest, control)
+            await asyncio.to_thread(
+                _generate_sync, text, dest, control, reference_audio
+            )
             return
         except Exception as exc:
             last = exc

@@ -306,6 +306,7 @@ async def run(args, progress=None) -> Path:
                         seg.tts_audio_path,
                         language=dub_lang,
                         control=getattr(args, "voice_theme", None) or "A natural, clear, warm English documentary narrator",
+                        reference_audio=project.audio_path,
                     ))
                 elif tts_engine == "qwen":
                     tasks.append(speak_qwen(
