@@ -139,9 +139,9 @@ async def run(args, progress=None) -> Path:
                 # recogniser — clearly announced, since it is English-only and
                 # less accurate.
                 requested_source = getattr(args, "source_lang", None)
-                if requested_source and requested_source not in {"auto", "en"}:
+                if requested_source != "en":
                     raise RuntimeError(
-                        f"لا يمكن تفريغ الصوت {requested_source.upper()} تلقائياً في هذه البيئة. "
+                        "لا يمكن كشف وتفريغ لغة الصوت تلقائياً في هذه البيئة. "
                         "الصق نص الفيديو في خانة النص أو وفّر نموذج Whisper متاحاً."
                     )
                 if not offline_asr_available():
