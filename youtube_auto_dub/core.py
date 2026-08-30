@@ -42,6 +42,7 @@ from youtube_auto_dub.voice import (
 from youtube_auto_dub.voxcpm_tts import speak_voxcpm
 from youtube_auto_dub.emotion import infer_emotion
 from youtube_auto_dub.speaker_diarization import annotate_segments
+from youtube_auto_dub.source_separation import separate_dialogue_background, validate_stems
 from youtube_auto_dub import xtts_clone
 from youtube_auto_dub.youtube import load_source
 
@@ -111,6 +112,23 @@ async def run(args, progress=None) -> Path:
         project = load_source(args.url, getattr(args, "browser", None))
         _report(progress, "download", f"تم التحميل: {project.video_id}", 16)
 
+        # Separate before ASR/diarization so music does not contaminate the
+        # transcript or the voice reference. Keep the original as a safe
+        # fallback when Demucs is unavailable or fails validation.
+        speech_audio = project.audio_path
+        background_audio = None
+        if getattr(args, "separate_sources", False):
+            console.info("Separating dialogue and background (Demucs)")
+            source_work = TEMP_DIR / "source-separation"
+            stems = separate_dialogue_background(project.audio_path, source_work)
+            source_duration = float(project.metadata.duration) if project.metadata else 0.0
+            stem_report = validate_stems(stems, source_duration)
+            if stem_report.get("valid"):
+                speech_audio, background_audio = stems
+                console.step("Validated Demucs speech/background stems")
+            else:
+                console.warning(f"Demucs stems rejected; using original audio: {stem_report.get('reason')}")
+
         # ── 2. Transcribe ────────────────────────────────────────────
         console.info(f"Transcribing ({model_name})")
         _report(progress, "transcribe", f"تفريغ الصوت ({model_name})", 22)
@@ -149,7 +167,7 @@ async def run(args, progress=None) -> Path:
                     console.step("Prompting with video metadata")
                 try:
                     raw, lang_detected = transcribe(
-                        project.audio_path,
+                        speech_audio,
                         model_name=model_name,
                         device=device,
                         hint=hint,
@@ -188,7 +206,7 @@ async def run(args, progress=None) -> Path:
 
             if getattr(args, "diarize", False):
                 console.info("Identifying speakers")
-                raw = annotate_segments(project.audio_path, raw)
+                raw = annotate_segments(speech_audio, raw)
             console.info("Grouping segments")
             project.segments = group_segments(raw)
 
@@ -255,17 +273,38 @@ async def run(args, progress=None) -> Path:
             xtts_reference = None
             if tts_engine == "voxcpm":
                 console.step("VoxCPM-Demo: generating clean target-language speech")
-                # VoxCPM-Demo rejects references longer than 50 seconds.  Use
-                # the real source recording, but create a bounded cleaned copy
-                # once and pass that same reference to every segment.
+                # VoxCPM-Demo rejects references longer than 50 seconds. Build
+                # one bounded, denoised reference from the dialogue stem.
                 voxcpm_reference = TEMP_DIR / "voxcpm_reference.wav"
                 subprocess.run([
-                    "ffmpeg", "-y", "-i", str(project.audio_path), "-t", "45",
+                    "ffmpeg", "-y", "-i", str(speech_audio), "-t", "45",
                     "-af", "highpass=f=80,lowpass=f=9000,afftdn=nr=12",
                     "-ar", "22050", "-ac", "1", str(voxcpm_reference),
                 ], check=True, capture_output=True)
+
+                # When diarization is reliable, do not feed every speaker the
+                # same voice reference. Pick each speaker's first real turn,
+                # pad it slightly, and clean it independently. If a turn is
+                # unavailable, retain the conservative global reference.
+                speaker_references = {}
+                for seg in project.segments:
+                    speaker = getattr(seg, "speaker", None)
+                    if not speaker or speaker in speaker_references:
+                        continue
+                    ref = TEMP_DIR / f"voxcpm_reference_{re.sub(r'[^A-Za-z0-9_-]', '_', str(speaker))}.wav"
+                    start = max(0.0, float(seg.start) - 0.25)
+                    length = min(15.0, max(2.5, float(seg.end) - float(seg.start) + 0.5))
+                    subprocess.run([
+                        "ffmpeg", "-y", "-ss", f"{start:.3f}", "-i", str(speech_audio),
+                        "-t", f"{length:.3f}", "-af",
+                        "highpass=f=80,lowpass=f=9000,afftdn=nr=12,dynaudnorm=f=150:g=7",
+                        "-ar", "22050", "-ac", "1", str(ref),
+                    ], check=True, capture_output=True)
+                    if ref.exists() and ref.stat().st_size > 1024:
+                        speaker_references[speaker] = ref
             else:
                 voxcpm_reference = None
+                speaker_references = {}
 
             if tts_engine == "xtts":
                 # XTTS needs a few seconds of the original speaker. Use the
@@ -273,7 +312,7 @@ async def run(args, progress=None) -> Path:
                 # the cloned timbre is genuine and language-independent.
                 import soundfile as sf
 
-                source_audio, source_sr = sf.read(project.audio_path, dtype="float32")
+                source_audio, source_sr = sf.read(speech_audio, dtype="float32")
                 if getattr(source_audio, "ndim", 1) > 1:
                     source_audio = source_audio.mean(axis=1)
                 ref_end = min(len(source_audio) / source_sr, xtts_clone.REF_MAX_SEC)
@@ -336,7 +375,9 @@ async def run(args, progress=None) -> Path:
                             ))
                             + "; delivery: " + infer_emotion(seg.translated_text_dub)
                         ),
-                        reference_audio=voxcpm_reference,
+                        reference_audio=speaker_references.get(
+                            getattr(seg, "speaker", None), voxcpm_reference
+                        ),
                     ))
                 elif tts_engine == "qwen":
                     tasks.append(speak_qwen(
@@ -382,7 +423,7 @@ async def run(args, progress=None) -> Path:
                     args, "ambient_gain", AUDIO_DEFAULT_AMBIENT_GAIN
                 )
                 finalize_audio(
-                    raw_mix, project.audio_path,
+                    raw_mix, speech_audio,
                     project.dub_audio_path,
                     match_loudness=True,
                     mix_ambient=keep_bg,
@@ -390,6 +431,7 @@ async def run(args, progress=None) -> Path:
                     # The working audio is mono for Whisper; centre separation
                     # needs the original stereo mix.
                     stereo_source=project.video_path,
+                    ambient_source=background_audio,
                 )
             else:
                 overlay_dub(project.audio_path, project.segments,
