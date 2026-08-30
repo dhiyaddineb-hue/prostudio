@@ -84,9 +84,19 @@ on:
         type: choice
         options: [tiny, base, small]
       bg_music:
-        description: "dub: keep background music"
+        description: "dub: keep background music and effects when separation is reliable"
         required: false
         default: true
+        type: boolean
+      diarize:
+        description: "dub: identify speakers automatically when HF_TOKEN is configured"
+        required: false
+        default: false
+        type: boolean
+      separate_sources:
+        description: "dub: neural separation of dialogue from music/effects"
+        required: false
+        default: false
         type: boolean
 
 jobs:
@@ -235,6 +245,12 @@ jobs:
           print("XTTS-v2 ready")
           PY
 
+      - name: Install optional speaker diarization
+        if: inputs.diarize == true
+        run: python -m pip install pyannote.audio
+      - name: Install optional neural source separation
+        if: inputs.separate_sources == true
+        run: python -m pip install demucs
       - name: Write YouTube cookies
         env:
           YT_COOKIES: ${{ secrets.YT_COOKIES }}
@@ -252,6 +268,7 @@ jobs:
           YAD_TEMP_DIR: temp
           YAD_CACHE_DIR: .cache
           YAD_COOKIES_FILE: cookies.txt
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set -euo pipefail
           source="${{ inputs.youtube_url }}"
@@ -265,6 +282,9 @@ jobs:
           extra=()
           if [ "${{ inputs.bg_music }}" = "true" ]; then
             extra+=(--bg-music)
+          fi
+          if [ "${{ inputs.diarize }}" = "true" ]; then
+            extra+=(--diarize)
           fi
           python -m youtube_auto_dub "$source" \
             --lang "${{ inputs.target_lang }}" \
@@ -294,6 +314,9 @@ jobs:
           extra=()
           if [ "${{ inputs.bg_music }}" = "true" ]; then
             extra+=(--keep-background)
+          fi
+          if [ "${{ inputs.separate_sources }}" = "true" ]; then
+            extra+=(--separate-sources)
           fi
           python scripts/seed_vc_enhance.py \
             --original "$SOURCE_PATH" \

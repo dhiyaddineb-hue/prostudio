@@ -63,6 +63,8 @@ def _parser() -> argparse.ArgumentParser:
                       help="Disable voice-activity detection")
     proc.add_argument("--bg-music", action="store_true",
                       help="Mix original background audio into dub")
+    proc.add_argument("--diarize", action="store_true",
+                      help="Automatically identify speakers when HF_TOKEN is available")
     proc.add_argument("-o", "--output-dir",
                       help="Output directory (default: ./output)")
 
@@ -89,6 +91,7 @@ def main():
         args.edge_voice = args.voice
     args.auto_clone = args.voice_clone
     args.preserve_bg = args.bg_music
+    args.diarize = args.diarize
     args.whisper_model = args.model
 
     # Clean temp

@@ -40,6 +40,7 @@ from youtube_auto_dub.voice import (
 )
 from youtube_auto_dub.voxcpm_tts import speak_voxcpm
 from youtube_auto_dub.emotion import infer_emotion
+from youtube_auto_dub.speaker_diarization import annotate_segments
 from youtube_auto_dub import xtts_clone
 from youtube_auto_dub.youtube import load_source
 
@@ -129,8 +130,13 @@ async def run(args, progress=None) -> Path:
         elif cached and not getattr(args, "refresh", False):
             console.step("Using cached transcription")
             project.segments = [
-                SubtitleSegment(start=s["start"], end=s["end"],
-                                source_text=s["source_text"], index=i)
+                SubtitleSegment(
+                    start=s["start"], end=s["end"],
+                    source_text=s["source_text"],
+                    speaker=s.get("speaker"),
+                    confidence=float(s.get("confidence", 1.0)),
+                    index=i,
+                )
                 for i, s in enumerate(cached)
             ]
             lang_detected = cached[0].get("lang")
@@ -179,12 +185,16 @@ async def run(args, progress=None) -> Path:
                     )
                 lang_detected = "en"
 
+            if getattr(args, "diarize", False):
+                console.info("Identifying speakers")
+                raw = annotate_segments(project.audio_path, raw)
             console.info("Grouping segments")
             project.segments = group_segments(raw)
 
             cache_data = [
                 {"index": i, "start": s.start, "end": s.end,
-                 "source_text": s.source_text, "lang": lang_detected}
+                 "source_text": s.source_text, "lang": lang_detected,
+                 "speaker": s.speaker, "confidence": s.confidence}
                 for i, s in enumerate(project.segments)
             ]
             project.save_cache("segments", cache_data)

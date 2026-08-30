@@ -14,6 +14,8 @@ from pathlib import Path
 
 from gradio_client import Client, handle_file
 
+from youtube_auto_dub.source_separation import separate_dialogue_background
+
 
 def run(cmd: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, check=True, capture_output=True, text=True)
@@ -43,6 +45,8 @@ def main() -> None:
     parser.add_argument("--length-adjust", type=float, default=1.0)
     parser.add_argument("--keep-background", action="store_true",
                         help="Mix an isolated background bed back in; off by default to prevent original speech leakage")
+    parser.add_argument("--separate-sources", action="store_true",
+                        help="Use Demucs neural separation for speech and background stems")
     args = parser.parse_args()
 
     work = Path(args.output).with_suffix(".seed-work")
@@ -56,7 +60,10 @@ def main() -> None:
     final_audio = work / "final-mixed.wav"
 
     # Clean the reference without destroying the speaker's pitch or cadence.
-    run(["ffmpeg", "-y", "-i", args.original, "-vn", "-ac", "1", "-ar", "22050",
+    separated = separate_dialogue_background(Path(args.original), work) if args.separate_sources else None
+    reference_input = separated[0] if separated else Path(args.original)
+    background_input = separated[1] if separated else Path(args.original)
+    run(["ffmpeg", "-y", "-i", str(reference_input), "-vn", "-ac", "1", "-ar", "22050",
          str(original_wav)])
     run(["ffmpeg", "-y", "-i", str(original_wav), "-af",
          "highpass=f=80,lowpass=f=9000,afftdn=nr=12:nf=-25,dynaudnorm=f=150:g=7",
@@ -65,8 +72,8 @@ def main() -> None:
         # Remove the phantom centre channel: dialogue is normally centred while
         # music/effects live in the sides. This bed is mixed back only after
         # Seed-VC and only when explicitly requested.
-        run(["ffmpeg", "-y", "-i", args.original, "-af",
-             "pan=stereo|c0=FL-FC|c1=FR-FC,volume=0.45",
+        run(["ffmpeg", "-y", "-i", str(background_input), "-af",
+             "volume=0.45",
              "-ar", "24000", str(background_wav)])
     run(["ffmpeg", "-y", "-i", args.dubbed, "-vn", "-ac", "1", "-ar", "22050",
          str(dubbed_wav)])
@@ -129,6 +136,7 @@ def main() -> None:
         "reference_cleaned": True,
         "speaker_mode": "conservative-single-reference",
         "background_mixed": args.keep_background,
+        "sources_separated": bool(separated),
     }))
 
 
