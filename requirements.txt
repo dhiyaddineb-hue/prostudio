@@ -1,0 +1,36 @@
+faster-whisper
+torch
+yt-dlp
+pydub
+edge-tts
+httpx
+beautifulsoup4
+numpy
+rich
+PyYAML
+soundfile
+imageio-ffmpeg
+fastapi
+uvicorn
+python-multipart
+aiofiles
+librosa
+espeakng-loader
+praat-parselmouth
+
+# اختياري: استنساخ عصبي (يحتاج أوزاناً من HuggingFace)
+# f5-tts
+# PocketSphinx ships a model inside its wheel, which made it the only
+# recogniser that worked offline here -- and its transcript was unusable:
+# "trolls many types of art" for "ninety five percent of the population".
+# Kept only as a last resort when the Vosk model cannot be fetched.
+pocketsphinx
+# The recogniser actually used. Its model is not on PyPI and every host that
+# serves one is blocked from this sandbox, so scripts/fetch_asr_model.py pulls
+# it from a repository that committed it as ordinary git objects.
+vosk
+piper-tts
+# coqui-tts (XTTS-v2) breaks on transformers 5.x: it imports
+# isin_mps_friendly, removed in 5.0. It also needs >=4.57.
+transformers>=4.57,<5
+coqui-tts
