@@ -1,7 +1,7 @@
 """Optional VoxCPM-Demo client for GitHub Actions dubbing.
 
-The remote Space generates the target-language speech; Seed-VC can then be
-used as a separate post-process to transfer the source speaker's timbre.
+The remote Space is rate-limited, so requests are deliberately serialized and
+retried with bounded exponential backoff. Seed-VC remains a separate post-process.
 """
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from youtube_auto_dub.models import SR_TTS, VOICE_MIN_FILE_SIZE
 
 log = logging.getLogger(__name__)
 SPACE = "openbmb/VoxCPM-Demo"
+_REQUEST_LOCK = asyncio.Lock()
 
 
 def _generate_sync(
@@ -25,9 +26,6 @@ def _generate_sync(
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     client = Client(SPACE)
-    # Inputs mirror the Space's public api_name="generate":
-    # target text, control instruction, reference audio, ultimate cloning,
-    # reference transcript, CFG, normalize text, denoise reference.
     result = client.predict(
         text,
         control,
@@ -56,21 +54,26 @@ async def speak_voxcpm(
     text: str,
     dest: Path,
     language: str = "en",
-    control: str = "A natural, clear, warm English documentary narrator",
+    control: str = "A natural, clear, warm narrator",
     reference_audio: Path | None = None,
 ) -> None:
-    """Generate one line with VoxCPM-Demo, with bounded retry and clean output."""
+    """Generate one line through VoxCPM without saturating the remote queue."""
     last: Exception | None = None
-    for attempt in range(2):
-        try:
-            await asyncio.to_thread(
-                _generate_sync, text, dest, control, reference_audio
-            )
-            return
-        except Exception as exc:
-            last = exc
-            log.warning("VoxCPM attempt %d failed: %s", attempt + 1, exc)
-            dest.unlink(missing_ok=True)
-            if attempt == 0:
-                await asyncio.sleep(3)
+    async with _REQUEST_LOCK:
+        for attempt in range(4):
+            try:
+                await asyncio.to_thread(
+                    _generate_sync, text, dest, control, reference_audio
+                )
+                return
+            except Exception as exc:
+                last = exc
+                dest.unlink(missing_ok=True)
+                delay = min(30, 5 * (2 ** attempt))
+                log.warning(
+                    "VoxCPM attempt %d/4 failed for %s: %s; retrying in %ss",
+                    attempt + 1, language, exc, delay,
+                )
+                if attempt < 3:
+                    await asyncio.sleep(delay)
     raise RuntimeError(f"VoxCPM failed for {language} speech") from last
