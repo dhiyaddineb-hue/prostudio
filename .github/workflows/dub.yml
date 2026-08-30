@@ -63,7 +63,7 @@ on:
       target_lang:
         description: "dub: target language"
         required: false
-        default: "ar"
+        default: "en"
         type: string
       mode:
         description: "dub: mode"
@@ -86,7 +86,7 @@ on:
       bg_music:
         description: "dub: keep background music and effects when separation is reliable"
         required: false
-        default: true
+        default: false
         type: boolean
       diarize:
         description: "dub: identify speakers automatically when HF_TOKEN is configured"
@@ -103,6 +103,24 @@ on:
         required: false
         default: false
         type: boolean
+      lip_sync_backend:
+        description: "dub: verified visual backend"
+        required: false
+        default: "wav2lip"
+        type: choice
+        options: [wav2lip, experiment]
+      profile:
+        description: "dub: pipeline profile"
+        required: false
+        default: "safe"
+        type: choice
+        options: [safe, high_quality_single, multi_speaker_cinematic, experiment]
+      quality:
+        description: "dub: quality policy"
+        required: false
+        default: "balanced"
+        type: choice
+        options: [safe, balanced, strict]
 
 jobs:
   clone:
@@ -358,5 +376,8 @@ jobs:
           path: |
             output/*.mp4
             output/*.srt
+            output/*.pipeline.json
+            output/**/*.json
+            output/**/*.log
           if-no-files-found: error
           retention-days: 14

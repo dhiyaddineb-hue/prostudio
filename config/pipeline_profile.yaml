@@ -1,0 +1,80 @@
+# ProStudio dubbing profile. Override with --set section.key=value or a mode.
+version: 1
+mode: safe
+languages:
+  source: ar
+  target: en
+  translation_style: conversational
+  preserve_meaning: true
+tts:
+  backend: voxcpm_seedvc
+  fallback_backend: edge
+  seed_vc_space: phuoc2005/seed-vc
+  diffusion_steps: 40
+  voice_reference_policy: speaker_then_global
+  require_clean_reference: true
+separation:
+  enabled: false
+  backend: demucs
+  model: htdemucs
+  preserve_background: false
+  allow_non_neural_fallback: false
+diarization:
+  enabled: false
+  model: pyannote/speaker-diarization-community-1
+  min_overlap: 0.55
+  require_token: false
+  overlap_policy: review
+
+timing:
+  enabled: true
+  min_tempo_factor: 0.80
+  max_tempo_factor: 1.25
+  absolute_min: 0.69
+  absolute_max: 1.45
+  rewrite_attempts: 1
+  preserve_pauses: true
+lip_sync:
+  enabled: false
+  backend: wav2lip
+  min_face_coverage: 0.20
+  min_face_area_ratio: 0.008
+  min_frontalness: 0.0
+  require_single_face: true
+  allow_unvalidated: false
+quality:
+  duration_tolerance_seconds: 0.25
+  require_audio: true
+  require_no_original_dialogue: true
+  require_timing: true
+  fail_on_warning: false
+fallback:
+  missing_optional_model: audio_only
+  missing_reference: review
+  overlap: review
+  lip_sync_failure: audio_only
+  stop_on_fatal: true
+modes:
+  safe:
+    separation.enabled: false
+    diarization.enabled: false
+    lip_sync.enabled: false
+    separation.preserve_background: false
+  high_quality_single:
+    separation.enabled: false
+    diarization.enabled: false
+    lip_sync.enabled: false
+    tts.backend: voxcpm_seedvc
+  multi_speaker_cinematic:
+    separation.enabled: true
+    separation.preserve_background: true
+    diarization.enabled: true
+    diarization.require_token: true
+    lip_sync.enabled: true
+  experiment:
+    separation.enabled: true
+    diarization.enabled: true
+    separation.preserve_background: true
+    lip_sync.enabled: true
+    lip_sync.backend: experiment
+    fallback.missing_optional_model: audio_only
