@@ -43,6 +43,10 @@ def main() -> None:
     parser.add_argument("--space", default="phuoc2005/seed-vc")
     parser.add_argument("--diffusion-steps", type=int, default=40)
     parser.add_argument("--length-adjust", type=float, default=1.0)
+    # Kept for compatibility with the GitHub workflow; this script always
+    # restores the source bed after conversion, which is the safe behaviour.
+    parser.add_argument("--keep-background", action="store_true")
+    parser.add_argument("--separate-sources", action="store_true")
     parser.add_argument("--keep-background", action="store_true",
                         help="Mix an isolated background bed back in; off by default to prevent original speech leakage")
     parser.add_argument("--separate-sources", action="store_true",
