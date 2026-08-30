@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import re
+import subprocess
 from pathlib import Path
 
 from rich.table import Table
@@ -254,6 +255,17 @@ async def run(args, progress=None) -> Path:
             xtts_reference = None
             if tts_engine == "voxcpm":
                 console.step("VoxCPM-Demo: generating clean target-language speech")
+                # VoxCPM-Demo rejects references longer than 50 seconds.  Use
+                # the real source recording, but create a bounded cleaned copy
+                # once and pass that same reference to every segment.
+                voxcpm_reference = TEMP_DIR / "voxcpm_reference.wav"
+                subprocess.run([
+                    "ffmpeg", "-y", "-i", str(project.audio_path), "-t", "45",
+                    "-af", "highpass=f=80,lowpass=f=9000,afftdn=nr=12",
+                    "-ar", "22050", "-ac", "1", str(voxcpm_reference),
+                ], check=True, capture_output=True)
+            else:
+                voxcpm_reference = None
 
             if tts_engine == "xtts":
                 # XTTS needs a few seconds of the original speaker. Use the
@@ -320,7 +332,7 @@ async def run(args, progress=None) -> Path:
                             (getattr(args, "voice_theme", None) or "A natural, clear, warm English documentary narrator")
                             + "; delivery: " + infer_emotion(seg.translated_text_dub)
                         ),
-                        reference_audio=project.audio_path,
+                        reference_audio=voxcpm_reference,
                     ))
                 elif tts_engine == "qwen":
                     tasks.append(speak_qwen(
