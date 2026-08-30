@@ -170,3 +170,10 @@ python scripts/build_phantom_dub.py
 ## الترخيص
 
 MIT. نواة الخط الأنبوبي من youtube-auto-dub © Nguyen Cong Thuan Huy.
+
+## دليل خط الإنتاج النهائي
+
+للتشغيل الإنتاجي من GitHub، وإعداد الأسرار، وفحص checkpoints، وقواعد المزامنة
+والـ fallback، راجع [دليل الاستخدام العربي الشامل](docs/USAGE_AR.md). كما يتوفر
+[مخطط مراحل خط الإنتاج](docs/pipeline-flow-ar.png) وملف Mermaid القابل للتعديل
+`docs/pipeline-flow-ar.mmd`.

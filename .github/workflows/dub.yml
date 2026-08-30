@@ -121,6 +121,11 @@ on:
         default: "balanced"
         type: choice
         options: [safe, balanced, strict]
+      wav2lip_sha256:
+        description: "sha256 for the approved Wav2Lip checkpoint downloaded from WAV2LIP_CHECKPOINT_URL"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   clone:
@@ -352,8 +357,15 @@ jobs:
         if: inputs.lip_sync == true
         env:
           WAV2LIP_CHECKPOINT: ${{ secrets.WAV2LIP_CHECKPOINT }}
+          WAV2LIP_CHECKPOINT_URL: ${{ secrets.WAV2LIP_CHECKPOINT_URL }}
         run: |
           set -euo pipefail
+          if [ -n "$WAV2LIP_CHECKPOINT_URL" ]; then
+            test -n "${{ inputs.wav2lip_sha256 }}" || { echo "wav2lip_sha256 is required when downloading a checkpoint" >&2; exit 1; }
+            curl --fail --location --retry 3 --output /tmp/wav2lip.pth "$WAV2LIP_CHECKPOINT_URL"
+            echo "${{ inputs.wav2lip_sha256 }}  /tmp/wav2lip.pth" | sha256sum --check
+            WAV2LIP_CHECKPOINT=/tmp/wav2lip.pth
+          fi
           if [ -z "$WAV2LIP_CHECKPOINT" ]; then
             echo "WAV2LIP_CHECKPOINT is not configured; preserving the validated Seed-VC audio dub."
             printf '%s\n' '{"requested":true,"applied":false,"reason":"missing_verified_checkpoint","quality":"unvalidated"}' > output/lip-sync-report.json
