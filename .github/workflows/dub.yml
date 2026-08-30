@@ -276,6 +276,18 @@ jobs:
       - name: Install optional speaker diarization
         if: inputs.diarize == true
         run: python -m pip install pyannote.audio
+      - name: Verify Hugging Face token is available
+        if: inputs.diarize == true
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$HF_TOKEN" ]; then
+            echo "HF_TOKEN is missing or unavailable to this workflow." >&2
+            echo "Add it under repository Settings > Secrets and variables > Actions." >&2
+            exit 1
+          fi
+          echo "HF_TOKEN is configured (value hidden)."
       - name: Install optional neural source separation
         if: inputs.separate_sources == true
         run: python -m pip install demucs
