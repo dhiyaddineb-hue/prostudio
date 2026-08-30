@@ -1,0 +1,53 @@
+flowchart TD
+    A[الفيديو الأصلي] --> B[استخراج وفحص الصوت<br/>FFmpeg و FFprobe]
+    B --> C{هل تم تفعيل فصل المصادر؟}
+    C -- نعم --> D[Demucs اختياري<br/>speech/vocals + background/no-vocals]
+    D --> E{هل stems صالحة؟<br/>المدة والطاقة والوجود}
+    E -- لا --> F[تحذير وفallback آمن<br/>بدون موسيقى أصلية]
+    E -- نعم --> G[استخدام speech للتحليل<br/>و background للمزج فقط]
+    C -- لا --> F
+
+    F --> H[التفريغ الصوتي<br/>Whisper / ASR مع التوقيت]
+    G --> H
+    H --> I{هل فُعّل تحديد المتحدثين؟}
+    I -- نعم + HF_TOKEN --> J[Pyannote diarization<br/>أدوار حقيقية فقط]
+    J --> K[دمج الأدوار مع المقاطع<br/>حد تغطية محافظ 0.55]
+    I -- لا أو بدون token --> L[وضع متحدث واحد محافظ]
+    K --> M[اختيار مراجع صوتية نظيفة<br/>لكل متحدث موثوق]
+    L --> M
+
+    M --> N[الترجمة وتكييف الحوار<br/>عربي → إنجليزي افتراضيًا]
+    N --> O[وصف الإلقاء والعاطفة<br/>مع درجة ثقة]
+    O --> P[توليد الصوت لكل مقطع<br/>VoxCPM + Seed-VC افتراضيًا]
+    P --> Q{هل المدة ضمن الحدود؟<br/>tempo 0.80–1.25}
+    Q -- لا --> R[إعادة صياغة قصيرة أو إعادة توليد]
+    R --> Q
+    Q -- نعم --> S[محاذاة كل مقطع داخل نافذته<br/>فواصل و fades بدون قص الكلمات]
+
+    S --> T{هل background stem صالح<br/>وم preservation مفعّل؟}
+    T -- نعم --> U[مزج الصوت المدبلج<br/>مع background المعزول فقط]
+    T -- لا --> V[صوت الدبلجة فقط<br/>لا مزج للصوت الأصلي]
+    U --> W[المسار الصوتي النهائي]
+    V --> W
+
+    W --> X{هل lip-sync مفعّل؟}
+    X -- لا --> Y[Remux: الفيديو الأصلي + الصوت النهائي]
+    X -- نعم --> Z[بوابة الوجه واللقطة<br/>الحجم والثبات والوضوح وعدد الوجوه]
+    Z -- فشل --> Y
+    Z -- نجاح --> AA[Wav2Lip مشروط<br/>على لقطات/مسارات موثوقة]
+    AA --> AB{هل خرج صالح؟<br/>لا artifacts ومدة صحيحة}
+    AB -- لا --> Y
+    AB -- نعم --> AC[فيديو مع lip-sync]
+
+    Y --> AD[فحص الجودة النهائي]
+    AC --> AD
+    AD --> AE{اختبارات الجودة ناجحة؟<br/>MP4 و audio و duration و timing}
+    AE -- نعم --> AF[final.mp4 + pipeline.json]
+    AE -- لا --> AG[إيقاف واضح أو تسليم audio-only<br/>مع warnings و manual review]
+
+    style A fill:#1f2937,color:#fff
+    style AF fill:#166534,color:#fff
+    style AG fill:#991b1b,color:#fff
+    style F fill:#92400e,color:#fff
+    style V fill:#92400e,color:#fff
+    style Z fill:#7c3aed,color:#fff
