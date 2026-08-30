@@ -386,6 +386,7 @@ def finalize_audio(
     mix_ambient: bool = False,
     ambient_gain: float = AUDIO_DEFAULT_AMBIENT_GAIN,
     stereo_source: Optional[Path] = None,
+    ambient_source: Optional[Path] = None,
 ) -> Path:
     """Apply loudness normalisation and optional background mixing."""
     if not match_loudness and not mix_ambient:
@@ -409,7 +410,7 @@ def finalize_audio(
 
     if mix_ambient:
         bg = output.with_name("ambient.wav")
-        result = _isolate_ambient(original, bg, sr=SR, stereo_source=stereo_source)
+        result = ambient_source if ambient_source and ambient_source.exists() else _isolate_ambient(original, bg, sr=SR, stereo_source=stereo_source)
         if result and result.exists():
             dur = sf.info(str(work)).duration
             tmp = output.with_name(output.name + ".amb.wav")
