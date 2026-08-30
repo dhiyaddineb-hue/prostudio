@@ -98,6 +98,11 @@ on:
         required: false
         default: false
         type: boolean
+      lip_sync:
+        description: "dub: conditionally apply Wav2Lip when a face is visible"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   clone:
@@ -324,6 +329,27 @@ jobs:
             --output output/seedvc-enhanced.mp4 \
             "${extra[@]}"
           rm -f "$dubbed"
+
+      - name: Conditional lip synchronization
+        if: inputs.lip_sync == true
+        env:
+          WAV2LIP_CHECKPOINT: ${{ secrets.WAV2LIP_CHECKPOINT }}
+        run: |
+          set -euo pipefail
+          test -n "$WAV2LIP_CHECKPOINT" || { echo "WAV2LIP_CHECKPOINT secret is required" >&2; exit 1; }
+          test -f "$WAV2LIP_CHECKPOINT" || { echo "Checkpoint path is not present on runner" >&2; exit 1; }
+          python -m pip install opencv-python-headless
+          git clone --depth 1 https://github.com/Rudrabha/Wav2Lip.git /tmp/Wav2Lip
+          python lip_sync/run.py \
+            --video output/seedvc-enhanced.mp4 \
+            --audio output/seedvc-enhanced.seed-work/final-mixed.wav \
+            --wav2lip-repo /tmp/Wav2Lip \
+            --checkpoint "$WAV2LIP_CHECKPOINT" \
+            --output output/lipsynced.mp4 \
+            --min-coverage 0.20 \
+            --min-face-ratio 0.008
+          rm -f output/seedvc-enhanced.mp4
+          mv output/lipsynced.mp4 output/seedvc-enhanced.mp4
 
       - name: Upload the dubbed video
         uses: actions/upload-artifact@v4
