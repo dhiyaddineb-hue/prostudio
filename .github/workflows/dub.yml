@@ -315,6 +315,9 @@ jobs:
           if [ "${{ inputs.diarize }}" = "true" ]; then
             extra+=(--diarize)
           fi
+          if [ "${{ inputs.separate_sources }}" = "true" ]; then
+            extra+=(--separate-sources)
+          fi
           python -m youtube_auto_dub "$source" \
             --lang "${{ inputs.target_lang }}" \
             --dub-lang "${{ inputs.target_lang }}" \
