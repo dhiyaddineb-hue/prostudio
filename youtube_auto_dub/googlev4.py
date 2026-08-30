@@ -128,6 +128,16 @@ class GoogleTranslator:
         if len(results) != len(texts):
             results = [await self.translate(t, source=source, target=target) for t in texts]
 
+        if target.lower() in ("ar", "ar-sa", "arabic"):
+            missing = [i for i, value in enumerate(results)
+                       if value.strip() and not re.search(r"[\u0600-\u06FF]", value)]
+            if missing:
+                raise RuntimeError(
+                    "Arabic translation validation failed for segments "
+                    + ", ".join(str(i) for i in missing)
+                    + "; refusing to synthesize non-Arabic speech"
+                )
+
         return results
 
     async def close(self):
