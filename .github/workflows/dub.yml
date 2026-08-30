@@ -354,8 +354,16 @@ jobs:
           WAV2LIP_CHECKPOINT: ${{ secrets.WAV2LIP_CHECKPOINT }}
         run: |
           set -euo pipefail
-          test -n "$WAV2LIP_CHECKPOINT" || { echo "WAV2LIP_CHECKPOINT secret is required" >&2; exit 1; }
-          test -f "$WAV2LIP_CHECKPOINT" || { echo "Checkpoint path is not present on runner" >&2; exit 1; }
+          if [ -z "$WAV2LIP_CHECKPOINT" ]; then
+            echo "WAV2LIP_CHECKPOINT is not configured; preserving the validated Seed-VC audio dub."
+            printf '%s\n' '{"requested":true,"applied":false,"reason":"missing_verified_checkpoint","quality":"unvalidated"}' > output/lip-sync-report.json
+            exit 0
+          fi
+          if [ ! -f "$WAV2LIP_CHECKPOINT" ]; then
+            echo "WAV2LIP_CHECKPOINT does not exist on this runner; preserving the validated Seed-VC audio dub."
+            printf '%s\n' '{"requested":true,"applied":false,"reason":"checkpoint_path_missing","quality":"unvalidated"}' > output/lip-sync-report.json
+            exit 0
+          fi
           python -m pip install opencv-python-headless
           git clone --depth 1 https://github.com/Rudrabha/Wav2Lip.git /tmp/Wav2Lip
           python lip_sync/run.py \
@@ -377,6 +385,7 @@ jobs:
             output/*.mp4
             output/*.srt
             output/*.pipeline.json
+            output/*-report.json
             output/**/*.json
             output/**/*.log
           if-no-files-found: error
