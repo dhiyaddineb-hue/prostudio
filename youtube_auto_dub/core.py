@@ -329,7 +329,11 @@ async def run(args, progress=None) -> Path:
                         seg.tts_audio_path,
                         language=dub_lang,
                         control=(
-                            (getattr(args, "voice_theme", None) or "A natural, clear, warm English documentary narrator")
+                            (getattr(args, "voice_theme", None) or (
+                                "متحدث عربي واضح وطبيعي ودافئ، نطق عربي سليم، دون لهجة أجنبية"
+                                if dub_lang.lower() in ("ar", "ar-sa", "arabic")
+                                else "A natural, clear, warm narrator speaking the target language"
+                            ))
                             + "; delivery: " + infer_emotion(seg.translated_text_dub)
                         ),
                         reference_audio=voxcpm_reference,
