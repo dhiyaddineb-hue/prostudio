@@ -98,17 +98,6 @@ on:
         required: false
         default: false
         type: boolean
-      lip_sync:
-        description: "dub: conditionally apply Wav2Lip when a face is visible"
-        required: false
-        default: false
-        type: boolean
-      lip_sync_backend:
-        description: "dub: verified visual backend"
-        required: false
-        default: "wav2lip"
-        type: choice
-        options: [wav2lip, experiment]
       profile:
         description: "dub: pipeline profile"
         required: false
@@ -364,42 +353,6 @@ jobs:
             --output output/seedvc-enhanced.mp4 \
             "${extra[@]}"
           rm -f "$dubbed"
-
-      - name: Conditional lip synchronization
-        if: inputs.lip_sync == true
-        env:
-          WAV2LIP_CHECKPOINT: ${{ secrets.WAV2LIP_CHECKPOINT }}
-          WAV2LIP_CHECKPOINT_URL: ${{ secrets.WAV2LIP_CHECKPOINT_URL }}
-        run: |
-          set -euo pipefail
-          if [ -n "$WAV2LIP_CHECKPOINT_URL" ]; then
-            test -n "${{ inputs.wav2lip_sha256 }}" || { echo "wav2lip_sha256 is required when downloading a checkpoint" >&2; exit 1; }
-            curl --fail --location --retry 3 --output /tmp/wav2lip.pth "$WAV2LIP_CHECKPOINT_URL"
-            echo "${{ inputs.wav2lip_sha256 }}  /tmp/wav2lip.pth" | sha256sum --check
-            WAV2LIP_CHECKPOINT=/tmp/wav2lip.pth
-          fi
-          if [ -z "$WAV2LIP_CHECKPOINT" ]; then
-            echo "WAV2LIP_CHECKPOINT is not configured; preserving the validated Seed-VC audio dub."
-            printf '%s\n' '{"requested":true,"applied":false,"reason":"missing_verified_checkpoint","quality":"unvalidated"}' > output/lip-sync-report.json
-            exit 0
-          fi
-          if [ ! -f "$WAV2LIP_CHECKPOINT" ]; then
-            echo "WAV2LIP_CHECKPOINT does not exist on this runner; preserving the validated Seed-VC audio dub."
-            printf '%s\n' '{"requested":true,"applied":false,"reason":"checkpoint_path_missing","quality":"unvalidated"}' > output/lip-sync-report.json
-            exit 0
-          fi
-          python -m pip install opencv-python-headless
-          git clone --depth 1 https://github.com/Rudrabha/Wav2Lip.git /tmp/Wav2Lip
-          python lip_sync/run.py \
-            --video output/seedvc-enhanced.mp4 \
-            --audio output/seedvc-enhanced.seed-work/final-mixed.wav \
-            --wav2lip-repo /tmp/Wav2Lip \
-            --checkpoint "$WAV2LIP_CHECKPOINT" \
-            --output output/lipsynced.mp4 \
-            --min-coverage 0.20 \
-            --min-face-ratio 0.008
-          rm -f output/seedvc-enhanced.mp4
-          mv output/lipsynced.mp4 output/seedvc-enhanced.mp4
 
       - name: Upload the dubbed video
         uses: actions/upload-artifact@v4
