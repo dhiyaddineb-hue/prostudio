@@ -329,7 +329,11 @@ jobs:
           ls -lh output
 
       - name: Enhance voice with Seed-VC
-        if: inputs.tts_engine == 'xtts' || inputs.tts_engine == 'voxcpm'
+        # VoxCPM already produces the target-language speech. Running the
+        # remote Seed-VC post-process on it can reduce Arabic intelligibility;
+        # keep Seed-VC only for the XTTS path until a validated Arabic profile
+        # is available.
+        if: inputs.tts_engine == 'xtts'
         env:
           SOURCE_PATH: ${{ inputs.source_path }}
         run: |
