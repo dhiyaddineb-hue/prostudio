@@ -420,12 +420,10 @@ def finalize_audio(
             filt = (
                 f"[1:a]atrim=0:{dur:.3f},asetpts=PTS-STARTPTS,"
                 f"volume={ambient_gain:.2f}[bg];"
-                f"[bg][0:a]sidechaincompress="
-                f"threshold=0.03:ratio=12:attack=20:release=350:makeup=1[duck];"
-                f"[0:a][duck]amix=inputs=2:duration=first:normalize=0[out]"
+                f"[0:a][bg]amix=inputs=2:duration=first:normalize=0[out]"
             )
             subprocess.run(
-                [ffmpeg_exe(), "-y", "-i", str(work), "-i", str(bg),
+                [ffmpeg_exe(), "-y", "-i", str(work), "-i", str(result),
                  "-filter_complex", filt, "-map", "[out]",
                  "-ar", str(SR), "-ac", "1", str(tmp)],
                 capture_output=True, check=True,
