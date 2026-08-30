@@ -10,10 +10,14 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 from gradio_client import Client, handle_file
 
+# The GitHub workflow executes this file as scripts/seed_vc_enhance.py, so the
+# repository root is not guaranteed to be on sys.path on every runner.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from youtube_auto_dub.source_separation import separate_dialogue_background
 
 
@@ -43,10 +47,6 @@ def main() -> None:
     parser.add_argument("--space", default="phuoc2005/seed-vc")
     parser.add_argument("--diffusion-steps", type=int, default=40)
     parser.add_argument("--length-adjust", type=float, default=1.0)
-    # Kept for compatibility with the GitHub workflow; this script always
-    # restores the source bed after conversion, which is the safe behaviour.
-    parser.add_argument("--keep-background", action="store_true")
-    parser.add_argument("--separate-sources", action="store_true")
     parser.add_argument("--keep-background", action="store_true",
                         help="Mix an isolated background bed back in; off by default to prevent original speech leakage")
     parser.add_argument("--separate-sources", action="store_true",
