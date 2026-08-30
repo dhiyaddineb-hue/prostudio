@@ -65,6 +65,8 @@ def _parser() -> argparse.ArgumentParser:
                       help="Mix original background audio into dub")
     proc.add_argument("--diarize", action="store_true",
                       help="Automatically identify speakers when HF_TOKEN is available")
+    proc.add_argument("--separate-sources", action="store_true",
+                      help="Separate dialogue from music/effects with Demucs")
     proc.add_argument("-o", "--output-dir",
                       help="Output directory (default: ./output)")
 
@@ -92,6 +94,7 @@ def main():
     args.auto_clone = args.voice_clone
     args.preserve_bg = args.bg_music
     args.diarize = args.diarize
+    args.separate_sources = args.separate_sources
     args.whisper_model = args.model
 
     # Clean temp
