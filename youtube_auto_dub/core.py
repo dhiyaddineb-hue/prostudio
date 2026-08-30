@@ -1,0 +1,536 @@
+"""Core pipeline — orchestrates download → transcribe → translate → speak → assemble → render."""
+
+import asyncio
+import logging
+import re
+import subprocess
+from pathlib import Path
+
+from rich.table import Table
+
+from youtube_auto_dub.align_text import guess_language
+from youtube_auto_dub.audio import (
+    align_segments,
+    finalize_audio,
+    group_segments,
+    overlay_dub,
+    render_video,
+    write_srt,
+)
+from youtube_auto_dub.googlev4 import GoogleTranslator
+from youtube_auto_dub.models import (
+    AUDIO_DEFAULT_AMBIENT_GAIN,
+    DEFAULT_TTS_ENGINE,
+    SR_TTS,
+    TEMP_DIR,
+    WHISPER_DEFAULT_MODEL,
+    SubtitleSegment,
+)
+from youtube_auto_dub.offline_asr import available as offline_asr_available
+from youtube_auto_dub.offline_asr import transcribe_offline
+from youtube_auto_dub.runtime import have_whisper, pick_device
+from youtube_auto_dub.speech import build_hint, transcribe
+from youtube_auto_dub.subs import read_srt
+from youtube_auto_dub.ui import console
+from youtube_auto_dub.voice import (
+    auto_clone_voice,
+    pick_voice,
+    resolve_persona,
+    speak_edge,
+    speak_qwen,
+)
+from youtube_auto_dub.voxcpm_tts import speak_voxcpm
+from youtube_auto_dub.emotion import infer_emotion
+from youtube_auto_dub.speaker_diarization import annotate_segments
+from youtube_auto_dub.source_separation import separate_dialogue_background, validate_stems
+from youtube_auto_dub import xtts_clone
+from youtube_auto_dub.youtube import load_source
+
+log = logging.getLogger(__name__)
+
+
+def _polish_english_dialogue(text: str) -> str:
+    """Make machine translation sound conversational without changing meaning."""
+    replacements = (
+        (r"\bI am\b", "I'm"), (r"\bI have\b", "I've"),
+        (r"\bdo not\b", "don't"), (r"\bdoes not\b", "doesn't"),
+        (r"\bcannot\b", "can't"), (r"\bit is\b", "it's"),
+        (r"\byou are\b", "you're"), (r"\bwe are\b", "we're"),
+        (r"\bthat is\b", "that's"), (r"\bthere is\b", "there's"),
+    )
+    polished = text.strip()
+    for pattern, replacement in replacements:
+        polished = re.sub(pattern, replacement, polished, flags=re.IGNORECASE)
+    return polished
+
+
+def _report(progress, step: str, message: str, percent: int) -> None:
+    if progress:
+        progress(step, message, percent)
+
+
+def _build_dub_only_mix(segments, output: Path, total_duration: float) -> None:
+    """Mix all TTS clips onto a silent timeline, never touching the original.
+
+    This is the ``no_tempo`` path: clips are placed at their original start
+    times without any speed adjustment.  The critical difference from
+    ``overlay_dub`` is that the base is silence, not the original audio,
+    so the original dialogue never leaks through.
+    """
+    import numpy as np
+    import soundfile as sf
+
+    sr = SR_TTS
+    total_samples = int((total_duration + 1.0) * sr)
+    timeline = np.zeros(total_samples, dtype=np.float32)
+
+    for seg in segments:
+        if not seg.tts_audio_path or not seg.tts_audio_path.exists():
+            continue
+        try:
+            clip, clip_sr = sf.read(seg.tts_audio_path, dtype="float32")
+        except Exception:
+            continue
+        if clip.ndim > 1:
+            clip = clip.mean(axis=1)
+        if clip_sr != sr:
+            # Simple resampling via ffmpeg for quality
+            tmp = seg.tts_audio_path.with_suffix(".resampled.wav")
+            subprocess.run([
+                "ffmpeg", "-y", "-i", str(seg.tts_audio_path),
+                "-ar", str(sr), "-ac", "1", str(tmp)
+            ], check=True, capture_output=True)
+            clip, _ = sf.read(tmp, dtype="float32")
+
+        start_sample = int(seg.start * sr)
+        end_sample = min(start_sample + len(clip), total_samples)
+        seg_len = end_sample - start_sample
+        if seg_len > 0:
+            timeline[start_sample:end_sample] += clip[:seg_len]
+
+    # Normalise peaks
+    peak = np.max(np.abs(timeline))
+    if peak > 1.0:
+        timeline /= peak
+    sf.write(str(output), timeline, sr)
+
+
+async def run(args, progress=None) -> Path:
+    base_lang = args.lang or "en"
+    sub_lang = args.lang_sub or base_lang
+    dub_lang = args.lang_dub or base_lang
+    out_root = Path(args.output_dir) if getattr(args, "output_dir", None) else Path("output")
+    device = pick_device()
+    model_name = args.whisper_model or WHISPER_DEFAULT_MODEL
+
+    tts_engine = getattr(args, "tts_engine", DEFAULT_TTS_ENGINE)
+    use_tempo = not getattr(args, "no_tempo", False)
+    keep_bg = getattr(args, "preserve_bg", False)
+    do_clone = getattr(args, "auto_clone", False)
+    persona = getattr(args, "voice_theme", None)
+
+    # ── UI ────────────────────────────────────────────────────────────
+    console.header("YouTube Auto Dub")
+    console.header("Configuration", center=False)
+    t = Table(show_header=False, box=None, padding=(0, 2))
+    t.add_row("URL", f"[#e5e7eb]{args.url}[/#e5e7eb]")
+    t.add_row("Mode", f"[#e5e7eb]{args.mode.upper()}[/#e5e7eb]")
+    if args.mode in ("sub", "both"):
+        t.add_row("Subs", f"[#e5e7eb]{sub_lang.upper()}[/#e5e7eb]")
+    if args.mode in ("dub", "both"):
+        t.add_row("Dub", f"[#e5e7eb]{dub_lang.upper()}[/#e5e7eb]")
+        t.add_row("Gender", f"[#e5e7eb]{args.gender.title()}[/#e5e7eb]")
+    t.add_row("ASR", f"[#e5e7eb]{model_name.upper()} ({device.upper()})[/#e5e7eb]")
+    t.add_row("TTS", f"[#e5e7eb]{tts_engine.upper()}[/#e5e7eb]")
+    if persona:
+        t.add_row("Persona", f"[#e5e7eb]{persona}[/#e5e7eb]")
+    if do_clone:
+        t.add_row("Clone", "[#e5e7eb]ON[/#e5e7eb]")
+    if keep_bg:
+        t.add_row("Ambient", "[#e5e7eb]ON[/#e5e7eb]")
+    console.print(t)
+    console.print()
+
+    with console.status("Processing..."):
+        # ── 1. Download ──────────────────────────────────────────────
+        console.info("Downloading media")
+        _report(progress, "download", "تنزيل الفيديو / Download", 8)
+        project = load_source(args.url, getattr(args, "browser", None))
+        _report(progress, "download", f"تم التحميل: {project.video_id}", 16)
+
+        # Separate before ASR/diarization so music does not contaminate the
+        # transcript or the voice reference. Keep the original as a safe
+        # fallback when Demucs is unavailable or fails validation.
+        speech_audio = project.audio_path
+        background_audio = None
+        if getattr(args, "separate_sources", False):
+            console.info("Separating dialogue and background (Demucs)")
+            source_work = TEMP_DIR / "source-separation"
+            stems = separate_dialogue_background(project.audio_path, source_work)
+            source_duration = float(project.metadata.duration) if project.metadata else 0.0
+            stem_report = validate_stems(stems, source_duration)
+            if stem_report.get("valid"):
+                speech_audio, background_audio = stems
+                console.step("Validated Demucs speech/background stems")
+            else:
+                console.warning(f"Demucs stems rejected; using original audio: {stem_report.get('reason')}")
+
+        # ── 2. Transcribe ────────────────────────────────────────────
+        console.info(f"Transcribing ({model_name})")
+        _report(progress, "transcribe", f"تفريغ الصوت ({model_name})", 22)
+
+        cached = project.load_cache("segments")
+        transcript = (getattr(args, "transcript", None) or "").strip()
+        if transcript:
+            from youtube_auto_dub.align_text import segments_from_transcript
+            console.step("Using provided transcript")
+            duration = float(project.metadata.duration) if project.metadata else 0.0
+            project.segments = segments_from_transcript(
+                transcript, project.audio_path, duration=duration
+            )
+            lang_detected = getattr(args, "source_lang", None) or guess_language(
+                transcript
+            )
+            console.step(f"Source language: {lang_detected}")
+        elif cached and not getattr(args, "refresh", False):
+            console.step("Using cached transcription")
+            project.segments = [
+                SubtitleSegment(
+                    start=s["start"], end=s["end"],
+                    source_text=s["source_text"],
+                    speaker=s.get("speaker"),
+                    confidence=float(s.get("confidence", 1.0)),
+                    index=i,
+                )
+                for i, s in enumerate(cached)
+            ]
+            lang_detected = cached[0].get("lang")
+        else:
+            raw = lang_detected = None
+            if have_whisper():
+                hint = build_hint(project.metadata)
+                if hint:
+                    console.step("Prompting with video metadata")
+                try:
+                    raw, lang_detected = transcribe(
+                        speech_audio,
+                        model_name=model_name,
+                        device=device,
+                        hint=hint,
+                    )
+                    console.success(f"Detected: {lang_detected}")
+                except Exception as exc:
+                    console.warning(f"Whisper failed ({exc})")
+                    raw = None
+
+            if raw is None:
+                # Whisper is missing or could not fetch its weights. Rather than
+                # refuse to transcribe, fall back to the fully offline
+                # recogniser — clearly announced, since it is English-only and
+                # less accurate.
+                requested_source = getattr(args, "source_lang", None)
+                if requested_source != "en":
+                    raise RuntimeError(
+                        "لا يمكن كشف وتفريغ لغة الصوت تلقائياً في هذه البيئة. "
+                        "الصق نص الفيديو في خانة النص أو وفّر نموذج Whisper متاحاً."
+                    )
+                if not offline_asr_available():
+                    raise RuntimeError(
+                        "تعذر التفريغ الآلي. الصق نص الفيديو في خانة النص، "
+                        "أو ثبّت pocketsphinx للتفريغ دون إنترنت."
+                    )
+                console.warning(
+                    "Using offline PocketSphinx (English only, lower accuracy)"
+                )
+                _report(progress, "transcribe", "تفريغ محلي دون إنترنت", 28)
+                raw = transcribe_offline(project.audio_path)
+                if not raw:
+                    raise RuntimeError(
+                        "تعذّر التعرف على أي كلام. الصق نص الفيديو في خانة النص."
+                    )
+                lang_detected = "en"
+
+            if getattr(args, "diarize", False):
+                console.info("Identifying speakers")
+                raw = annotate_segments(speech_audio, raw)
+            console.info("Grouping segments")
+            project.segments = group_segments(raw)
+
+            cache_data = [
+                {"index": i, "start": s.start, "end": s.end,
+                 "source_text": s.source_text, "lang": lang_detected,
+                 "speaker": s.speaker, "confidence": s.confidence}
+                for i, s in enumerate(project.segments)
+            ]
+            project.save_cache("segments", cache_data)
+
+        texts = [seg.source_text for seg in project.segments]
+        _report(progress, "chunk", f"تقسيم إلى {len(project.segments)} مقطع", 38)
+
+        # ── 3. Translate ─────────────────────────────────────────────
+        console.info("Translating")
+        _report(progress, "translate", f"ترجمة إلى {dub_lang if args.mode != 'sub' else sub_lang}", 44)
+
+        if args.mode in ("sub", "both"):
+            if lang_detected and lang_detected == sub_lang:
+                console.step(f"Source == target ({sub_lang}), skipping")
+                sub_out = texts
+            else:
+                console.step(f"Translating {len(texts)} segs -> {sub_lang.upper()}")
+                xl = GoogleTranslator()
+                sub_out = await xl.translate_batch(
+                    texts, source=lang_detected or "auto", target=sub_lang
+                )
+                await xl.close()
+            for i, seg in enumerate(project.segments):
+                seg.translated_text_sub = sub_out[i].strip() or seg.source_text
+
+        if args.mode in ("dub", "both"):
+            if args.mode == "both" and dub_lang == sub_lang:
+                console.step("Reusing subtitle translation for dubbing")
+                dub_out = sub_out
+            elif lang_detected and lang_detected == dub_lang:
+                console.step(f"Source == target ({dub_lang}), skipping")
+                dub_out = texts
+            else:
+                console.step(f"Translating {len(texts)} segs -> {dub_lang.upper()}")
+                xl = GoogleTranslator()
+                dub_out = await xl.translate_batch(
+                    texts, source=lang_detected or "auto", target=dub_lang
+                )
+                await xl.close()
+            for i, seg in enumerate(project.segments):
+                translated = dub_out[i].strip() or seg.source_text
+                seg.translated_text_dub = (
+                    _polish_english_dialogue(translated)
+                    if dub_lang.lower() in ("en", "en-us", "english")
+                    else translated
+                )
+
+        console.success("Translation done")
+
+        # ── 4. Speech synthesis ───────────────────────────────────────
+        if args.mode in ("dub", "both"):
+            console.info(f"Synthesizing ({tts_engine})")
+            _report(progress, "tts", "توليد الصوت العصبي", 58)
+
+            # Resolve voice source
+            sample = ref_txt = None
+            xtts_reference = None
+            if tts_engine == "voxcpm":
+                console.step("VoxCPM-Demo: generating clean target-language speech")
+                # VoxCPM-Demo rejects references longer than 50 seconds. Build
+                # one bounded, denoised reference from the dialogue stem.
+                voxcpm_reference = TEMP_DIR / "voxcpm_reference.wav"
+                subprocess.run([
+                    "ffmpeg", "-y", "-i", str(speech_audio), "-t", "45",
+                    "-af", "highpass=f=80,lowpass=f=9000,afftdn=nr=12",
+                    "-ar", "22050", "-ac", "1", str(voxcpm_reference),
+                ], check=True, capture_output=True)
+
+                # When diarization is reliable, do not feed every speaker the
+                # same voice reference. Pick each speaker's first real turn,
+                # pad it slightly, and clean it independently. If a turn is
+                # unavailable, retain the conservative global reference.
+                speaker_references = {}
+                for seg in project.segments:
+                    speaker = getattr(seg, "speaker", None)
+                    if not speaker or speaker in speaker_references:
+                        continue
+                    ref = TEMP_DIR / f"voxcpm_reference_{re.sub(r'[^A-Za-z0-9_-]', '_', str(speaker))}.wav"
+                    start = max(0.0, float(seg.start) - 0.25)
+                    length = min(15.0, max(2.5, float(seg.end) - float(seg.start) + 0.5))
+                    subprocess.run([
+                        "ffmpeg", "-y", "-ss", f"{start:.3f}", "-i", str(speech_audio),
+                        "-t", f"{length:.3f}", "-af",
+                        "highpass=f=80,lowpass=f=9000,afftdn=nr=12,dynaudnorm=f=150:g=7",
+                        "-ar", "22050", "-ac", "1", str(ref),
+                    ], check=True, capture_output=True)
+                    if ref.exists() and ref.stat().st_size > 1024:
+                        speaker_references[speaker] = ref
+            else:
+                voxcpm_reference = None
+                speaker_references = {}
+
+            if tts_engine == "xtts":
+                # XTTS needs a few seconds of the original speaker. Use the
+                # first available speech window, not the translated text, so
+                # the cloned timbre is genuine and language-independent.
+                import soundfile as sf
+
+                source_audio, source_sr = sf.read(speech_audio, dtype="float32")
+                if getattr(source_audio, "ndim", 1) > 1:
+                    source_audio = source_audio.mean(axis=1)
+                ref_end = min(len(source_audio) / source_sr, xtts_clone.REF_MAX_SEC)
+                xtts_reference = xtts_clone.write_reference(
+                    source_audio, source_sr, 0.0, ref_end,
+                    TEMP_DIR / "xtts_reference.wav",
+                )
+                if not xtts_reference or not xtts_clone.available():
+                    console.warning("XTTS-v2 unavailable; falling back to Edge-TTS")
+                    tts_engine = "edge"
+
+            if tts_engine == "qwen" and do_clone:
+                srt_path = TEMP_DIR / "ref.srt"
+                write_srt(project.segments, srt_path)
+                entries = read_srt(str(srt_path))
+                sample = auto_clone_voice(project.audio_path, entries,
+                                          project.project_dir / "clone")
+
+            if tts_engine == "qwen" and persona and not sample:
+                sample, ref_txt = resolve_persona(
+                    persona, dub_lang, device=f"{device}:0",
+                )
+                console.step(f"Persona: {persona}")
+
+            async def synth_xtts_or_edge(seg):
+                ok = await asyncio.to_thread(
+                    xtts_clone.clone_speak,
+                    seg.translated_text_dub,
+                    xtts_reference,
+                    seg.tts_audio_path,
+                    dub_lang,
+                    device,
+                )
+                if not ok:
+                    voice = pick_voice(
+                        dub_lang, args.gender,
+                        voice=getattr(args, "edge_voice", None),
+                    )
+                    await speak_edge(
+                        seg.translated_text_dub, voice, seg.tts_audio_path,
+                        lang=dub_lang, gender=args.gender,
+                    )
+
+            # Generate TTS per segment
+            tasks = []
+            for i, seg in enumerate(project.segments):
+                seg.tts_audio_path = TEMP_DIR / f"tts_{i}.wav"
+                if tts_engine == "xtts" and xtts_reference:
+                    tasks.append(synth_xtts_or_edge(seg))
+                elif tts_engine == "voxcpm":
+                    tasks.append(speak_voxcpm(
+                        seg.translated_text_dub,
+                        seg.tts_audio_path,
+                        language=dub_lang,
+                        control=(
+                            (getattr(args, "voice_theme", None) or (
+                                "متحدث عربي واضح وطبيعي ودافئ، نطق عربي سليم، دون لهجة أجنبية"
+                                if dub_lang.lower() in ("ar", "ar-sa", "arabic")
+                                else "A natural, clear, warm narrator speaking the target language"
+                            ))
+                            + "; delivery: " + infer_emotion(seg.translated_text_dub)
+                        ),
+                        reference_audio=speaker_references.get(
+                            getattr(seg, "speaker", None), voxcpm_reference
+                        ),
+                    ))
+                elif tts_engine == "qwen":
+                    tasks.append(speak_qwen(
+                        seg.translated_text_dub, seg.tts_audio_path,
+                        voice_sample=Path(sample) if sample else None,
+                        ref_text=ref_txt, language=dub_lang,
+                        device=f"{device}:0",
+                    ))
+                else:
+                    voice = pick_voice(
+                        dub_lang,
+                        args.gender,
+                        voice=getattr(args, "edge_voice", None),
+                    )
+                    tasks.append(speak_edge(
+                        seg.translated_text_dub, voice, seg.tts_audio_path,
+                        lang=dub_lang, gender=args.gender,
+                    ))
+
+            await asyncio.gather(*tasks)
+
+            # ── 5. Assemble & finalise ────────────────────────────────
+            _report(progress, "mix", "المزامنة ومزج الموسيقى", 78)
+            project.dub_audio_path = TEMP_DIR / "dub_final.wav"
+
+            # Verify every segment produced audio before mixing; a single
+            # missing TTS clip desynchronises the whole timeline.
+            missing = [
+                s for s in project.segments
+                if not s.tts_audio_path or not s.tts_audio_path.exists()
+            ]
+            if missing:
+                console.warning(
+                    f"{len(missing)} segment(s) missing TTS audio; "
+                    "filling with silence to keep sync"
+                )
+
+            if use_tempo:
+                info_list = []
+                for seg in project.segments:
+                    tts_dur = 0.0
+                    if seg.tts_audio_path and seg.tts_audio_path.exists():
+                        import soundfile as sf
+                        tts_dur = len(sf.read(seg.tts_audio_path, dtype="float32")[0]) / SR_TTS
+                    info_list.append({
+                        "start": seg.start,
+                        "target_dur": max(seg.duration, 0.35),
+                        "wav_path": seg.tts_audio_path,
+                    })
+
+                src_dur = float(project.metadata.duration) if project.metadata else 0.0
+                raw_mix = TEMP_DIR / "dub_raw.wav"
+                align_segments(info_list, src_dur, raw_mix)
+                ambient_gain = getattr(
+                    args, "ambient_gain", AUDIO_DEFAULT_AMBIENT_GAIN
+                )
+                # The dub replaces the original audio entirely. Original
+                # dialogue is NEVER mixed back in — only the isolated music/
+                # effects bed (if available and explicitly requested). This
+                # prevents the original speech from leaking through.
+                finalize_audio(
+                    raw_mix, speech_audio,
+                    project.dub_audio_path,
+                    match_loudness=True,
+                    mix_ambient=keep_bg,
+                    ambient_gain=ambient_gain if keep_bg else 0.0,
+                    stereo_source=project.video_path,
+                    ambient_source=background_audio,
+                    suppress_original=True,
+                )
+            else:
+                # Build a silence-only base; do NOT overlay on original audio.
+                _build_dub_only_mix(project.segments, project.dub_audio_path,
+                                    float(project.metadata.duration) if project.metadata else 0.0)
+
+            console.success("Dubbing complete")
+
+        # ── 6. Subtitles ──────────────────────────────────────────────
+        if args.mode in ("sub", "both"):
+            console.info("Writing subtitles")
+            project.subtitle_path = TEMP_DIR / "subtitles.srt"
+            write_srt(project.segments, project.subtitle_path)
+            console.success("Subtitles saved")
+
+        # ── 7. Render ─────────────────────────────────────────────────
+        console.info("Rendering video")
+        _report(progress, "render", "تصدير الفيديو النهائي", 90)
+        info = f"L-{base_lang}"
+        if args.lang_sub:
+            info += f"_S-{sub_lang}"
+        if args.lang_dub:
+            info += f"_D-{dub_lang}"
+        # Keep the container honest: an audio-only source produces audio.
+        from youtube_auto_dub.audio import _has_video_stream
+        ext = "mp4" if _has_video_stream(project.video_path) else "mp3"
+        out = out_root / f"Output_{args.mode}_{info}_{project.video_id}.{ext}"
+
+        render_video(
+            video_path=project.video_path,
+            subtitle_path=None,
+            dub_audio_path=project.dub_audio_path if args.mode in ("dub", "both") else None,
+            output_path=out,
+        )
+        console.success("Video rendered")
+        project.output_path = out
+        _report(progress, "done", "اكتمل الدوبلاج", 100)
+
+    console.print()
+    console.print(f"[bold #38bdf8]Output: {out.resolve()}[/bold #38bdf8]")
+    return out

@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+*.egg
+.venv/
+.mypy_cache/
+.ruff_cache/
+
+# Project runtime
+.cache/
+temp/
+output/
+uploads/
+inbox/*
+!inbox/.gitkeep
+.local/
+samples/*.wav
+*.mp4
+*.wav
+*.mp3
+*.srt
+!samples/*.mp4
+!samples/*.srt
+!samples/*.png
+# Approved studio voice takes are shipped assets, not scratch audio.
+!samples/voices/
+!samples/voices/*.mp3
+!samples/voices/*.json
+*.webm
+*.mkv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Dub projects: keep the recipe and deliverables, drop scratch and source media.
+projects/*/work/
+projects/*/source/
+!projects/*/output/
+!projects/*/voices/
+!projects/*/project.json
+!projects/*/voices/*.wav
+!projects/*/output/*.mp4
+!projects/*/output/*.srt
+
+# GitHub Pages assets: the page serves these from beside itself, so the broad
+# *.mp4 / *.srt rules must not swallow them.
+!docs/*.mp4
+!docs/*.srt
+!docs/*.vtt
+# Voice audition clips. The directory has to be unignored before the files
+# inside it can be: git will not look inside an excluded directory, so listing
+# only "!docs/samples/*.mp3" silently keeps them all out.
+!docs/samples/
+!docs/samples/*.mp3
