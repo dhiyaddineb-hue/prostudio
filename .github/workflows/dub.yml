@@ -55,9 +55,9 @@ on:
         default: "en-US-AndrewMultilingualNeural"
         type: string
       tts_engine:
-        description: "dub: speech engine (xtts clones the source voice)"
+        description: "dub: speech engine (XTTS is opt-in and never selected automatically)"
         required: false
-        default: "xtts"
+        default: "voxcpm"
         type: choice
         options: [xtts, edge, voxcpm]
       target_lang:
