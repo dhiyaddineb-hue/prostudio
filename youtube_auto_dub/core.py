@@ -272,7 +272,7 @@ async def run(args, progress=None) -> Path:
             sample = ref_txt = None
             xtts_reference = None
             if tts_engine == "voxcpm":
-                console.step("VoxCPM-Demo: generating clean target-language speech")
+                console.step("VoxCPM2: generating clean target-language speech")
                 # VoxCPM-Demo rejects references longer than 50 seconds. Build
                 # one bounded, denoised reference from the dialogue stem.
                 voxcpm_reference = TEMP_DIR / "voxcpm_reference.wav"
