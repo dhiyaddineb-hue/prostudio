@@ -16,15 +16,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - name: Measure audio level of each file
+      - name: Analyze
         run: |
           shopt -s nullglob
           for f in "${{ inputs.dir }}"/*.mp4; do
             echo "==================================================="
             echo "FILE: $f"
-            abr=$(ffprobe -v error -select_streams a:0 -show_entries stream=bit_rate,channels,sample_rate -of default=noprint_wrappers=1 "$f")
-            echo "audio_stream: $abr"
+            dur=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$f")
+            echo "duration: $dur"
             echo "--- loudness ---"
-            ffmpeg -hide_banner -i "$f" -vn -af volumedetect -f null - 2>&1 | grep -iE "mean_volume|max_volume" || echo "NO_VOLUME_OUTPUT"
+            ffmpeg -hide_banner -i "$f" -vn -af volumedetect -f null - 2>&1 | grep -iE "mean_volume|max_volume" || echo "NONE"
+            echo "--- silence gaps (below -45dB, >=0.4s) ---"
+            ffmpeg -hide_banner -i "$f" -vn -af silencedetect=noise=-45dB:d=0.4 -f null - 2>&1 | grep -iE "silence_start|silence_end|silence_duration" || echo "no gaps"
           done
           echo "ALL_DONE"
