@@ -72,6 +72,12 @@ on:
         default: "true"
         type: choice
         options: ["true", "false"]
+      no_vad:
+        description: "dub: disable VAD and transcribe the whole audio (better coverage for continuous speech)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["true", "false"]
       target_lang:
         description: "dub: target language"
         required: false
@@ -336,6 +342,9 @@ jobs:
           fi
           if [ "${{ inputs.separate_sources }}" = "true" ]; then
             extra+=(--separate-sources)
+          fi
+          if [ "${{ inputs.no_vad }}" = "true" ]; then
+            extra+=(--no-vad)
           fi
           python -m youtube_auto_dub "$source" \
             --lang "${{ inputs.target_lang }}" \
