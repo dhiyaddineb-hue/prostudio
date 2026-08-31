@@ -1,0 +1,32 @@
+name: ProStudio Speaker Voice Audit
+on:
+  workflow_dispatch:
+    inputs:
+      source_path:
+        description: Source video/audio path in the repository
+        required: true
+        default: samples/11.11_destiny_source.mp4
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Install audio and diarization dependencies
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          python -m pip install -q pyannote.audio voxcpm soundfile
+      - name: Run independent speaker audit
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          test -n "$HF_TOKEN"
+          python speaker_voice_audit.py "${{ inputs.source_path }}" --out voice-audit --hf-token "$HF_TOKEN"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: speaker-voice-audit
+          path: voice-audit
+          retention-days: 14
