@@ -171,6 +171,7 @@ async def run(args, progress=None) -> Path:
                         model_name=model_name,
                         device=device,
                         hint=hint,
+                        use_vad=not getattr(args, "no_vad", False),
                     )
                     console.success(f"Detected: {lang_detected}")
                 except Exception as exc:
