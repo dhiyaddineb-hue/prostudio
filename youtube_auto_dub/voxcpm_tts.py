@@ -27,7 +27,7 @@ def _generate_sync(text, dest, control, reference_audio):
     prompt = text.strip()
     if control and control.strip():
         prompt = f"({control.strip()}){prompt}"
-    kwargs = {"text": prompt, "seed": 42, "cfg_value": 2.0, "inference_timesteps": 10}
+    kwargs = {"text": prompt, "cfg_value": 2.0, "inference_timesteps": 10}
     if reference_audio and Path(reference_audio).exists():
         kwargs["reference_wav_path"] = str(reference_audio)
     wav = model.generate(**kwargs)
