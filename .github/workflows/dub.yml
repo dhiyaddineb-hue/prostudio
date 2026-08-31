@@ -272,7 +272,7 @@ jobs:
           PY
 
       - name: Install official VoxCPM2
-        if: inputs.tts_engine == 'voxcpm'
+        if: inputs.tts_engine == 'voxcpm' && inputs.voxcpm_backend != 'space'
         run: python -m pip install voxcpm
       - name: Install optional speaker diarization
         if: inputs.diarize == true
