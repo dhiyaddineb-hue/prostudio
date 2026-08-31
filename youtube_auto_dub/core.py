@@ -330,6 +330,27 @@ async def run(args, progress=None) -> Path:
                 if not xtts_reference or not xtts_clone.available():
                     console.warning("XTTS-v2 unavailable; falling back to Edge-TTS")
                     tts_engine = "edge"
+                speaker_references = {}
+                if xtts_reference and project.segments:
+                    speaker_turns = {}
+                    for seg in project.segments:
+                        speaker = getattr(seg, "speaker", None)
+                        if speaker:
+                            previous = speaker_turns.get(speaker)
+                            if previous is None or (seg.end - seg.start) > (previous.end - previous.start):
+                                speaker_turns[speaker] = seg
+                    for speaker, seg in speaker_turns.items():
+                        speaker_audio, speaker_sr = sf.read(speech_audio, dtype="float32")
+                        if getattr(speaker_audio, "ndim", 1) > 1:
+                            speaker_audio = speaker_audio.mean(axis=1)
+                        start = max(0.0, float(seg.start) - 0.25)
+                        end = min(len(speaker_audio) / speaker_sr, float(seg.end) + 0.5)
+                        ref = xtts_clone.write_reference(
+                            speaker_audio, speaker_sr, start, end,
+                            TEMP_DIR / f"xtts_reference_{re.sub(r'[^A-Za-z0-9_-]', '_', str(speaker))}.wav",
+                        )
+                        if ref:
+                            speaker_references[speaker] = ref
 
             if tts_engine == "qwen" and do_clone:
                 srt_path = TEMP_DIR / "ref.srt"
@@ -348,7 +369,7 @@ async def run(args, progress=None) -> Path:
                 ok = await asyncio.to_thread(
                     xtts_clone.clone_speak,
                     seg.translated_text_dub,
-                    xtts_reference,
+                    speaker_references.get(getattr(seg, "speaker", None), xtts_reference),
                     seg.tts_audio_path,
                     dub_lang,
                     device,
