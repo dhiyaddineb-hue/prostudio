@@ -383,6 +383,7 @@ jobs:
 
       - name: Save the dubbed video into the repository
         if: always()
+        continue-on-error: true
         run: |
           set -e
           final=$(find output -maxdepth 2 -type f -name '*.mp4' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
@@ -401,4 +402,4 @@ jobs:
             if git push origin "HEAD:${{ github.ref_name }}"; then echo "pushed"; break; fi
             echo "push retry $i"; sleep 4
           done
-          echo "Saved dubbed video to $dest\"
+          echo "Saved dubbed video to ${dest}"
