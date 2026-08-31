@@ -66,6 +66,12 @@ on:
         default: "space"
         type: choice
         options: [space, local]
+      enhance_seedvc:
+        description: "voxcpm: apply Seed-VC timbre transfer after generation"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
       target_lang:
         description: "dub: target language"
         required: false
@@ -349,7 +355,7 @@ jobs:
         # that would convert the male and female turns into one identity.
         # It is therefore available only for an explicitly selected
         # single-speaker VoxCPM job.
-        if: inputs.tts_engine == 'voxcpm' && inputs.diarize == false
+        if: inputs.tts_engine == 'voxcpm' && inputs.diarize == false && inputs.enhance_seedvc == 'true'
         env:
           SOURCE_PATH: ${{ inputs.source_path }}
         run: |
