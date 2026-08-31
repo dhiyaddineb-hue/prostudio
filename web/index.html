@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ProStudio - استوديو الدبلجة الذكي</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <h1>🎬 ProStudio</h1>
+                <p>استوديو الدبلجة الاحترافي</p>
+            </div>
+            <div class="status-bar">
+                <span id="status" class="status-idle">✓ جاهز</span>
+                <span id="quota" class="quota">الحصة: --</span>
+            </div>
+        </header>
+
+        <!-- Main Container -->
+        <main class="main-content">
+            <!-- Tabs Navigation -->
+            <nav class="tabs">
+                <button class="tab-btn active" data-tab="dubbing">🎤 الدبلجة</button>
+                <button class="tab-btn" data-tab="preview">👁️ المعاينة</button>
+                <button class="tab-btn" data-tab="diagnostics">🔧 التشخيص</button>
+                <button class="tab-btn" data-tab="settings">⚙️ الإعدادات</button>
+            </nav>
+
+            <!-- Tab Content -->
+            <div class="tab-content">
+
+                <!-- 1. Dubbing Tab -->
+                <div id="dubbing" class="tab-pane active">
+                    <div class="card">
+                        <h2>🎬 طلب دبلجة جديد</h2>
+                        
+                        <!-- File Upload Section -->
+                        <div class="section">
+                            <h3>📁 اختيار الملف</h3>
+                            <div class="upload-area" id="uploadArea">
+                                <p>اسحب الفيديو هنا أو انقر للاختيار</p>
+                                <input type="file" id="fileInput" accept="video/*" hidden>
+                                <small>MP4, WebM, AVI (الحد الأقصى: 500 MB)</small>
+                            </div>
+                            <div id="fileInfo" class="file-info" style="display:none;">
+                                <p><strong>الملف:</strong> <span id="fileName"></span></p>
+                                <p><strong>الحجم:</strong> <span id="fileSize"></span></p>
+                            </div>
+                        </div>
+
+                        <!-- Language Selection -->
+                        <div class="section">
+                            <h3>🌐 اختيار اللغات</h3>
+                            <div class="language-grid">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="language" value="ar" checked> العربية 🇸🇦
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="language" value="en"> الإنجليزية 🇺🇸
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="language" value="fr"> الفرنسية 🇫🇷
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="language" value="es"> الإسبانية 🇪🇸
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="language" value="zh"> الصينية 🇨🇳
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="language" value="ja"> اليابانية 🇯🇵
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Voice Model Selection -->
+                        <div class="section">
+                            <h3>🎵 نموذج الصوت</h3>
+                            <select id="voiceModel" class="select-input">
+                                <option value="xtts">XTTS (سريع وعالي الجودة)</option>
+                                <option value="seed-vc">Seed-VC (استنساخ صوتي متقدم)</option>
+                                <option value="coqui">Coqui (عام وموثوق)</option>
+                                <option value="elevenlabs">ElevenLabs (احترافي)</option>
+                            </select>
+                            <small>اختر النموذج المناسب للجودة والسرعة المطلوبة</small>
+                        </div>
+
+                        <!-- Voice Cloning -->
+                        <div class="section">
+                            <h3>🎙️ استنساخ الصوت</h3>
+                            <label class="switch">
+                                <input type="checkbox" id="voiceCloning" checked>
+                                <span class="slider"></span>
+                            </label>
+                            <p>تفعيل استنساخ الصوت من مقطع مرجعي</p>
+                            
+                            <div id="cloningOptions" class="cloning-options">
+                                <div class="subsection">
+                                    <label>اختيار ملف صوتي مرجعي (اختياري):</label>
+                                    <input type="file" id="referenceAudio" accept="audio/*">
+                                    <small>MP3، WAV (الحد الأقصى: 50 MB)</small>
+                                </div>
+                                <div class="subsection">
+                                    <label>خطوات Seed-VC:</label>
+                                    <input type="range" id="seedVCSteps" min="20" max="60" value="40">
+                                    <span id="seedVCValue">40</span> خطوة
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Audio Post-Processing -->
+                        <div class="section">
+                            <h3>🔊 معالجة الصوت</h3>
+                            
+                            <div class="subsection">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="keepMusic" checked> 
+                                    الحفاظ على الموسيقى الخلفية
+                                </label>
+                                <small>تحافظ على الموسيقى والمؤثرات الصوتية من الفيديو الأصلي</small>
+                            </div>
+
+                            <div class="subsection">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="keepSFX" checked> 
+                                    الحفاظ على المؤثرات الصوتية
+                                </label>
+                                <small>الأصوات المحيطة والمؤثرات الدرامية</small>
+                            </div>
+
+                            <div class="subsection">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="suppressOriginal" checked> 
+                                    إزالة الحوار الأصلي
+                                </label>
+                                <small>منع تسريب الصوت الأصلي في الناتج النهائي</small>
+                            </div>
+
+                            <div class="subsection">
+                                <label>جودة الصوت:</label>
+                                <select id="audioQuality" class="select-input">
+                                    <option value="high">عالية (128 kbps)</option>
+                                    <option value="medium" selected>متوسطة (96 kbps)</option>
+                                    <option value="low">منخفضة (64 kbps)</option>
+                                </select>
+                            </div>
+
+                            <div class="subsection">
+                                <label>تطبيع الصوت:</label>
+                                <select id="normalization" class="select-input">
+                                    <option value="loudnorm">Loudnorm (معيار YouTube)</option>
+                                    <option value="compand" selected>Compand (ديناميكي)</option>
+                                    <option value="none">بدون تطبيع</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Advanced Options -->
+                        <div class="section accordion">
+                            <h3 class="accordion-header">⚡ خيارات متقدمة</h3>
+                            <div class="accordion-content" style="display:none;">
+                                <div class="subsection">
+                                    <label>سرعة المتحدث (0.5 - 2.0):</label>
+                                    <input type="range" id="speakerSpeed" min="0.5" max="2.0" step="0.1" value="1.0">
+                                    <span id="speedValue">1.0x</span>
+                                </div>
+
+                                <div class="subsection">
+                                    <label>مستوى الفاصل الصامت (ديسيبل):</label>
+                                    <input type="number" id="silenceThreshold" value="-40" min="-100" max="0">
+                                </div>
+
+                                <div class="subsection">
+                                    <label>الحد الأدنى لمدة الجملة (ميلي ثانية):</label>
+                                    <input type="number" id="minPhraseDuration" value="200" min="50" max="1000">
+                                </div>
+
+                                <div class="subsection">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="parallelProcessing" checked> 
+                                        المعالجة المتوازية (أسرع)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="button-group">
+                            <button id="submitBtn" class="btn btn-primary btn-large">
+                                ▶️ بدء الدبلجة
+                            </button>
+                            <button id="resetBtn" class="btn btn-secondary">
+                                🔄 إعادة تعيين
+                            </button>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div id="progressContainer" class="progress-container" style="display:none;">
+                            <div class="progress-bar">
+                                <div id="progressFill" class="progress-fill"></div>
+                            </div>
+                            <p id="progressText">جاري المعالجة: 0%</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Preview Tab -->
+                <div id="preview" class="tab-pane">
+                    <div class="card">
+                        <h2>👁️ معاينة الفيديوهات</h2>
+                        
+                        <div class="section">
+                            <label>البحث عن فيديو:</label>
+                            <input type="text" id="searchVideos" class="search-input" placeholder="ابحث عن اسم الملف...">
+                        </div>
+
+                        <div id="videosList" class="videos-grid">
+                            <p class="loading">جاري تحميل الفيديوهات...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Diagnostics Tab -->
+                <div id="diagnostics" class="tab-pane">
+                    <div class="card">
+                        <h2>🔧 أداة التشخيص</h2>
+
+                        <div class="section">
+                            <button id="runDiagnosticsBtn" class="btn btn-primary">
+                                🔍 تشغيل الفحص الكامل
+                            </button>
+                        </div>
+
+                        <div id="diagnosticsResults" class="diagnostics-results" style="display:none;">
+                            <h3>📊 نتائج الفحص</h3>
+                            <div id="diagnosticsContent"></div>
+                        </div>
+
+                        <div class="section">
+                            <h3>📋 سجل الأخطاء</h3>
+                            <div id="errorLog" class="error-log"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Settings Tab -->
+                <div id="settings" class="tab-pane">
+                    <div class="card">
+                        <h2>⚙️ الإعدادات</h2>
+
+                        <div class="section">
+                            <h3>API Keys</h3>
+                            <div class="subsection">
+                                <label>ElevenLabs API Key:</label>
+                                <input type="password" id="elevenLabsKey" class="text-input" placeholder="sk-...">
+                                <button class="btn btn-secondary btn-small">✓ حفظ</button>
+                            </div>
+                        </div>
+
+                        <div class="section">
+                            <h3>إعدادات العام</h3>
+                            <div class="subsection">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="darkMode"> 
+                                    الوضع الداكن
+                                </label>
+                            </div>
+                            <div class="subsection">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="notifications" checked> 
+                                    إشعارات سطح المكتب
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="section">
+                            <h3>عن البرنامج</h3>
+                            <p>ProStudio v1.0.0</p>
+                            <p>استوديو دبلجة ذكي متعدد اللغات</p>
+                            <a href="https://github.com/dhiyaddineb-hue/prostudio" target="_blank">
+                                📘 GitHub Repository
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- Notification Toast -->
+        <div id="toast" class="toast"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
