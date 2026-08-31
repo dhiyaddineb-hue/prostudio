@@ -26,13 +26,13 @@ SR_WHISPER = 16000
 
 # ── Whisper defaults ──────────────────────────────────────────────────────
 
-WHISPER_DEFAULT_MODEL = "small"
+WHISPER_DEFAULT_MODEL = "base"
 WHISPER_BEAM = 5
 WHISPER_BATCH = 16
 WHISPER_TEMPERATURES = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
 WHISPER_COMPRESSION_RATIO_THRESHOLD = 2.4
-WHISPER_LOG_PROB_THRESHOLD = -2.5
-WHISPER_NO_SPEECH_THRESHOLD = 0.85
+WHISPER_LOG_PROB_THRESHOLD = -1.0
+WHISPER_NO_SPEECH_THRESHOLD = 0.6
 
 
 def pick_whisper_compute_type(device: str) -> str:
@@ -43,7 +43,7 @@ def pick_whisper_compute_type(device: str) -> str:
 
 # ── VAD defaults ──────────────────────────────────────────────────────────
 
-VAD_THRESHOLD = 0.30
+VAD_THRESHOLD = 0.35
 VAD_MIN_SILENCE_MS = 500
 VAD_SPEECH_PAD_MS = 200
 VAD_GUARD_SECONDS = 1.0
