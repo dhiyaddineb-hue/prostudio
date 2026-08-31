@@ -231,6 +231,18 @@ def align_segments(
                 Path(str(s["wav_path"]).replace(".wav", "_sped.wav")),
                 sr,
             )
+        elif mode == "auto" and ratio < 0.9:
+            # Underbudget: the translated line is shorter than its source
+            # window, which leaves a silent hole and makes the dub feel empty
+            # and out of sync. Gently slow it (never below 0.82x, to stay
+            # natural) so it spans more of its slot.
+            factor = max(ratio, 0.82)
+            audio = _stretch(
+                s["wav_path"],
+                factor,
+                Path(str(s["wav_path"]).replace(".wav", "_slow.wav")),
+                sr,
+            )
         else:
             audio = raw
         # Never play past the next line.
