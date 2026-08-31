@@ -1,0 +1,128 @@
+name: Voice Dub Later
+
+# مستقل عن dub.yml: لا يعمل تلقائياً، ويُشغّل فقط عند اختياره يدوياً.
+on:
+  workflow_dispatch:
+    inputs:
+      source_path:
+        description: "Path to the video already committed in this repository"
+        required: true
+        type: string
+      source_lang:
+        description: "Original spoken language"
+        required: true
+        default: "ar"
+        type: string
+      target_lang:
+        description: "Language to generate"
+        required: true
+        default: "en"
+        type: string
+      tts_engine:
+        description: "Speech generation engine"
+        required: true
+        default: "voxcpm"
+        type: choice
+        options: [voxcpm, edge, xtts]
+      seed_vc:
+        description: "Apply Seed-VC after speech generation"
+        required: true
+        default: true
+        type: boolean
+      keep_background:
+        description: "Keep isolated music/effects; leave off to remove original dialogue"
+        required: true
+        default: false
+        type: boolean
+      whisper_model:
+        description: "Whisper model used for timing/transcription"
+        required: true
+        default: "small"
+        type: choice
+        options: [base, small, medium, large-v3]
+
+permissions:
+  contents: read
+
+jobs:
+  dub-later:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Check out selected branch
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install faster-whisper edge-tts gradio_client yt-dlp
+
+      - name: Cache Whisper model
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: voice-dub-later-whisper-${{ inputs.whisper_model }}-v1
+
+      - name: Generate timed dub
+        env:
+          YAD_OUTPUT_DIR: output
+          YAD_TEMP_DIR: temp
+          YAD_CACHE_DIR: .cache
+          YAD_VOXCPM_BACKEND: space
+        run: |
+          set -euo pipefail
+          extra=()
+          if [ "${{ inputs.keep_background }}" = "true" ]; then
+            extra+=(--bg-music)
+          fi
+          python -m youtube_auto_dub "${{ inputs.source_path }}" \
+            --lang "${{ inputs.target_lang }}" \
+            --dub-lang "${{ inputs.target_lang }}" \
+            --source-lang "${{ inputs.source_lang }}" \
+            --tts-engine "${{ inputs.tts_engine }}" \
+            --model "${{ inputs.whisper_model }}" \
+            --mode both -o output "${extra[@]}"
+
+      - name: Apply Seed-VC and per-line timing alignment
+        if: inputs.seed_vc == true && inputs.tts_engine == 'voxcpm'
+        env:
+          SOURCE_PATH: ${{ inputs.source_path }}
+        run: |
+          set -euo pipefail
+          dubbed=$(find output -maxdepth 1 -type f -name 'Output_*.mp4' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
+          test -n "$dubbed"
+          python scripts/seed_vc_enhance.py \
+            --original "$SOURCE_PATH" \
+            --dubbed "$dubbed" \
+            --output output/seedvc-enhanced.mp4
+          rm -f "$dubbed"
+
+      - name: Upload reusable dub artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-dub-later-${{ github.run_number }}
+          path: output/*
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report run configuration
+        if: always()
+        run: |
+          echo "This workflow is manual-only and reusable."
+          echo "source=${{ inputs.source_path }}"
+          echo "engine=${{ inputs.tts_engine }}, seed_vc=${{ inputs.seed_vc }}, keep_background=${{ inputs.keep_background }}"
+          echo "No automatic trigger was configured."
+
+# Optional future caller:
+# This file intentionally remains workflow_dispatch-only so it cannot consume
+# resources or process a video unless a user explicitly starts it.
