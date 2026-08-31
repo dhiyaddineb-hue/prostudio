@@ -1,383 +1,338 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>مصمّم الأصوات — ProStudio</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ProStudio — استوديو الدبلجة</title>
 <style>
-  :root{--bg:#07080c;--ink:#f4efe4;--muted:#b7b0a3;--line:rgba(244,239,228,.12);
-        --card:rgba(16,17,23,.78);--gold:#e8b86d;--ok:#7dcea0;--warn:#e8c97d;--bad:#e88d8d}
-  *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
-       font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;
-       background-image:radial-gradient(circle at 12% 6%,rgba(232,184,109,.15),transparent 38%),
-                        radial-gradient(circle at 90% 88%,rgba(90,140,255,.10),transparent 34%)}
-  header{padding:24px 6vw 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-  .brand{display:flex;align-items:center;gap:12px}
-  .mark{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;
-        background:linear-gradient(160deg,var(--gold),#9a6a2c);color:#1a1208;font-weight:700}
-  .brand strong{display:block}.brand small{color:var(--muted)}
-  nav a{color:var(--muted);text-decoration:none;font-size:14.5px;margin-inline-start:16px}
-  nav a:hover,nav a.on{color:var(--gold)}
-  main{max-width:1040px;margin:0 auto;padding:22px 6vw 60px}
-  h1{font-size:clamp(24px,4vw,34px);margin:14px 0 8px}
-  .lede{color:var(--muted);margin:0 0 22px;font-size:16.5px;line-height:1.85}
-
-  .tabs{display:flex;gap:8px;margin:0 0 20px;flex-wrap:wrap}
-  .tab{background:var(--card);border:1px solid var(--line);color:var(--ink);
-       border-radius:11px;padding:11px 20px;font:inherit;font-size:14.5px;cursor:pointer;transition:.16s}
-  .tab:hover{border-color:var(--gold)}
-  .tab.on{border-color:var(--gold);background:rgba(232,184,109,.12);color:var(--gold);font-weight:600}
-  .pane{display:none}.pane.on{display:block}
-
-  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;margin-bottom:18px}
-  .panel h2{margin:0 0 6px;font-size:17px}
-  .panel .sub{color:var(--muted);font-size:14px;margin:0 0 16px;line-height:1.8}
-
-  textarea,select{width:100%;background:rgba(0,0,0,.35);color:var(--ink);
-    border:1px solid var(--line);border-radius:11px;padding:13px 15px;font:inherit;font-size:15px}
-  textarea:focus,select:focus{outline:none;border-color:var(--gold)}
-  textarea{resize:vertical;min-height:74px;line-height:1.8}
-  label.fld{display:block;margin-bottom:14px}
-  label.fld span{display:block;font-size:13.5px;color:var(--muted);margin-bottom:7px}
-
-  .chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
-  .chip{background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--muted);
-        border-radius:999px;padding:6px 13px;font:inherit;font-size:13px;cursor:pointer;transition:.14s}
-  .chip:hover{border-color:var(--gold);color:var(--gold)}
-
-  .mix{display:grid;gap:15px}
-  .ctl{display:grid;grid-template-columns:78px 1fr 66px;gap:13px;align-items:center}
-  .ctl b{font-weight:600;font-size:14px}
-  .ctl output{font-variant-numeric:tabular-nums;color:var(--gold);font-size:13.5px;text-align:left;direction:ltr}
-  input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:5px;border-radius:99px;
-    background:linear-gradient(90deg,rgba(232,184,109,.55),rgba(244,239,228,.14));outline:none}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:19px;height:19px;border-radius:50%;
-    background:var(--gold);cursor:pointer;border:2px solid #1a1208}
-  input[type=range]::-moz-range-thumb{width:19px;height:19px;border-radius:50%;
-    background:var(--gold);cursor:pointer;border:2px solid #1a1208}
-
-  .btn{display:inline-block;padding:12px 22px;border-radius:11px;border:1px solid transparent;
-       font:inherit;font-weight:600;font-size:14.5px;cursor:pointer;text-decoration:none;transition:.16s}
-  .primary{background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208}
-  .primary:disabled{opacity:.55;cursor:wait}
-  .ghost{border-color:var(--line);color:var(--ink);background:transparent}
-  .ghost:hover{border-color:var(--gold);color:var(--gold)}
-  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;align-items:center}
-
-  .result{margin-top:0;display:none}
-  .result.on{display:block}
-  audio{width:100%;margin-bottom:12px}
-  .facts{display:flex;gap:7px;flex-wrap:wrap}
-  .tag{font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
-  .tag.ok{color:var(--ok);border-color:rgba(125,206,160,.35)}
-  .tag.warn{color:var(--warn);border-color:rgba(232,201,125,.35)}
-  .tag.bad{color:var(--bad);border-color:rgba(232,141,141,.35)}
-
-  .note{background:rgba(232,201,125,.08);border:1px solid rgba(232,201,125,.3);
-        border-radius:12px;padding:14px 16px;font-size:13.5px;color:var(--warn);line-height:1.85;margin-top:14px}
-  .note code{background:rgba(0,0,0,.35);padding:1px 6px;border-radius:5px;font-size:12.5px}
-  .msg{font-size:14px;color:var(--muted);margin-top:12px;min-height:20px}
-  .msg.err{color:var(--bad)}
-
-  .drop{border:2px dashed var(--line);border-radius:16px;padding:38px 22px;text-align:center;
-        cursor:pointer;transition:.16s;background:rgba(0,0,0,.2)}
-  .drop:hover,.drop.over{border-color:var(--gold);background:rgba(232,184,109,.07)}
-  .drop b{display:block;font-size:16px;margin-bottom:7px}
-  .drop span{color:var(--muted);font-size:13.5px}
-  footer{color:var(--muted);font-size:13.5px;text-align:center;padding:0 6vw 40px}
-  a{color:var(--gold)}
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#30363d;
+  --txt:#e6edf3; --mut:#9da7b3; --acc:#58a68d; --acc2:#4f86c6;
+  --ok:#2ea043; --warn:#d29922; --err:#f85149; --rad:14px;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",Tahoma,system-ui,sans-serif;background:var(--bg);color:var(--txt);}
+a{color:var(--acc2);text-decoration:none}
+header{padding:18px 22px;background:linear-gradient(90deg,#0d1117,#12202b);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
+header h1{font-size:20px;margin:0;display:flex;gap:10px;align-items:center}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--err)}
+.dot.on{background:var(--ok)}
+.wrap{max-width:1200px;margin:0 auto;padding:20px;display:grid;gap:20px}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab{padding:9px 16px;border:1px solid var(--border);border-radius:999px;background:var(--panel);cursor:pointer;color:var(--mut);font-size:14px}
+.tab.active{background:var(--acc);color:#08130f;border-color:var(--acc);font-weight:600}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--rad);padding:18px}
+.card h2{margin:0 0 14px;font-size:16px;border-right:3px solid var(--acc);padding-right:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+label{display:block;font-size:13px;color:var(--mut);margin-bottom:6px}
+select,input[type=text],input[type=number]{width:100%;padding:10px;background:var(--panel2);border:1px solid var(--border);
+  border-radius:10px;color:var(--txt);font-size:14px}
+.switch{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.switch input{width:42px;height:22px;appearance:none;background:#3a3f47;border-radius:999px;position:relative;cursor:pointer;transition:.2s}
+.switch input:checked{background:var(--acc)}
+.switch input::after{content:"";position:absolute;width:18px;height:18px;background:#fff;border-radius:50%;top:2px;right:2px;transition:.2s}
+.switch input:checked::after{right:22px}
+.switch span{font-size:14px;color:var(--txt)}
+.btn{padding:11px 20px;border:none;border-radius:10px;background:var(--acc);color:#08130f;font-weight:700;cursor:pointer;font-size:15px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sec{background:var(--panel2);color:var(--txt);border:1px solid var(--border)}
+.btn.blue{background:var(--acc2);color:#fff}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.hint{font-size:12px;color:var(--mut);margin-top:6px;line-height:1.6}
+.msg{padding:12px;border-radius:10px;font-size:14px;margin-top:12px;display:none}
+.msg.show{display:block}
+.msg.ok{background:#0f2417;border:1px solid var(--ok);color:#7ee2a8}
+.msg.err{background:#2a1113;border:1px solid var(--err);color:#ff9c96}
+.msg.info{background:#10202b;border:1px solid var(--acc2);color:#9fd0ff}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.vcard{background:var(--panel2);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.vcard video{width:100%;display:block;background:#000;max-height:220px}
+.vcard .meta{padding:10px 12px}
+.vcard .meta .t{font-size:13px;font-weight:600;word-break:break-all}
+.vcard .meta .s{font-size:11px;color:var(--mut);margin-top:4px}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;margin-inline-start:6px}
+.badge.dub{background:#0f2417;color:#7ee2a8;border:1px solid var(--ok)}
+.badge.src{background:#1c2330;color:var(--mut);border:1px solid var(--border)}
+.runlist{display:flex;flex-direction:column;gap:8px}
+.run{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;background:var(--panel2);
+  border:1px solid var(--border);border-radius:10px;cursor:pointer;font-size:13px}
+.run:hover{border-color:var(--acc)}
+.st{font-size:11px;padding:3px 9px;border-radius:999px;font-weight:600}
+.st.success{background:#0f2417;color:#7ee2a8}
+.st.failure{background:#2a1113;color:#ff9c96}
+.st.in_progress,.st.queued{background:#2a2411;color:#f0d68a}
+.steps{margin-top:10px;font-size:12px;font-family:monospace;background:#0b0f14;border:1px solid var(--border);border-radius:10px;padding:12px;display:none;white-space:pre-wrap;max-height:340px;overflow:auto}
+.hidden{display:none!important}
+.tokrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tokrow input{flex:1;min-width:220px}
+footer{color:var(--mut);font-size:12px;text-align:center;padding:24px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.two{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-
 <header>
-  <div class="brand">
-    <span class="mark">PS</span>
-    <div><strong>ProStudio</strong><small>مصمّم الأصوات</small></div>
+  <h1><span class="dot" id="authDot"></span> ProStudio — استوديو الدبلجة</h1>
+  <div class="row">
+    <a href="https://github.com/dhiyaddineb-hue/prostudio/tree/arena/01a03969-prostudio" target="_blank">المستودع</a>
+    <a href="https://github.com/dhiyaddineb-hue/prostudio/actions" target="_blank">Actions</a>
   </div>
-  <nav>
-    <a href="index.html">الرئيسية</a>
-    <a href="preview.html">المعاينة</a>
-    <a href="voices.html">الأصوات</a>
-    <a href="studio.html" class="on">المصمّم</a>
-    <a href="send.html">إرسال</a>
-  </nav>
 </header>
 
-<main>
-  <h1>اصنع الصوت الذي تريده</h1>
-  <p class="lede">
-    صِف الصوت بالعربية، أو حرّك الخلاط، أو ارفع مقطعاً ليُطابَق عليه.
-    كل شيء يعمل داخل متصفحك — لا خادم، ولا يُرفَع ملفك إلى أي مكان.
-  </p>
+<div class="wrap">
+
+  <!-- TOKEN -->
+  <div class="card">
+    <h2>الاتصال بـ GitHub</h2>
+    <div class="tokrow">
+      <input type="text" id="token" placeholder="ألصق GitHub Personal Access Token (بصلاحية repo + workflow)"/>
+      <button class="btn" onclick="saveToken()">حفظ واتصال</button>
+      <button class="btn sec" onclick="clearToken()">مسح</button>
+    </div>
+    <div class="hint">التوكن يُحفظ في متصفحك فقط (localStorage) ولا يُرسل لأي جهة غير GitHub. مطلوب لتشغيل الدبلجة ورفع الملفات. المعاينة تعمل بدونه لأن المستودع عام. أنشئ توكن من: Settings → Developer settings → Fine-grained tokens (صلاحية Actions: Read/Write, Contents: Read/Write).</div>
+    <div class="msg" id="authMsg"></div>
+  </div>
 
   <div class="tabs">
-    <button class="tab on" data-pane="describe">✍️ وصف بالكلام</button>
-    <button class="tab" data-pane="mixer">🎛️ الخلاط</button>
-    <button class="tab" data-pane="clone">🎤 استنساخ من مقطع</button>
+    <div class="tab active" data-t="dub" onclick="tab('dub')">تشغيل دبلجة</div>
+    <div class="tab" data-t="preview" onclick="tab('preview')">معاينة الفيديوهات</div>
+    <div class="tab" data-t="diag" onclick="tab('diag')">تشخيص الأخطاء</div>
+    <div class="tab" data-t="upload" onclick="tab('upload')">رفع ملف</div>
   </div>
 
-  <section class="pane on" id="pane-describe">
-    <div class="panel">
-      <h2>صِف الصوت</h2>
-      <p class="sub">اكتب وصفاً بالعربية وسيُترجم إلى إعدادات الخلاط.</p>
-      <label class="fld">
-        <span>الوصف</span>
-        <textarea id="desc" placeholder="مثال: رجل عميق مهيب بطيء"></textarea>
-      </label>
-      <div class="chips" id="chips"></div>
-      <div class="actions">
-        <button class="btn primary" id="doDesc">ولّد الصوت</button>
-        <button class="btn ghost" id="toMixer">افتح في الخلاط</button>
+  <!-- DUB TAB -->
+  <section id="tab-dub">
+    <div class="card">
+      <h2>إعدادات الدبلجة</h2>
+      <div class="grid">
+        <div>
+          <label>مصدر الفيديو</label>
+          <select id="sourceMode" onchange="toggleSource()">
+            <option value="repo">فيديو من المستودع</option>
+            <option value="youtube">رابط YouTube</option>
+          </select>
+        </div>
+        <div id="repoPick">
+          <label>اختر فيديو</label>
+          <select id="source_path"></select>
+        </div>
+        <div id="ytPick" class="hidden">
+          <label>رابط YouTube</label>
+          <input type="text" id="youtube_url" placeholder="https://youtube.com/watch?v=..."/>
+        </div>
       </div>
-      <p class="msg" id="descMsg"></p>
+
+      <div class="grid" style="margin-top:14px">
+        <div><label>لغة المصدر</label><select id="source_lang"></select></div>
+        <div><label>لغة الهدف</label><select id="target_lang"></select></div>
+        <div>
+          <label>نموذج الصوت (TTS)</label>
+          <select id="tts_engine" onchange="engineChanged()">
+            <option value="xtts">XTTS — استنساخ صوت المتحدث</option>
+            <option value="voxcpm">VoxCPM — استنساخ + Seed-VC</option>
+            <option value="edge">Edge — صوت جاهز (بدون استنساخ)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top:14px">
+        <div class="switch"><input type="checkbox" id="clone" checked onchange="cloneChanged()"><span>استنساخ صوت المتحدث الأصلي</span></div>
+        <div class="switch"><input type="checkbox" id="bg_music"><span>الاحتفاظ بالموسيقى والمؤثرات</span></div>
+        <div class="switch"><input type="checkbox" id="separate_sources" checked><span>فصل الحوار عن الموسيقى (Demucs)</span></div>
+        <div class="switch"><input type="checkbox" id="diarize"><span>تعدّد المتحدثين (pyannote)</span></div>
+      </div>
+
+      <div class="grid" style="margin-top:14px">
+        <div id="voiceWrap" class="hidden">
+          <label>صوت Edge الجاهز</label>
+          <select id="voice">
+            <option value="en-US-AndrewMultilingualNeural">en-US Andrew (ذكر)</option>
+            <option value="en-US-AvaMultilingualNeural">en-US Ava (أنثى)</option>
+            <option value="en-GB-RyanNeural">en-GB Ryan (ذكر)</option>
+            <option value="en-US-GuyNeural">en-US Guy (ذكر)</option>
+            <option value="ar-EG-ShakirNeural">ar-EG Shakir (ذكر)</option>
+          </select>
+        </div>
+        <div><label>جنس الصوت</label><select id="gender"><option value="male">ذكر</option><option value="female">أنثى</option></select></div>
+        <div><label>وضع الإخراج</label><select id="mode"><option value="dub">دبلجة فقط</option><option value="both">دبلجة + ترجمة</option><option value="sub">ترجمة فقط</option></select></div>
+        <div><label>الخلفية</label><select id="audioPolicy" onchange="policyChanged()">
+            <option value="audio_only">صوت فقط (بدون خلفية)</option>
+            <option value="keep_bg">الاحتفاظ بالخلفية</option></select></div>
+      </div>
+
+      <div class="grid" style="margin-top:14px">
+        <div><label>Profile</label><select id="profile">
+          <option value="safe">safe</option><option value="high_quality_single" selected>high_quality_single</option>
+          <option value="multi_speaker_cinematic">multi_speaker_cinematic</option><option value="experiment">experiment</option></select></div>
+        <div><label>سياسة الجودة</label><select id="quality">
+          <option value="safe">safe</option><option value="balanced" selected>balanced</option><option value="strict">strict</option></select></div>
+        <div><label>نموذج Whisper</label><select id="model">
+          <option value="tiny">tiny</option><option value="base" selected>base</option><option value="small">small</option></select></div>
+      </div>
+
+      <div class="row" style="margin-top:18px">
+        <button class="btn" id="runBtn" onclick="runDub()">تشغيل الدبلجة الآن</button>
+        <button class="btn sec" onclick="loadVideos()">تحديث قائمة الفيديوهات</button>
+      </div>
+      <div class="hint">ملاحظة: Seed-VC يعمل تلقائياً مع مسار XTTS/VoxCPM فقط. تعدّد المتحدثين (diarize) يتطلب secret باسم <code>HF_TOKEN</code> في المستودع وإلا يبقى النظام في الوضع المحافظ بأمان.</div>
+      <div class="msg" id="dubMsg"></div>
     </div>
   </section>
 
-  <section class="pane" id="pane-mixer">
-    <div class="panel">
-      <h2>الخلاط</h2>
-      <p class="sub">ستة مقابض. حرّكها ثم ولّد.</p>
-      <label class="fld">
-        <span>الصوت الأساس</span>
-        <select id="base"></select>
-      </label>
-      <div class="mix" id="mix"></div>
-      <div class="chips" id="presets" style="margin-top:16px"></div>
-      <div class="actions">
-        <button class="btn primary" id="doRender">ولّد الصوت</button>
-        <button class="btn ghost" id="doReset">صفّر</button>
-      </div>
-      <p class="msg" id="mixMsg"></p>
+  <!-- PREVIEW TAB -->
+  <section id="tab-preview" class="hidden">
+    <div class="card">
+      <h2>معاينة الفيديوهات <button class="btn sec" style="float:left;padding:6px 12px" onclick="loadVideos()">تحديث</button></h2>
+      <div class="hint">تُعرض كل فيديوهات المستودع تلقائياً. أي فيديو جديد يُرفع سيظهر هنا بعد التحديث. المدبلج يظهر بشارة خضراء.</div>
+      <div class="gallery" id="gallery" style="margin-top:14px"></div>
     </div>
   </section>
 
-  <section class="pane" id="pane-clone">
-    <div class="panel">
-      <h2>استنساخ من مقطع</h2>
-      <p class="sub">ارفع مقطعاً فيه صوت واضح، وسأقيسه وأضبط الخلاط ليقترب منه.</p>
-      <div class="drop" id="drop">
-        <b>اضغط أو اسحب الملف هنا</b>
-        <span>MP3 · WAV · MP4 · M4A — لا يغادر جهازك</span>
-        <input type="file" id="file" accept="audio/*,video/*" hidden />
-      </div>
-      <div class="note">
-        <b>ما يفعله هذا فعلاً:</b> يقيس طبقة الصوت واللمعان في مقطعك، ثم يضبط
-        صوتاً أساساً ليطابقهما. هذه مطابقة قابلة للقياس — <b>وليست استنساخاً
-        عصبياً للهوية</b>. أوزان نماذج الاستنساخ (F5‑TTS / XTTS) محجوبة عن هذه
-        البيئة، والكود جاهز في <code>clone_tts.py</code> متى أُتيح الوصول.
-      </div>
-      <p class="msg" id="cloneMsg"></p>
+  <!-- DIAGNOSTICS TAB -->
+  <section id="tab-diag" class="hidden">
+    <div class="card">
+      <h2>تشخيص الأخطاء <button class="btn sec" style="float:left;padding:6px 12px" onclick="loadRuns()">تحديث</button></h2>
+      <div class="hint">آخر تشغيلات الدبلجة. اضغط أي تشغيل لعرض المراحل ومعرفة أين حدث الخطأ بالضبط.</div>
+      <div class="runlist" id="runlist" style="margin-top:14px"></div>
     </div>
   </section>
 
-  <div class="panel result" id="result">
-    <h2>النتيجة</h2>
-    <audio id="player" controls></audio>
-    <div class="facts" id="facts"></div>
-    <div class="actions">
-      <a class="btn ghost" id="dl" download="voice.wav">تحميل WAV</a>
+  <!-- UPLOAD TAB -->
+  <section id="tab-upload" class="hidden">
+    <div class="card">
+      <h2>رفع فيديو إلى المستودع</h2>
+      <div class="grid">
+        <div><label>الملف</label><input type="file" id="upfile" accept="video/*"/></div>
+        <div><label>المجلد الوجهة</label><input type="text" id="updir" value="samples"/></div>
+      </div>
+      <div class="row" style="margin-top:14px"><button class="btn blue" onclick="uploadFile()">رفع الآن</button></div>
+      <div class="hint">يُرفع الملف عبر GitHub Contents API إلى الفرع arena/01a03969-prostudio. الملفات الكبيرة جداً قد تتجاوز حد الـ API؛ للأحجام الضخمة استخدم رفع Git العادي.</div>
+      <div class="msg" id="upMsg"></div>
     </div>
-  </div>
-</main>
+  </section>
 
-<footer>
-  ProStudio · كل المعالجة داخل المتصفح · رخصة MIT
-</footer>
+  <footer>ProStudio · فرع arena/01a03969-prostudio · واجهة تحكم عبر GitHub API</footer>
+</div>
 
-<script type="module">
-import {
-  CONTROLS, PRESETS, neutralSpec, clampSpec, isNeutral,
-  parseDescription, measurePitch, measureBrightness, cloneSpec,
-  renderSpec, toWav,
-} from './voice-design.js';
+<script>
+const OWNER="dhiyaddineb-hue", REPO="prostudio", BRANCH="arena/01a03969-prostudio", WF="dub.yml";
+const API=`https://api.github.com/repos/${OWNER}/${REPO}`;
+const LANGS=[["ar","العربية"],["en","الإنجليزية"],["fr","الفرنسية"],["es","الإسبانية"],["de","الألمانية"],["it","الإيطالية"],["ru","الروسية"],["tr","التركية"],["pt","البرتغالية"],["hi","الهندية"],["ja","اليابانية"],["ko","الكورية"],["zh","الصينية"],["nl","الهولندية"],["pl","البولندية"]];
+let token=localStorage.getItem("ps_token")||"";
 
-const $ = s => document.querySelector(s);
-let spec = neutralSpec();
-let bases = [];
-const cache = new Map();
-let ctx;
-const audioCtx = () => (ctx ||= new (window.AudioContext || window.webkitAudioContext)());
+function hdr(json){const h={"Accept":"application/vnd.github+json"};if(token)h["Authorization"]="Bearer "+token;if(json)h["Content-Type"]="application/json";return h;}
+function show(id,type,txt){const e=document.getElementById(id);e.className="msg show "+type;e.innerHTML=txt;}
+function tab(t){document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x.dataset.t===t));
+  ["dub","preview","diag","upload"].forEach(x=>document.getElementById("tab-"+x).classList.toggle("hidden",x!==t));
+  if(t==="preview")loadVideos(); if(t==="diag")loadRuns();}
 
-document.querySelectorAll('.tab').forEach(t => {
-  t.onclick = () => {
-    document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
-    document.querySelectorAll('.pane').forEach(x => x.classList.remove('on'));
-    t.classList.add('on');
-    $('#pane-' + t.dataset.pane).classList.add('on');
-  };
-});
-const openTab = n => document.querySelector(`.tab[data-pane="${n}"]`).click();
+function fillLangs(){for(const[v,n]of LANGS){document.getElementById("source_lang").add(new Option(n+" ("+v+")",v));document.getElementById("target_lang").add(new Option(n+" ("+v+")",v));}
+  document.getElementById("source_lang").value="ar";document.getElementById("target_lang").value="en";}
 
-const EXAMPLES = ['رجل عميق مهيب', 'امرأة هادئة دافئة', 'عجوز حكيم بطيء',
-                  'شاب حماسي سريع', 'همس قريب', 'شرير مظلم جدا', 'مذيع أخبار', 'طفل'];
+function toggleSource(){const m=document.getElementById("sourceMode").value;
+  document.getElementById("repoPick").classList.toggle("hidden",m!=="repo");
+  document.getElementById("ytPick").classList.toggle("hidden",m!=="youtube");}
+function engineChanged(){const e=document.getElementById("tts_engine").value;
+  document.getElementById("clone").checked=(e!=="edge");
+  document.getElementById("voiceWrap").classList.toggle("hidden",e!=="edge");}
+function cloneChanged(){const c=document.getElementById("clone").checked;const eng=document.getElementById("tts_engine");
+  if(!c){eng.value="edge";}else if(eng.value==="edge"){eng.value="xtts";}engineChanged();}
+function policyChanged(){document.getElementById("bg_music").checked=(document.getElementById("audioPolicy").value==="keep_bg");}
 
-function buildMixer() {
-  const box = $('#mix');
-  box.innerHTML = '';
-  CONTROLS.forEach(c => {
-    const row = document.createElement('div');
-    row.className = 'ctl';
-    row.innerHTML = `<b>${c.label}</b>
-      <input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${spec[c.id]}" />
-      <output></output>`;
-    const range = row.querySelector('input'), out = row.querySelector('output');
-    const show = () => { out.textContent = `${(+range.value).toFixed(c.step < 0.1 ? 2 : 1)} ${c.unit}`; };
-    range.oninput = () => { spec[c.id] = +range.value; show(); };
-    show();
-    box.appendChild(row);
-    c._range = range; c._show = show;
-  });
-}
+async function saveToken(){token=document.getElementById("token").value.trim();
+  if(!token){show("authMsg","err","الرجاء إدخال توكن.");return;}
+  const r=await fetch("https://api.github.com/user",{headers:hdr()});
+  if(r.ok){const u=await r.json();localStorage.setItem("ps_token",token);document.getElementById("authDot").classList.add("on");
+    show("authMsg","ok","تم الاتصال باسم "+u.login);}
+  else{show("authMsg","err","توكن غير صالح ("+r.status+").");}}
+function clearToken(){token="";localStorage.removeItem("ps_token");document.getElementById("token").value="";
+  document.getElementById("authDot").classList.remove("on");show("authMsg","info","تم مسح التوكن.");}
 
-function setSpec(next) {
-  spec = clampSpec({ ...spec, ...next });
-  CONTROLS.forEach(c => { if (c._range) { c._range.value = spec[c.id]; c._show(); } });
-}
+async function loadVideos(){const g=document.getElementById("gallery");const sel=document.getElementById("source_path");
+  g.innerHTML="<p style='color:var(--mut)'>جارٍ التحميل...</p>";
+  const r=await fetch(`${API}/git/trees/${encodeURIComponent(BRANCH)}?recursive=1`,{headers:hdr()});
+  if(!r.ok){g.innerHTML="<p style='color:var(--err)'>تعذّر جلب القائمة ("+r.status+")</p>";return;}
+  const t=await r.json();
+  const vids=t.tree.filter(x=>x.type==="blob"&&/\.(mp4|mov|mkv|webm)$/i.test(x.path));
+  sel.innerHTML="";g.innerHTML="";
+  if(!vids.length){g.innerHTML="<p style='color:var(--mut)'>لا توجد فيديوهات.</p>";}
+  vids.sort((a,b)=>a.path.localeCompare(b.path));
+  for(const v of vids){
+    sel.add(new Option(v.path,v.path));
+    const dub=/output|seedvc|dub|enhanced|_en\.|english/i.test(v.path);
+    const raw=`https://raw.githubusercontent.com/${OWNER}/${REPO}/${encodeURIComponent(BRANCH)}/${v.path.split("/").map(encodeURIComponent).join("/")}`;
+    const c=document.createElement("div");c.className="vcard";
+    c.innerHTML=`<video controls preload="metadata" src="${raw}"></video>
+      <div class="meta"><div class="t">${v.path}<span class="badge ${dub?'dub':'src'}">${dub?'مدبلج':'مصدر'}</span></div>
+      <div class="s">${(v.size/1048576).toFixed(2)} MB · <a href="${raw}" target="_blank">تحميل</a></div></div>`;
+    g.appendChild(c);}
+  const dflt=vids.find(v=>/comingstarr_arabic_source/.test(v.path));if(dflt)sel.value=dflt.path;}
 
-function verdict(cv) {
-  if (cv >= 0.30) return ['ok', 'حيّ'];
-  if (cv >= 0.18) return ['warn', 'مسطّح'];
-  return ['bad', 'آلي'];
-}
+async function runDub(){
+  if(!token){show("dubMsg","err","الرجاء إدخال توكن GitHub أولاً.");return;}
+  const btn=document.getElementById("runBtn");btn.disabled=true;show("dubMsg","info","جارٍ إرسال طلب التشغيل...");
+  const m=document.getElementById("sourceMode").value;
+  const inputs={task:"dub",
+    source_path:m==="repo"?document.getElementById("source_path").value:"",
+    youtube_url:m==="youtube"?document.getElementById("youtube_url").value:"",
+    source_lang:document.getElementById("source_lang").value,
+    target_lang:document.getElementById("target_lang").value,
+    tts_engine:document.getElementById("tts_engine").value,
+    voice:document.getElementById("voice").value,
+    gender:document.getElementById("gender").value,
+    mode:document.getElementById("mode").value,
+    model:document.getElementById("model").value,
+    profile:document.getElementById("profile").value,
+    quality:document.getElementById("quality").value,
+    bg_music:String(document.getElementById("bg_music").checked),
+    diarize:String(document.getElementById("diarize").checked),
+    separate_sources:String(document.getElementById("separate_sources").checked)};
+  const r=await fetch(`${API}/actions/workflows/${WF}/dispatches`,{method:"POST",headers:hdr(true),
+    body:JSON.stringify({ref:BRANCH,inputs})});
+  btn.disabled=false;
+  if(r.status===204){show("dubMsg","ok","تم بدء الدبلجة. افتح تبويب <b>تشخيص الأخطاء</b> لمتابعة التقدم، والناتج سيظهر في <b>معاينة الفيديوهات</b> بعد الانتهاء.");setTimeout(loadRuns,3000);}
+  else{const e=await r.text();show("dubMsg","err","فشل التشغيل ("+r.status+"): "+e);}}
 
-async function loadBase(name) {
-  if (cache.has(name)) return cache.get(name);
-  const res = await fetch(`samples/${name}`);
-  if (!res.ok) throw new Error('تعذّر تحميل الصوت الأساس');
-  const buf = await audioCtx().decodeAudioData(await res.arrayBuffer());
-  cache.set(name, buf);
-  return buf;
-}
+async function loadRuns(){const box=document.getElementById("runlist");box.innerHTML="<p style='color:var(--mut)'>جارٍ التحميل...</p>";
+  const r=await fetch(`${API}/actions/workflows/${WF}/runs?per_page=12`,{headers:hdr()});
+  if(!r.ok){box.innerHTML="<p style='color:var(--err)'>تعذّر جلب التشغيلات ("+r.status+")</p>";return;}
+  const d=await r.json();box.innerHTML="";
+  if(!d.workflow_runs.length){box.innerHTML="<p style='color:var(--mut)'>لا توجد تشغيلات.</p>";return;}
+  for(const run of d.workflow_runs){
+    const st=run.conclusion||run.status;
+    const el=document.createElement("div");el.className="run";
+    el.innerHTML=`<div>#${run.run_number} · ${new Date(run.created_at).toLocaleString("ar")}<br>
+      <span style="color:var(--mut);font-size:11px">${(run.display_title||"").slice(0,60)}</span></div>
+      <span class="st ${st}">${st}</span>`;
+    const steps=document.createElement("div");steps.className="steps";
+    el.onclick=async()=>{if(steps.style.display==="block"){steps.style.display="none";return;}
+      steps.style.display="block";steps.textContent="جارٍ تحميل المراحل...";
+      const jr=await fetch(run.jobs_url,{headers:hdr()});const jd=await jr.json();
+      let out="";for(const j of jd.jobs){out+=`>> ${j.name} — ${j.conclusion||j.status}\n`;
+        for(const s of j.steps){const ic=s.conclusion==="success"?"[ok]":s.conclusion==="failure"?"[X]":s.conclusion==="skipped"?"[-]":"[..]";
+          out+=`   ${ic} ${s.name} [${s.conclusion||s.status}]\n`;}}
+      out+=`\nالسجل الكامل: ${run.html_url}`;steps.textContent=out;};
+    box.appendChild(el);box.appendChild(steps);}}
 
-async function render(msgEl, btn) {
-  const label = btn?.textContent;
-  if (btn) { btn.disabled = true; btn.textContent = 'جارٍ التوليد…'; }
-  if (msgEl) { msgEl.className = 'msg'; msgEl.textContent = ''; }
-  try {
-    const base = await loadBase($('#base').value);
-    const out = await renderSpec(base, spec);
-    const data = out.getChannelData(0);
-    const { f0, cv } = measurePitch(data, out.sampleRate);
+async function uploadFile(){if(!token){show("upMsg","err","الرجاء إدخال توكن أولاً.");return;}
+  const f=document.getElementById("upfile").files[0];if(!f){show("upMsg","err","اختر ملفاً.");return;}
+  show("upMsg","info","جارٍ الرفع...");
+  const dir=document.getElementById("updir").value.replace(/\/+$/,"");const path=dir?dir+"/"+f.name:f.name;
+  const buf=await f.arrayBuffer();let bin="";const bytes=new Uint8Array(buf);
+  for(let i=0;i<bytes.length;i++)bin+=String.fromCharCode(bytes[i]);const b64=btoa(bin);
+  let sha=null;const chk=await fetch(`${API}/contents/${path}?ref=${encodeURIComponent(BRANCH)}`,{headers:hdr()});
+  if(chk.ok){sha=(await chk.json()).sha;}
+  const body={message:"studio: upload "+f.name,content:b64,branch:BRANCH};if(sha)body.sha=sha;
+  const r=await fetch(`${API}/contents/${path}`,{method:"PUT",headers:hdr(true),body:JSON.stringify(body)});
+  if(r.ok){show("upMsg","ok","تم الرفع: "+path+" — سيظهر في المعاينة بعد التحديث.");}
+  else{const e=await r.text();show("upMsg","err","فشل الرفع ("+r.status+"): "+e);}}
 
-    const blob = toWav(out);
-    const url = URL.createObjectURL(blob);
-    $('#result').classList.add('on');
-    $('#player').src = url;
-    $('#dl').href = url;
-
-    const f = $('#facts');
-    f.innerHTML = '';
-    if (f0 > 0) {
-      f.innerHTML += `<span class="tag">${Math.round(f0)} هرتز</span>`;
-      const [cls, word] = verdict(cv);
-      f.innerHTML += `<span class="tag ${cls}">CV ${cv.toFixed(3)} — ${word}</span>`;
-    }
-    f.innerHTML += `<span class="tag">${(data.length / out.sampleRate).toFixed(2)} ث</span>`;
-    if (Math.abs(spec.pitch) > 0.01) f.innerHTML += `<span class="tag">الطبقة ${spec.pitch > 0 ? '+' : ''}${spec.pitch}</span>`;
-    if (Math.abs(spec.rate - 1) > 0.005) f.innerHTML += `<span class="tag">السرعة ×${spec.rate}</span>`;
-
-    $('#result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    $('#player').play().catch(() => {});
-  } catch (e) {
-    if (msgEl) { msgEl.className = 'msg err'; msgEl.textContent = 'تعذّر التوليد: ' + e.message; }
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = label; }
-  }
-}
-
-$('#doDesc').onclick = async () => {
-  const msg = $('#descMsg');
-  const text = $('#desc').value.trim();
-  if (!text) { msg.className = 'msg err'; msg.textContent = 'اكتب وصفاً أولاً.'; return; }
-  const parsed = parseDescription(text);
-  setSpec(parsed);
-  if (isNeutral(parsed)) {
-    msg.className = 'msg err';
-    msg.textContent = 'لم أتعرّف على أي وصف — الصوت سيبقى كما هو.';
-    return;
-  }
-  await render(msg, $('#doDesc'));
-};
-
-$('#toMixer').onclick = () => {
-  const t = $('#desc').value.trim();
-  if (t) setSpec(parseDescription(t));
-  openTab('mixer');
-};
-
-$('#doRender').onclick = () => render($('#mixMsg'), $('#doRender'));
-$('#doReset').onclick = () => { setSpec(neutralSpec()); $('#mixMsg').textContent = ''; };
-
-const drop = $('#drop'), file = $('#file');
-drop.onclick = () => file.click();
-drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
-drop.ondragleave = () => drop.classList.remove('over');
-drop.ondrop = e => {
-  e.preventDefault(); drop.classList.remove('over');
-  if (e.dataTransfer.files[0]) { file.files = e.dataTransfer.files; doClone(); }
-};
-file.onchange = () => file.files[0] && doClone();
-
-async function doClone() {
-  const msg = $('#cloneMsg');
-  msg.className = 'msg';
-  msg.textContent = 'أقيس المقطع…';
-  try {
-    const buf = await audioCtx().decodeAudioData(await file.files[0].arrayBuffer());
-    const ref = buf.getChannelData(0);
-    const r = measurePitch(ref, buf.sampleRate);
-    if (!r.f0) throw new Error('لم أعثر على صوت بشري — تأكد أن فيه كلاماً واضحاً بلا موسيقى عالية');
-
-    const base = await loadBase($('#base').value);
-    const b = measurePitch(base.getChannelData(0), base.sampleRate);
-    const next = cloneSpec(
-      r.f0, measureBrightness(ref, buf.sampleRate),
-      b.f0, measureBrightness(base.getChannelData(0), base.sampleRate),
-    );
-    setSpec(next);
-    msg.textContent = `المرجع ${Math.round(r.f0)} هرتز · الأساس ${Math.round(b.f0)} هرتز · الإزاحة ${next.pitch.toFixed(2)} نصف نغمة`;
-    await render(null, null);
-  } catch (e) {
-    msg.className = 'msg err';
-    msg.textContent = 'تعذّر: ' + e.message;
-  }
-}
-
-fetch('samples.json')
-  .then(r => r.json())
-  .then(d => {
-    // One base take per voice: the designer reshapes a recording, so the
-    // dialect of the source line does not matter here.
-    const seen = new Set();
-    bases = d.samples.filter(s => !seen.has(s.voice) && seen.add(s.voice));
-    $('#base').innerHTML = bases
-      .map(s => `<option value="${s.mp3.replace('samples/', '')}">${s.voice} — ${s.f0} هرتز</option>`)
-      .join('');
-  })
-  .catch(() => {
-    $('#base').innerHTML = '<option>تعذّر تحميل الأصوات</option>';
-    document.querySelectorAll('.btn.primary').forEach(b => b.disabled = true);
-  });
-
-buildMixer();
-EXAMPLES.forEach(x => {
-  const b = document.createElement('button');
-  b.className = 'chip'; b.textContent = x;
-  b.onclick = () => { $('#desc').value = x; $('#doDesc').click(); };
-  $('#chips').appendChild(b);
-});
-Object.entries(PRESETS).forEach(([name, s]) => {
-  const b = document.createElement('button');
-  b.className = 'chip'; b.textContent = name;
-  b.onclick = () => { setSpec(s); $('#doRender').click(); };
-  $('#presets').appendChild(b);
-});
+// init
+fillLangs();engineChanged();
+if(token){document.getElementById("token").value=token;
+  fetch("https://api.github.com/user",{headers:hdr()}).then(r=>{if(r.ok)document.getElementById("authDot").classList.add("on");});}
+loadVideos();
 </script>
-
 </body>
 </html>
