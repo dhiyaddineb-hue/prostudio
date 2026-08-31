@@ -287,9 +287,16 @@ async def run(args, progress=None) -> Path:
                 # pad it slightly, and clean it independently. If a turn is
                 # unavailable, retain the conservative global reference.
                 speaker_references = {}
+                speaker_turns = {}
                 for seg in project.segments:
                     speaker = getattr(seg, "speaker", None)
-                    if not speaker or speaker in speaker_references:
+                    if speaker:
+                        previous = speaker_turns.get(speaker)
+                        if previous is None or (seg.end - seg.start) > (previous.end - previous.start):
+                            speaker_turns[speaker] = seg
+                for seg in sorted(speaker_turns.values(), key=lambda item: item.start):
+                    speaker = getattr(seg, "speaker", None)
+                    if not speaker:
                         continue
                     ref = TEMP_DIR / f"voxcpm_reference_{re.sub(r'[^A-Za-z0-9_-]', '_', str(speaker))}.wav"
                     start = max(0.0, float(seg.start) - 0.25)
@@ -398,6 +405,21 @@ async def run(args, progress=None) -> Path:
                     ))
 
             await asyncio.gather(*tasks)
+
+            # VoxCPM may return a noticeable leading pause and trailing room
+            # tone. Remove only silence around each utterance before fitting it
+            # into the original speaker turn; otherwise every line sounds late.
+            for seg in project.segments:
+                if not seg.tts_audio_path or not seg.tts_audio_path.exists():
+                    continue
+                trimmed = seg.tts_audio_path.with_name(seg.tts_audio_path.stem + "_trim.wav")
+                subprocess.run([
+                    "ffmpeg", "-y", "-i", str(seg.tts_audio_path),
+                    "-af", "silenceremove=start_periods=1:start_duration=0.08:start_threshold=-45dB:stop_periods=1:stop_duration=0.12:stop_threshold=-45dB",
+                    "-ar", str(SR_TTS), "-ac", "1", str(trimmed),
+                ], check=True, capture_output=True)
+                if trimmed.exists() and trimmed.stat().st_size > 1024:
+                    seg.tts_audio_path = trimmed
 
             # ── 5. Assemble & finalise ────────────────────────────────
             _report(progress, "mix", "المزامنة ومزج الموسيقى", 78)
