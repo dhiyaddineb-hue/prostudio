@@ -1,0 +1,33 @@
+name: Audio Diagnostic
+on:
+  workflow_dispatch:
+    inputs:
+      dir:
+        description: "folder of mp4s to analyze"
+        required: false
+        default: "output/dubbed"
+        type: string
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Measure audio level of each file
+        run: |
+          set -e
+          shopt -s nullglob
+          for f in "${{ inputs.dir }}"/*.mp4; do
+            echo "==================================================="
+            echo "FILE: $f"
+            echo "--- streams ---"
+            ffprobe -v error -show_entries stream=codec_type,codec_name,channels,sample_rate -show_entries format=duration -of default=noprint_wrappers=1 "$f" || true
+            echo "--- loudness (volumedetect) ---"
+            ffmpeg -hide_banner -nostats -i "$f" -map 0:a? -af volumedetect -f null - 2>&1 | grep -E "mean_volume|max_volume|n_samples|Stream #|does not contain any stream" || echo "NO AUDIO STREAM DECODED"
+            echo "--- silence below -50dB ---"
+            ffmpeg -hide_banner -nostats -i "$f" -map 0:a? -af silencedetect=noise=-50dB:d=0.3 -f null - 2>&1 | grep -E "silence_start|silence_end|silence_duration" | head -20 || true
+          done
+          echo "DONE"
