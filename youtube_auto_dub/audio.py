@@ -78,6 +78,8 @@ def group_segments(raw: List[dict]) -> List[SubtitleSegment]:
             start=buf[0]["start"],
             end=buf[-1]["end"],
             source_text=" ".join(s["text"] for s in buf).strip(),
+            speaker=buf[0].get("speaker"),
+            confidence=min(float(s.get("confidence", 1.0)) for s in buf),
         ))
     console.step(f"Grouped {len(out)} segments")
     return out
