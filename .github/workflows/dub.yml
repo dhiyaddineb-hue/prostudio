@@ -63,7 +63,7 @@ on:
       voxcpm_backend:
         description: "voxcpm: where to run it - space (fast, hosted GPU) or local (slow, reliable)"
         required: false
-        default: "space"
+        default: "local"
         type: choice
         options: [space, local]
       enhance_seedvc:
