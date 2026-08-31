@@ -332,11 +332,11 @@ jobs:
           ls -lh output
 
       - name: Enhance voice with Seed-VC
-        # VoxCPM already produces the target-language speech. Running the
-        # remote Seed-VC post-process on it can reduce Arabic intelligibility;
-        # keep Seed-VC only for the XTTS path until a validated Arabic profile
-        # is available.
-        if: false
+        # Seed-VC has one reference input. Never run it over a diarized mix:
+        # that would convert the male and female turns into one identity.
+        # It is therefore available only for an explicitly selected
+        # single-speaker VoxCPM job.
+        if: inputs.tts_engine == 'voxcpm' && inputs.diarize == false
         env:
           SOURCE_PATH: ${{ inputs.source_path }}
         run: |
