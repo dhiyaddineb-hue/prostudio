@@ -60,6 +60,12 @@ on:
         default: "voxcpm"
         type: choice
         options: [xtts, edge, voxcpm]
+      voxcpm_backend:
+        description: "voxcpm: where to run it - space (fast, hosted GPU) or local (slow, reliable)"
+        required: false
+        default: "space"
+        type: choice
+        options: [space, local]
       target_lang:
         description: "dub: target language"
         required: false
@@ -304,6 +310,7 @@ jobs:
           YAD_CACHE_DIR: .cache
           YAD_COOKIES_FILE: cookies.txt
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          YAD_VOXCPM_BACKEND: ${{ inputs.voxcpm_backend }}
         run: |
           set -euo pipefail
           source="${{ inputs.youtube_url }}"
