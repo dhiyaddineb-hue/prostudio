@@ -336,7 +336,7 @@ jobs:
         # remote Seed-VC post-process on it can reduce Arabic intelligibility;
         # keep Seed-VC only for the XTTS path until a validated Arabic profile
         # is available.
-        if: inputs.tts_engine == 'xtts'
+        if: false
         env:
           SOURCE_PATH: ${{ inputs.source_path }}
         run: |
