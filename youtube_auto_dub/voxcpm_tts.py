@@ -62,7 +62,12 @@ def _space_client():
     global _CLIENT
     if _CLIENT is None:
         from gradio_client import Client
-        _CLIENT = Client(_SPACE, hf_token=os.environ.get("HF_TOKEN") or None)
+        tok = os.environ.get("HF_TOKEN") or None
+        try:
+            _CLIENT = Client(_SPACE, hf_token=tok) if tok else Client(_SPACE)
+        except TypeError:
+            # older/newer gradio_client without hf_token kwarg
+            _CLIENT = Client(_SPACE)
     return _CLIENT
 
 
