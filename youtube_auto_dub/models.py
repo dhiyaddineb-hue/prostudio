@@ -51,7 +51,9 @@ VAD_GUARD_SECONDS = 1.0
 
 # ── Segment grouping / subtitle defaults ──────────────────────────────────
 
-SEGMENT_GAP_THRESHOLD = 0.8
+# Merge short transcription gaps so the dubbed line does not sound chopped;
+# long pauses remain separate and are preserved from the source.
+SEGMENT_GAP_THRESHOLD = 2.0
 SEGMENT_MAX_DURATION = 10.0
 SUBTITLE_MAX_CHARS = 84
 SUBTITLE_MAX_DUR = 5.0
