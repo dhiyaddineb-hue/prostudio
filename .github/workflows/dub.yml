@@ -393,7 +393,7 @@ jobs:
         continue-on-error: true
         run: |
           set -e
-          final=$(find output -maxdepth 2 -type f -name '*.mp4' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
+          final=$(find output -maxdepth 1 -type f -name '*.mp4' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
           if [ -z "$final" ]; then echo "No mp4 to save"; exit 0; fi
           mkdir -p output/dubbed
           base=$(basename "${{ inputs.source_path }}" | sed 's/\.[^.]*$//')
