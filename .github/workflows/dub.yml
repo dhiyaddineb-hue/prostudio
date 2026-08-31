@@ -92,7 +92,7 @@ on:
       model:
         description: "dub: Whisper model"
         required: false
-        default: "base"
+        default: "small"
         type: choice
         options: [tiny, base, small]
       bg_music:
