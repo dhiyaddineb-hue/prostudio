@@ -394,6 +394,7 @@ jobs:
             echo "No dubbed video found for Seed-VC" >&2
             exit 1
           fi
+          cp "$dubbed" output/dubbed-before-seedvc.mp4
           extra=()
           if [ "${{ inputs.bg_music }}" = "true" ]; then
             extra+=(--keep-background)
@@ -407,6 +408,22 @@ jobs:
             --output output/seedvc-enhanced.mp4 \
             "${extra[@]}"
           rm -f "$dubbed"
+
+      - name: Validate target-language audio after Seed-VC
+        if: inputs.seed_vc == true
+        run: |
+          set -euo pipefail
+          if python scripts/validate_dub_language.py \
+            --video output/seedvc-enhanced.mp4 \
+            --expected "${{ inputs.target_lang }}" \
+            --model "${{ inputs.model }}" \
+            --report output/language-integrity.json; then
+            echo "Seed-VC target-language integrity passed"
+          else
+            echo "Seed-VC changed or obscured the target language; restoring the verified raw translated dub"
+            cat output/language-integrity.json
+            cp output/dubbed-before-seedvc.mp4 output/seedvc-enhanced.mp4
+          fi
 
       - name: Publish project, report, and Pages index
         if: success()
