@@ -438,12 +438,42 @@ jobs:
           if [ "${{ inputs.separate_sources }}" = "true" ]; then
             extra+=(--separate-sources)
           fi
+          # If core.py produced a per-speaker map (2+ distinct roles), generate
+          # --speaker-refs and --speaker-map so Seed-VC keeps each role's
+          # cloned timbre instead of flattening to one reference voice.
+          SPR_ARGS=()
+          if [ -f output/speaker-map.json ] && [ -s output/speaker-map.json ]; then
+            # Map segments to roles
+            MAP=$(python - <<'PY'
+import json
+p="output/speaker-map.json"
+try:
+    m=json.load(open(p,encoding="utf-8"))
+    refs={}
+    map_parts=[]
+    for e in m:
+        sp=e.get("speaker"); ref=e.get("ref")
+        if sp and ref:
+            refs[sp]=ref
+            map_parts.append(f"{e['start']}-{e['end']}={sp}")
+    if refs:
+        print("REFS="+",".join(f"{k}={v}" for k,v in refs.items()))
+        print("MAP="+",".join(map_parts))
+except Exception as e:
+    pass
+PY
+)
+            if echo "$MAP" | grep -q '^REFS='; then
+              SPR_ARGS+=(--speaker-refs "$(echo "$MAP" | grep '^REFS=' | cut -d= -f2-)")
+              SPR_ARGS+=(--speaker-map "$(echo "$MAP" | grep '^MAP=' | cut -d= -f2-)")
+            fi
+          fi
           python scripts/seed_vc_enhance.py \
             --space "phuoc2005/seed-vc" \
             --original "$SOURCE_PATH" \
             --dubbed "$dubbed" \
             --output output/seedvc-enhanced.mp4 \
-            "${extra[@]}"
+            "${extra[@]}" "${SPR_ARGS[@]}"
           rm -f "$dubbed"
 
       - name: Validate target-language audio after Seed-VC
