@@ -72,6 +72,12 @@ on:
         default: "true"
         type: choice
         options: ["true", "false"]
+      adapt_translation:
+        description: "dub: shorten translation to fit source timing (better sync)"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
       no_vad:
         description: "dub: disable VAD and transcribe the whole audio (better coverage for continuous speech)"
         required: false
@@ -347,6 +353,9 @@ jobs:
           fi
           if [ "${{ inputs.no_vad }}" = "true" ]; then
             extra+=(--no-vad)
+          fi
+          if [ "${{ inputs.adapt_translation }}" = "false" ]; then
+            extra+=(--no-adapt-translation)
           fi
           python -m youtube_auto_dub "$source" \
             --lang "${{ inputs.target_lang }}" \
