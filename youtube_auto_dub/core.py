@@ -688,6 +688,23 @@ async def run(args, progress=None) -> Path:
         # gates and the studio must inspect what was actually rendered instead of
         # inferring coverage from a successful process exit code.
         segment_report = out_root / "segments-report.json"
+        # Persist the per-speaker reference + timeline so a downstream
+        # per-speaker Seed-VC pass can keep each role's timbre distinct
+        # (a male voice no longer falls back to a generic global reference).
+        try:
+            _ref_cache = { }
+            _map = []
+            for _seg in project.segments:
+                _sp = getattr(_seg, "speaker", None)
+                if _sp and _sp in speaker_references:
+                    _map.append({"start": round(float(_seg.start),3), "end": round(float(_seg.end),3),
+                                 "speaker": _sp,
+                                 "ref": str(speaker_references[_sp])})
+            _map_out = out_root / "speaker-map.json"
+            _map_out.write_text(json.dumps(_map, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            # non-fatal: per-speaker pass is best-effort
+            pass
         segment_report.write_text(json.dumps({
             "source_duration": float(project.metadata.duration) if project.metadata else 0.0,
             "transcript_source": transcript_source,
