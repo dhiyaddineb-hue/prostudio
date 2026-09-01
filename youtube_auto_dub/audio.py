@@ -244,25 +244,31 @@ def align_segments(
             if not is_last
             else (source_duration - s["start"])
         )
-        slot = max(declared, next_slot)
-        budget = max(min(slot, source_duration - s["start"]), 0.35)
+        # Tight sync: fit the dubbed line to the ORIGINAL speaker's window
+        # (its own duration), so it starts and ends with the source speech
+        # instead of sprawling toward the next line. The gap before the next
+        # line is a real pause in the original and is kept as a pause.
+        window = declared if declared > 0.0 else next_slot
+        # Cap at the room before the next line so lines never overlap.
+        room = next_slot if not is_last else (source_duration - s["start"])
+        budget = max(min(window, room), 0.35)
         ratio = actual / budget
 
+        # Always stretch to land on the window: speed up long lines (up to
+        # max_speed) and slow down short lines (down to MAX_SLOWDOWN) so each
+        # line spans its slot -> no drift, no artificial silent holes.
+        MAX_SLOWDOWN = 1.0 / 1.5
         if mode == "auto" and ratio > TEMPO_OVERBUDGET_RATIO:
-            # Compress only when a line would overlap the next one.
             audio = _stretch(
                 s["wav_path"],
                 min(ratio, max_speed),
                 Path(str(s["wav_path"]).replace(".wav", "_sped.wav")),
                 sr,
             )
-        elif mode == "auto" and ratio < 0.92:
-            # Fill short artificial holes with a conservative slowdown. This
-            # keeps the cloned timbre while avoiding abrupt silence between
-            # adjacent dubbed lines.
+        elif mode == "auto" and ratio < 0.97:
             audio = _stretch(
                 s["wav_path"],
-                max(ratio, 1.0 / 1.35),
+                max(ratio, MAX_SLOWDOWN),
                 Path(str(s["wav_path"]).replace(".wav", "_slow.wav")),
                 sr,
             )
