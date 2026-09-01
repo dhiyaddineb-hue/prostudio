@@ -14,6 +14,15 @@ def duration(path: Path) -> float:
     return float(p.stdout.strip())
 
 
+def audio_stream(path: Path) -> dict:
+    p = run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=codec_name,sample_rate,channels", "-of", "json", str(path)])
+    streams = json.loads(p.stdout).get("streams", [])
+    if not streams:
+        return {"codec": None, "sample_rate": 0, "channels": 0}
+    stream = streams[0]
+    return {"codec": stream.get("codec_name"), "sample_rate": int(stream.get("sample_rate") or 0), "channels": int(stream.get("channels") or 0)}
+
+
 def audio_peak_db(path: Path) -> float:
     p = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-vn", "-af", "volumedetect", "-f", "null", "-"], text=True, capture_output=True)
     m = re.search(r"max_volume:\s*(-?[0-9.]+) dB", p.stderr)
@@ -57,7 +66,7 @@ def main() -> None:
       "balanced":{"duration":1.0,"peak":-0.3,"extra_silence":2.5,"segment_gap":6.0,"coverage":0.72,"asr_confidence":0.40},
       "strict":{"duration":0.75,"peak":-0.5,"extra_silence":1.5,"segment_gap":4.0,"coverage":0.78,"asr_confidence":0.50},
     }[a.policy]
-    source_dur=duration(a.source); final_dur=duration(a.video); peak=audio_peak_db(a.video)
+    source_dur=duration(a.source); final_dur=duration(a.video); peak=audio_peak_db(a.video); stream=audio_stream(a.video)
     source_sil=silences(a.source); final_sil=silences(a.video)
     source_long=max([x["duration"] for x in source_sil]+[0.0]); final_long=max([x["duration"] for x in final_sil]+[0.0])
     source_silence_total=sum(x["duration"] for x in source_sil)
@@ -72,6 +81,7 @@ def main() -> None:
     checks={
       "duration_match": abs(final_dur-source_dur) <= limits["duration"],
       "no_clipping": peak <= limits["peak"],
+      "playback_compatible_audio": stream["codec"] == "aac" and 8000 <= stream["sample_rate"] <= 48000 and stream["channels"] in (1, 2),
       "language_valid": bool(language.get("valid",False)),
       "silence_not_added": final_long <= max(3.0,source_long+limits["extra_silence"]),
       "segment_coverage": trusted_timing or tm["coverage"] >= required_coverage,
@@ -81,7 +91,7 @@ def main() -> None:
     }
     report={"ok":all(checks.values()),"policy":a.policy,"checks":checks,"metrics":{
       "source_duration":round(source_dur,3),"transcript_source":segdoc.get("transcript_source","asr"),"source_active_ratio":round(source_active_ratio,4),"required_segment_coverage":round(required_coverage,4),"final_duration":round(final_dur,3),"duration_delta":round(final_dur-source_dur,3),
-      "peak_db":peak,"source_longest_silence":round(source_long,3),"final_longest_silence":round(final_long,3),
+      "peak_db":peak,"audio_stream":stream,"source_longest_silence":round(source_long,3),"final_longest_silence":round(final_long,3),
       "segment_count":len(segdoc.get("segments",[])),"mean_asr_confidence":round(mean_asr_confidence,4),**{k:round(v,4) for k,v in tm.items()}},"limits":limits,"language":language}
     a.report.parent.mkdir(parents=True,exist_ok=True); a.report.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
     print(json.dumps(report,ensure_ascii=False,indent=2))

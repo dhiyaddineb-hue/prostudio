@@ -24,8 +24,9 @@
           "speaker"
         ],
         "duration": 21.03,
-        "peak_dbfs": -2.93,
-        "clipped": false
+        "peak_dbfs": -1.01,
+        "clipped": false,
+        "audio": "AAC 48 kHz stereo"
       }
     },
     {

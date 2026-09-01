@@ -466,8 +466,8 @@ jobs:
           if [ ! -f "$final" ]; then final=$(find output -maxdepth 1 -type f -name 'Output_*.mp4' | head -1); fi
           test -n "$final" && test -f "$final"
           ffmpeg -y -i "$final" -map 0:v:0 -map 0:a:0 \
-            -c:v copy -af "loudnorm=I=-16:TP=-1.5:LRA=11,alimiter=limit=0.891:level=false" \
-            -c:a aac -b:a 192k -movflags +faststart output/final-dub.mp4
+            -c:v copy -af "volume=6dB,acompressor=threshold=-18dB:ratio=2:attack=5:release=80,loudnorm=I=-16:TP=-1.5:LRA=11,alimiter=limit=0.891:level=false" \
+            -c:a aac -b:a 192k -ar 48000 -ac 2 -movflags +faststart output/final-dub.mp4
 
       - name: Validate final target language
         run: |
