@@ -324,11 +324,23 @@ async def run(args, progress=None) -> Path:
         _report(progress, "chunk", f"تقسيم إلى {len(project.segments)} مقطع", 38)
 
         # ── 3. Translate ─────────────────────────────────────────────
+        target_sidecar_entries = None
+        if not str(args.url).startswith(("http://", "https://")):
+            target_sidecar = Path(args.url).with_suffix(f".{dub_lang}.srt")
+            if target_sidecar.exists():
+                candidate_entries = read_srt(str(target_sidecar))
+                if len(candidate_entries) == len(project.segments):
+                    target_sidecar_entries = candidate_entries
+                    console.step(f"Using trusted target transcript: {target_sidecar.name}")
+                else:
+                    console.warning(f"Target sidecar cue count does not match source: {target_sidecar}")
         console.info("Translating")
         _report(progress, "translate", f"ترجمة إلى {dub_lang if args.mode != 'sub' else sub_lang}", 44)
 
         if args.mode in ("sub", "both"):
-            if lang_detected and lang_detected == sub_lang:
+            if target_sidecar_entries is not None and sub_lang == dub_lang:
+                sub_out = [item["text"] for item in target_sidecar_entries]
+            elif lang_detected and lang_detected == sub_lang:
                 console.step(f"Source == target ({sub_lang}), skipping")
                 sub_out = texts
             else:
@@ -342,7 +354,9 @@ async def run(args, progress=None) -> Path:
                 seg.translated_text_sub = sub_out[i].strip() or seg.source_text
 
         if args.mode in ("dub", "both"):
-            if args.mode == "both" and dub_lang == sub_lang:
+            if target_sidecar_entries is not None:
+                dub_out = [item["text"] for item in target_sidecar_entries]
+            elif args.mode == "both" and dub_lang == sub_lang:
                 console.step("Reusing subtitle translation for dubbing")
                 dub_out = sub_out
             elif lang_detected and lang_detected == dub_lang:
