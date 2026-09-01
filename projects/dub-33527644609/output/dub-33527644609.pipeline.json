@@ -1,0 +1,26 @@
+{
+  "run_id": "33527644609",
+  "engine": "voxcpm",
+  "source_lang": "ar",
+  "target_lang": "en",
+  "seed_vc": true,
+  "bg_music": true,
+  "diarize": false,
+  "video": "output/seedvc-enhanced.mp4",
+  "published_at": "2026-09-01T15:49:06+00:00",
+  "pipeline_report": {
+    "ffmpeg": true,
+    "ffprobe": true,
+    "source_lang": "ar",
+    "target_lang": "en",
+    "tts_engine": "voxcpm",
+    "seed_vc_requested": true,
+    "diarization_requested": false,
+    "demucs_requested": true,
+    "seed_vc_script": true,
+    "hf_token_present": true,
+    "youtube_cookies_present": true,
+    "lip_sync": "disabled",
+    "status": "ready_with_warnings"
+  }
+}
