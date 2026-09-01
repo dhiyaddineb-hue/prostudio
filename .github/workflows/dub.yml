@@ -329,7 +329,7 @@ jobs:
           YAD_COOKIES_FILE: cookies.txt
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           YAD_VOXCPM_BACKEND: ${{ inputs.voxcpm_backend }}
-          YAD_FIXED_WINDOWS: "true"
+          YAD_FIXED_WINDOWS: "false"
           YAD_FIXED_WINDOW_SECONDS: "6.0"
         run: |
           set -euo pipefail
