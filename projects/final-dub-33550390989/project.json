@@ -1,0 +1,80 @@
+{
+  "slug": "final-dub-33550390989",
+  "title": "ar → en · verified",
+  "source_name": "ProStudio_Arabic_Demo.mp4",
+  "lang": "ar",
+  "dialect": "",
+  "created_at": "2026-09-01T19:41:40+00:00",
+  "cues": [
+    {
+      "i": 0,
+      "start": 1.62,
+      "end": 5.559,
+      "speaker": "speaker",
+      "text": "Welcome to Pro Studio."
+    },
+    {
+      "i": 1,
+      "start": 6.599,
+      "end": 7.86,
+      "speaker": "speaker",
+      "text": "This short film showcases automatic video dubbing."
+    },
+    {
+      "i": 2,
+      "start": 9.32,
+      "end": 9.919,
+      "speaker": "speaker",
+      "text": "First, we unpack the words."
+    },
+    {
+      "i": 3,
+      "start": 12.72,
+      "end": 13.32,
+      "speaker": "speaker",
+      "text": "we translate the meaning into Arabic."
+    },
+    {
+      "i": 4,
+      "start": 14.4,
+      "end": 15.0,
+      "speaker": "speaker",
+      "text": "Finally, we generate a new sound and synchronize it with the image."
+    }
+  ],
+  "voices": {
+    "engine": "voxcpm",
+    "seed_vc": true
+  },
+  "render": {
+    "settings": {
+      "target_lang": "en",
+      "bg_music": false,
+      "diarize": false
+    },
+    "measured": {
+      "source_duration": 19.832,
+      "transcript_source": "sidecar",
+      "source_active_ratio": 0.8629,
+      "required_segment_coverage": 0.72,
+      "final_duration": 19.9,
+      "duration_delta": 0.068,
+      "peak_db": -4.4,
+      "audio_stream": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      },
+      "source_longest_silence": 1.623,
+      "final_longest_silence": 2.494,
+      "segment_count": 5,
+      "mean_asr_confidence": 1.0,
+      "coverage": 0.3529,
+      "max_gap": 4.832,
+      "internal_max_gap": 2.801,
+      "leading_gap": 1.62,
+      "trailing_gap": 4.832,
+      "placed": 5
+    }
+  }
+}
