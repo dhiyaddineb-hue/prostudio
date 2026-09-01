@@ -1,5 +1,8 @@
 name: Run YouTube Auto Dub
 
+permissions:
+  contents: write
+
 # Two jobs, pick one from the "Run workflow" dropdown:
 #   clone  — re-record a project's lines in the original actor's voice (F5-TTS)
 #   dub    — dub a YouTube URL from scratch
@@ -59,7 +62,7 @@ on:
         required: false
         default: "xtts"
         type: choice
-        options: [xtts, edge, voxcpm]
+        options: [xtts, edge, voxcpm, qwen]
       target_lang:
         description: "dub: target language"
         required: false
@@ -82,7 +85,7 @@ on:
         required: false
         default: "base"
         type: choice
-        options: [tiny, base, small]
+        options: [tiny, base, small, medium]
       bg_music:
         description: "dub: keep background music and effects when separation is reliable"
         required: false
@@ -97,6 +100,11 @@ on:
         description: "dub: neural separation of dialogue from music/effects"
         required: false
         default: false
+        type: boolean
+      seed_vc:
+        description: "dub: transfer the source voice identity with Seed-VC"
+        required: false
+        default: true
         type: boolean
       lip_sync:
         description: "deprecated: visual lip-sync is disabled; audio-only dubbing is used"
@@ -290,6 +298,53 @@ jobs:
             echo "No YT_COOKIES secret set; continuing without it"
           fi
 
+      - name: Preflight environment and credentials
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          YT_COOKIES: ${{ secrets.YT_COOKIES }}
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          ffmpeg -version >/dev/null
+          python - <<'PY'
+          import json, os, shutil
+          report = {
+            "ffmpeg": bool(shutil.which("ffmpeg")),
+            "ffprobe": bool(shutil.which("ffprobe")),
+            "source_lang": "${{ inputs.source_lang }}",
+            "target_lang": "${{ inputs.target_lang }}",
+            "tts_engine": "${{ inputs.tts_engine }}",
+            "seed_vc_requested": "${{ inputs.seed_vc }}" == "true",
+            "diarization_requested": "${{ inputs.diarize }}" == "true",
+            "demucs_requested": "${{ inputs.separate_sources }}" == "true",
+            "seed_vc_script": os.path.exists("scripts/seed_vc_enhance.py"),
+            "hf_token_present": bool(os.environ.get("HF_TOKEN")),
+            "youtube_cookies_present": bool(os.environ.get("YT_COOKIES")),
+            "lip_sync": "disabled",
+            "status": "ready_with_warnings",
+          }
+          if report["diarization_requested"] and not report["hf_token_present"]:
+            report["status"] = "blocked_missing_hf_token"
+            report["error"] = "HF_TOKEN is required when diarize=true"
+          if report["seed_vc_requested"] and not report["seed_vc_script"]:
+            report["status"] = "blocked_missing_seed_vc"
+            report["error"] = "Seed-VC integration script is missing"
+          with open("output/preflight.json", "w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+          print(json.dumps(report, ensure_ascii=False))
+          if report["status"].startswith("blocked_"):
+            raise SystemExit(report["error"])
+          PY
+
+      - name: Upload preflight diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preflight-${{ github.run_id }}
+          path: output/preflight.json
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Run the dub
         env:
           YAD_OUTPUT_DIR: output
@@ -328,7 +383,7 @@ jobs:
           ls -lh output
 
       - name: Enhance voice with Seed-VC
-        if: inputs.tts_engine == 'xtts' || inputs.tts_engine == 'voxcpm'
+        if: inputs.seed_vc == true
         env:
           SOURCE_PATH: ${{ inputs.source_path }}
         run: |
@@ -352,6 +407,28 @@ jobs:
             --output output/seedvc-enhanced.mp4 \
             "${extra[@]}"
           rm -f "$dubbed"
+
+      - name: Publish project, report, and Pages index
+        if: success()
+        env:
+          SOURCE_PATH: ${{ inputs.source_path }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          final="output/seedvc-enhanced.mp4"
+          if [ ! -f "$final" ]; then final=$(find output -maxdepth 1 -type f -name '*.mp4' | head -1); fi
+          test -n "$final" && test -f "$final"
+          python scripts/publish_dub_run.py --video "$final" --source "$SOURCE_PATH" \
+            --source-lang "${{ inputs.source_lang }}" --target-lang "${{ inputs.target_lang }}" \
+            --engine "${{ inputs.tts_engine }}" --seed-vc "${{ inputs.seed_vc }}" \
+            --bg-music "${{ inputs.bg_music }}" --diarize "${{ inputs.diarize }}" --run-id "$RUN_ID"
+          python scripts/publish_docs.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add projects docs/projects.json docs/*.mp4 docs/*.srt docs/*.vtt
+          git diff --cached --quiet || git commit -m "Publish dub $RUN_ID to project library"
+          git pull --rebase origin "${{ github.ref_name }}"
+          git push origin HEAD:${{ github.ref_name }}
 
       - name: Conditional lip synchronization
         if: false

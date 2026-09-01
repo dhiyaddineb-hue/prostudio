@@ -75,3 +75,12 @@ Wav2Lip مشروع بحثي upstream، ويجب مراجعة شروطه قبل �
 [3]: https://github.com/facebookresearch/demucs "Demucs repository"
 [4]: https://github.com/Rudrabha/Wav2Lip "Wav2Lip repository"
 [5]: https://ffmpeg.org/ffprobe.html "FFprobe documentation"
+
+
+## 13. الربط الفعلي بين صفحة التحكم وWorkflow
+
+ترسل صفحة `dashboard.html` الآن جميع الخيارات الأساسية إلى Workflow، بما في ذلك `source_lang` و`target_lang` و`voice` و`tts_engine` و`gender` و`model` و`bg_music` و`diarize` و`separate_sources` و`seed_vc`. عند إلغاء خيار الاستنساخ، تكون قيمة `seed_vc=false` ولا تُنفذ مرحلة Seed-VC. وعند تفعيله، ينفذ Workflow `scripts/seed_vc_enhance.py` بعد التوليد لكل محركات الدبلجة التي اختارها المستخدم.
+
+قبل الدبلجة، تنشئ مرحلة `Preflight environment and credentials` الملف `output/preflight.json`. يفحص التقرير وجود FFmpeg وFFprobe، اللغة والمحرك، حالة طلب Seed-VC وDemucs وdiarization، وجود `HF_TOKEN` وcookies، ويثبت أن lip-sync المرئي معطل. إذا اختار المستخدم diarization دون `HF_TOKEN` يتوقف التشغيل قبل استهلاك وقت النماذج ويرفع تقرير التشخيص كـ artifact.
+
+بعد نجاح الدبلجة، ينفذ Workflow `scripts/publish_dub_run.py` لإنشاء مشروع مستقل تحت `projects/`، ويحفظ المصدر والناتج والتقرير والـ manifest، ثم يشغل `scripts/publish_docs.py` لتحديث `docs/projects.json` ونسخ الفيديو وSRT وVTT إلى GitHub Pages. لذلك يظهر كل ناتج ناجح في مكتبة المشاريع والمعاينة بعد اكتمال النشر.
