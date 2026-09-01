@@ -62,9 +62,9 @@ on:
         default: "en-US-AndrewMultilingualNeural"
         type: string
       tts_engine:
-        description: "dub: speech engine (xtts clones the source voice)"
+        description: "dub: speech engine (xtts is opt-in; default is voxcpm)"
         required: false
-        default: "xtts"
+        default: "voxcpm"
         type: choice
         options: [xtts, edge, voxcpm, qwen]
       target_lang:
@@ -103,7 +103,7 @@ on:
       separate_sources:
         description: "dub: neural separation of dialogue from music/effects"
         required: false
-        default: false
+        default: true
         type: boolean
       no_vad:
         description: "dub: disable VAD only for continuous speech that VAD wrongly drops"
