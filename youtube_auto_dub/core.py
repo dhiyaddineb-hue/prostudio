@@ -597,7 +597,7 @@ async def run(args, progress=None) -> Path:
                 trimmed = seg.tts_audio_path.with_name(seg.tts_audio_path.stem + "_trim.wav")
                 subprocess.run([
                     "ffmpeg", "-y", "-i", str(seg.tts_audio_path),
-                    "-af", "silenceremove=start_periods=1:start_duration=0.08:start_threshold=-45dB:stop_periods=1:stop_duration=0.12:stop_threshold=-45dB",
+                    "-af", "silenceremove=start_periods=1:start_duration=0.08:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_duration=0.12:start_threshold=-45dB,areverse",
                     "-ar", str(SR_TTS), "-ac", "1", str(trimmed),
                 ], check=True, capture_output=True)
                 if trimmed.exists() and trimmed.stat().st_size > 1024:
