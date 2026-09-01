@@ -85,6 +85,34 @@ def group_segments(raw: List[dict]) -> List[SubtitleSegment]:
     return out
 
 
+def fixed_window_segments(raw: List[dict], source_duration: float, window_seconds: float = 6.0) -> List[SubtitleSegment]:
+    """Bucket ASR segments into fixed windows while preserving all detected text.
+
+    A window is emitted only when it contains recognized speech; silent source
+    intervals remain silent rather than being filled with invented words.
+    """
+    if not raw or source_duration <= 0 or window_seconds <= 0:
+        return group_segments(raw)
+    out: List[SubtitleSegment] = []
+    cursor = 0.0
+    while cursor < source_duration:
+        end = min(cursor + window_seconds, source_duration)
+        members = [s for s in raw if float(s.get("end", 0.0)) > cursor and float(s.get("start", 0.0)) < end]
+        if members:
+            text = " ".join(str(s.get("text", "")).strip() for s in members).strip()
+            if text:
+                out.append(SubtitleSegment(
+                    start=cursor,
+                    end=end,
+                    source_text=text,
+                    speaker=members[0].get("speaker"),
+                    confidence=min(float(s.get("confidence", 1.0)) for s in members),
+                ))
+        cursor = end
+    console.step(f"Fixed windows: {len(out)} x {window_seconds:.1f}s")
+    return out
+
+
 # ── SRT output ──────────────────────────────────────────────────────────
 
 def _stamp(sec: float) -> str:

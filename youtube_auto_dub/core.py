@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -13,6 +14,7 @@ from youtube_auto_dub.audio import (
     align_segments,
     finalize_audio,
     group_segments,
+    fixed_window_segments,
     overlay_dub,
     render_video,
     write_srt,
@@ -209,7 +211,14 @@ async def run(args, progress=None) -> Path:
                 console.info("Identifying speakers")
                 raw = annotate_segments(speech_audio, raw)
             console.info("Grouping segments")
-            project.segments = group_segments(raw)
+            if os.environ.get("YAD_FIXED_WINDOWS", "false").lower() == "true":
+                project.segments = fixed_window_segments(
+                    raw,
+                    float(project.metadata.duration) if project.metadata else 0.0,
+                    float(os.environ.get("YAD_FIXED_WINDOW_SECONDS", "6.0")),
+                )
+            else:
+                project.segments = group_segments(raw)
 
             cache_data = [
                 {"index": i, "start": s.start, "end": s.end,
@@ -385,29 +394,34 @@ async def run(args, progress=None) -> Path:
                         lang=dub_lang, gender=args.gender,
                     )
 
-            # Generate TTS per segment
+            # Generate TTS per fixed/timed window. Remote failures are handled
+            # per window so one failed request cannot erase later speech.
+            async def synth_vox_resilient(seg, dest):
+                try:
+                    await speak_voxcpm(
+                        seg.translated_text_dub,
+                        dest,
+                        language=dub_lang,
+                        control=(
+                            (getattr(args, "voice_theme", None) or "A natural, clear, warm narrator")
+                            + "; delivery: " + infer_emotion(seg.translated_text_dub)
+                        ),
+                        reference_audio=speaker_references.get(
+                            getattr(seg, "speaker", None), voxcpm_reference
+                        ),
+                    )
+                except Exception as exc:
+                    console.warning(f"VoxCPM failed for window {seg.start:.2f}s; using Edge-TTS fallback: {exc}")
+                    voice = pick_voice(dub_lang, args.gender, voice=getattr(args, "edge_voice", None))
+                    await speak_edge(seg.translated_text_dub, voice, dest, lang=dub_lang, gender=args.gender)
+
             tasks = []
             for i, seg in enumerate(project.segments):
                 seg.tts_audio_path = TEMP_DIR / f"tts_{i}.wav"
                 if tts_engine == "xtts" and xtts_reference:
                     tasks.append(synth_xtts_or_edge(seg))
                 elif tts_engine == "voxcpm":
-                    tasks.append(speak_voxcpm(
-                        seg.translated_text_dub,
-                        seg.tts_audio_path,
-                        language=dub_lang,
-                        control=(
-                            (getattr(args, "voice_theme", None) or (
-                                "متحدث عربي واضح وطبيعي ودافئ، نطق عربي سليم، دون لهجة أجنبية"
-                                if dub_lang.lower() in ("ar", "ar-sa", "arabic")
-                                else "A natural, clear, warm narrator speaking the target language"
-                            ))
-                            + "; delivery: " + infer_emotion(seg.translated_text_dub)
-                        ),
-                        reference_audio=speaker_references.get(
-                            getattr(seg, "speaker", None), voxcpm_reference
-                        ),
-                    ))
+                    tasks.append(synth_vox_resilient(seg, seg.tts_audio_path))
                 elif tts_engine == "qwen":
                     tasks.append(speak_qwen(
                         seg.translated_text_dub, seg.tts_audio_path,
@@ -427,6 +441,18 @@ async def run(args, progress=None) -> Path:
                     ))
 
             await asyncio.gather(*tasks)
+
+            missing = [
+                (i, round(seg.start, 3), seg.source_text[:60])
+                for i, seg in enumerate(project.segments)
+                if seg.source_text.strip() and (
+                    not seg.tts_audio_path
+                    or not seg.tts_audio_path.exists()
+                    or seg.tts_audio_path.stat().st_size < 1024
+                )
+            ]
+            if missing:
+                raise RuntimeError(f"Audio coverage validation failed for windows: {missing}")
 
             # VoxCPM may return a noticeable leading pause and trailing room
             # tone. Remove only silence around each utterance before fitting it
