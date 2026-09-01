@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 import subprocess
 import sys
 from pathlib import Path
+import os
 
 from gradio_client import Client, handle_file
 
@@ -51,6 +53,10 @@ def main() -> None:
                         help="Mix an isolated background bed back in; off by default to prevent original speech leakage")
     parser.add_argument("--separate-sources", action="store_true",
                         help="Use Demucs neural separation for speech and background stems")
+    parser.add_argument("--speaker-refs", default="",
+                        help="Comma-separated SPEAKER_XX=/path/to/ref.wav per-voice cloned references")
+    parser.add_argument("--speaker-map", default="",
+                        help="Comma-separated start-end=SPEAKER_XX (seconds) timeline-to-role mapping")
     args = parser.parse_args()
 
     work = Path(args.output).with_suffix(".seed-work")
@@ -81,6 +87,40 @@ def main() -> None:
              "-ar", "24000", str(background_wav)])
     run(["ffmpeg", "-y", "-i", args.dubbed, "-vn", "-ac", "1", "-ar", "22050",
          str(dubbed_wav)])
+
+    # ── Per-speaker Seed-VC branch: if per-role references and timeline were
+    # supplied, convert each role separately so distinct timbres survive.
+    if args.speaker_refs and args.speaker_map:
+        refs = {}
+        for item in args.speaker_refs.split(","):
+            if "=" in item:
+                k, v = item.split("=", 1)
+                refs[k.strip()] = v.strip()
+        seg_conv = {}
+        for item in args.speaker_map.split(","):
+            if "=" in item and "-" in item.split("=")[0]:
+                rng, sp = item.split("=", 1)
+                try:
+                    a, b = [float(x) for x in rng.split("-")]
+                except Exception:
+                    continue
+                seg_conv[(a, b)] = sp.strip()
+        final_audio = work / "per-speaker.wav"
+        if _do_per_speaker_seed(dubbed_wav, duration(args.dubbed), seg_conv, refs, work, args, final_audio):
+            # mux video + per-speaker audio, same as single path below
+            target_duration = duration(args.dubbed)
+            run([
+                "ffmpeg", "-y", "-i", args.dubbed, "-i", str(final_audio),
+                "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
+                "-af", "apad", "-t", f"{target_duration:.3f}",
+                "-c:a", "aac", "-b:a", "160k", args.output,
+            ])
+            print(json.dumps({"ok": True, "output": args.output, "space": args.space,
+                              "speaker_mode": "per-speaker",
+                              "roles": sorted(set(s for _,_,s,_ in seg_files)) if False else sorted(set(seg_conv.values())),
+                              "pieces": len(seg_conv)}))
+            return
+
 
     result = None
     last_error = None
