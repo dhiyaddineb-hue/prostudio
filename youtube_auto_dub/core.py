@@ -404,10 +404,13 @@ async def run(args, progress=None) -> Path:
                     "-ar", "22050", "-ac", "1", str(voxcpm_reference),
                 ], check=True, capture_output=True)
 
-                # When diarization is reliable, do not feed every speaker the
-                # same voice reference. Pick each speaker's first real turn,
-                # pad it slightly, and clean it independently. If a turn is
-                # unavailable, retain the conservative global reference.
+                # Per-speaker voice references for high-fidelity cloning.
+                # We pick each speaker's LONGEST genuine turn (not the first,
+                # which may be a one-liner) and slice a clean, mid-turn segment
+                # from it. A weak or absent reference is exactly why a male
+                # voice came out generic: the reference fell back to a global
+                # voice. Keeping a strong isolated reference for every role
+                # makes the clone timbre genuine and distinct.
                 speaker_references = {}
                 speaker_turns = {}
                 for seg in project.segments:
@@ -421,15 +424,22 @@ async def run(args, progress=None) -> Path:
                     if not speaker:
                         continue
                     ref = TEMP_DIR / f"voxcpm_reference_{re.sub(r'[^A-Za-z0-9_-]', '_', str(speaker))}.wav"
-                    start = max(0.0, float(seg.start) - 0.25)
-                    length = min(15.0, max(2.5, float(seg.end) - float(seg.start) + 0.5))
+                    dur = float(seg.end) - float(seg.start)
+                    if dur >= 6.0:
+                        # take the central 6s of a long turn: the most stable
+                        # timbre zone (noisy lead-in / trailing are excluded).
+                        start = max(0.0, float(seg.start) + (dur - 6.0) / 2.0)
+                        length = 6.0
+                    else:
+                        start = max(0.0, float(seg.start) - 0.25)
+                        length = min(20.0, dur + 0.5)
                     subprocess.run([
                         "ffmpeg", "-y", "-ss", f"{start:.3f}", "-i", str(speech_audio),
                         "-t", f"{length:.3f}", "-af",
                         "highpass=f=80,lowpass=f=9000,afftdn=nr=12,dynaudnorm=f=150:g=7",
                         "-ar", "22050", "-ac", "1", str(ref),
                     ], check=True, capture_output=True)
-                    if ref.exists() and ref.stat().st_size > 1024:
+                    if ref.exists() and ref.stat().st_size > 2048:
                         speaker_references[speaker] = ref
             else:
                 voxcpm_reference = None
