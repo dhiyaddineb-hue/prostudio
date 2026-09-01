@@ -1,0 +1,95 @@
+{
+  "slug": "final-dub-33566430039",
+  "title": "ar → en · verified",
+  "source_name": "phantom_multi.mp4",
+  "lang": "ar",
+  "dialect": "",
+  "created_at": "2026-09-01T22:44:40+00:00",
+  "cues": [
+    {
+      "i": 0,
+      "start": 0.24,
+      "end": 8.77,
+      "speaker": "speaker",
+      "text": "Why didn't you visit? I'm sure I wasn't just a lunatic, I'm just a bashla, I'm in Coriboul"
+    },
+    {
+      "i": 1,
+      "start": 9.65,
+      "end": 18.55,
+      "speaker": "speaker",
+      "text": "The house will keep me locked up and I don't want that. I think you only support strength. No, I'm strong"
+    },
+    {
+      "i": 2,
+      "start": 19.03,
+      "end": 28.73,
+      "speaker": "speaker",
+      "text": "He is not ours. I think this is his timing and other negotiations. Join the channel, Bitkoz Hatik"
+    },
+    {
+      "i": 3,
+      "start": 29.36,
+      "end": 37.18,
+      "speaker": "speaker",
+      "text": "I'm with you, a chain towards the ponds, did you hear? Tanda oh"
+    },
+    {
+      "i": 4,
+      "start": 38.16,
+      "end": 42.84,
+      "speaker": "speaker",
+      "text": "Just me to her then I want you to be a force"
+    },
+    {
+      "i": 5,
+      "start": 47.06,
+      "end": 55.8,
+      "speaker": "speaker",
+      "text": "They say my name when I dream and when I wake up in front of me I lost you"
+    },
+    {
+      "i": 6,
+      "start": 56.04,
+      "end": 59.375,
+      "speaker": "speaker",
+      "text": "Subscribe to the channel"
+    }
+  ],
+  "voices": {
+    "engine": "voxcpm",
+    "seed_vc": true
+  },
+  "render": {
+    "settings": {
+      "target_lang": "en",
+      "bg_music": true,
+      "diarize": true
+    },
+    "measured": {
+      "source_duration": 59.488,
+      "transcript_source": "asr",
+      "source_active_ratio": 1.0,
+      "required_segment_coverage": 0.72,
+      "final_duration": 59.6,
+      "duration_delta": 0.112,
+      "peak_db": -4.5,
+      "audio_stream": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      },
+      "source_longest_silence": 0.0,
+      "final_longest_silence": 0.0,
+      "segment_count": 7,
+      "mean_asr_confidence": 0.3648,
+      "frac_high_conf": 0.0,
+      "coverage": 0.8692,
+      "max_gap": 4.22,
+      "internal_max_gap": 4.22,
+      "leading_gap": 0.24,
+      "trailing_gap": 0.1131,
+      "placed": 7
+    }
+  }
+}
