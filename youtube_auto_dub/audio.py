@@ -207,28 +207,35 @@ def align_segments(
             continue
         start_samp = int(s["start"] * sr)
         is_last = i + 1 >= len(valid)
-        # Prefer the original subtitle window for this exact line. Using the
-        # next line's start as the budget lets a long translated line drift
-        # into the following speaker turn and creates audible desynchronisation.
+        # Use the complete interval up to the next spoken line. The previous
+        # implementation used only subtitle duration, so a short translated
+        # line ended early and created an artificial silent hole.
         declared = float(s.get("target_dur") or 0.0)
-        if declared > 0.0:
-            slot = declared
-        else:
-            slot = (
-                (valid[i + 1]["start"] - s["start"] - gap_ms / 1000)
-                if not is_last
-                else (source_duration - s["start"])
-            )
+        next_slot = (
+            (valid[i + 1]["start"] - s["start"])
+            if not is_last
+            else (source_duration - s["start"])
+        )
+        slot = max(declared, next_slot)
         budget = max(min(slot, source_duration - s["start"]), 0.35)
         ratio = actual / budget
 
         if mode == "auto" and ratio > TEMPO_OVERBUDGET_RATIO:
-            # Stretch against the line's own window, preserving the excellent
-            # VoxCPM/Seed-VC timbre while preventing line-to-line drift.
+            # Compress only when a line would overlap the next one.
             audio = _stretch(
                 s["wav_path"],
                 min(ratio, max_speed),
                 Path(str(s["wav_path"]).replace(".wav", "_sped.wav")),
+                sr,
+            )
+        elif mode == "auto" and ratio < 0.92:
+            # Fill short artificial holes with a conservative slowdown. This
+            # keeps the cloned timbre while avoiding abrupt silence between
+            # adjacent dubbed lines.
+            audio = _stretch(
+                s["wav_path"],
+                max(ratio, 1.0 / 1.35),
+                Path(str(s["wav_path"]).replace(".wav", "_slow.wav")),
                 sr,
             )
         else:
