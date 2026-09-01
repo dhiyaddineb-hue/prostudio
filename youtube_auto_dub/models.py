@@ -77,7 +77,7 @@ AUDIO_HPSS_MARGIN = 4.0
 
 # ── Tempo stretch defaults ────────────────────────────────────────────────
 
-TEMPO_MAX_SPEED = 1.45
+TEMPO_MAX_SPEED = 1.6
 TEMPO_GAP_MS = 80
 TEMPO_TAIL_SECONDS = 1.0
 TEMPO_OVERBUDGET_RATIO = 1.03
