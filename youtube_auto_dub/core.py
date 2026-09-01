@@ -10,6 +10,7 @@ from pathlib import Path
 from rich.table import Table
 
 from youtube_auto_dub.align_text import guess_language
+from youtube_auto_dub.translate_fit import adapt_length
 from youtube_auto_dub.audio import (
     align_segments,
     finalize_audio,
@@ -270,6 +271,12 @@ async def run(args, progress=None) -> Path:
                     if dub_lang.lower() in ("en", "en-us", "english")
                     else translated
                 )
+                if getattr(args, "adapt_translation", True):
+                    seg.translated_text_dub = adapt_length(
+                        seg.translated_text_dub,
+                        max(float(seg.end) - float(seg.start), 0.1),
+                        dub_lang,
+                    )
 
         console.success("Translation done")
 
