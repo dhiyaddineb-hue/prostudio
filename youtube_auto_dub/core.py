@@ -178,6 +178,22 @@ async def run(args, progress=None) -> Path:
                 transcript
             )
             console.step(f"Source language: {lang_detected}")
+        elif not str(args.url).startswith(("http://", "https://")) and Path(args.url).with_suffix(".srt").exists():
+            sidecar = Path(args.url).with_suffix(".srt")
+            console.step(f"Using trusted sidecar transcript: {sidecar.name}")
+            entries = read_srt(str(sidecar))
+            project.segments = [
+                SubtitleSegment(
+                    start=float(item["start"]), end=float(item["end"]),
+                    source_text=item["text"].strip(), confidence=1.0, index=i,
+                )
+                for i, item in enumerate(entries) if item.get("text", "").strip()
+            ]
+            if not project.segments:
+                raise RuntimeError(f"Sidecar transcript is empty: {sidecar}")
+            lang_detected = getattr(args, "source_lang", None) or guess_language(
+                " ".join(seg.source_text for seg in project.segments)
+            )
         elif cached and not getattr(args, "refresh", False):
             console.step("Using cached transcription")
             project.segments = [
