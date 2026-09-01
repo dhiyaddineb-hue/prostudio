@@ -1,0 +1,108 @@
+{
+  "slug": "final-dub-33551532669",
+  "title": "ar → en · verified",
+  "source_name": "md3zd2_clip.mp4",
+  "lang": "ar",
+  "dialect": "",
+  "created_at": "2026-09-01T20:03:10+00:00",
+  "cues": [
+    {
+      "i": 0,
+      "start": 0.0,
+      "end": 8.06,
+      "speaker": "speaker",
+      "text": "The things that permeate a person quickly transcend. Do you know what is the secret of Hadi’s compassion?"
+    },
+    {
+      "i": 1,
+      "start": 10.44,
+      "end": 17.35,
+      "speaker": "speaker",
+      "text": "It changes any behaviors that a person does in his life, in relationships, even in time, meaning"
+    },
+    {
+      "i": 2,
+      "start": 17.88,
+      "end": 27.09,
+      "speaker": "speaker",
+      "text": "I was getting used to sleep and I had to send a message or this was the time we were talking to each other or this was the time"
+    },
+    {
+      "i": 3,
+      "start": 27.09,
+      "end": 35.11,
+      "speaker": "speaker",
+      "text": "There was a quarrel in it, me and my friend, where was the relationship and what should I do? Work for me"
+    },
+    {
+      "i": 4,
+      "start": 35.44,
+      "end": 38.58,
+      "speaker": "speaker",
+      "text": "I wish we could do something new at this time"
+    },
+    {
+      "i": 5,
+      "start": 40.78,
+      "end": 48.06,
+      "speaker": "speaker",
+      "text": "Bravo to you, something new. I used to do this all the time. We were used to doing this in Moroccan times."
+    },
+    {
+      "i": 6,
+      "start": 48.06,
+      "end": 56.46,
+      "speaker": "speaker",
+      "text": "In the morning we do this. This hour is the end of sports. It will allow me to do sports. I'll register for a course and do this."
+    },
+    {
+      "i": 7,
+      "start": 56.46,
+      "end": 66.41,
+      "speaker": "speaker",
+      "text": "I occupy her with something completely away from her, with different activities that I was accustomed to, and in this place I don't go"
+    },
+    {
+      "i": 8,
+      "start": 67.86,
+      "end": 71.64,
+      "speaker": "speaker",
+      "text": "The name is void, such as certain syllables and certain songs, whose name is invalid"
+    }
+  ],
+  "voices": {
+    "engine": "voxcpm",
+    "seed_vc": true
+  },
+  "render": {
+    "settings": {
+      "target_lang": "en",
+      "bg_music": true,
+      "diarize": true
+    },
+    "measured": {
+      "source_duration": 71.819,
+      "transcript_source": "asr",
+      "source_active_ratio": 0.9552,
+      "required_segment_coverage": 0.72,
+      "final_duration": 71.9,
+      "duration_delta": 0.081,
+      "peak_db": -6.0,
+      "audio_stream": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      },
+      "source_longest_silence": 1.912,
+      "final_longest_silence": 1.45,
+      "segment_count": 9,
+      "mean_asr_confidence": 0.6324,
+      "coverage": 0.9016,
+      "max_gap": 2.38,
+      "internal_max_gap": 2.38,
+      "leading_gap": 0.0,
+      "trailing_gap": 0.179,
+      "placed": 9
+    }
+  }
+}
