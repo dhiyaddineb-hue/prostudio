@@ -1,93 +1,164 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ProStudio Control Room</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ProStudio — الدبلجة العربية</title>
+<meta name="description" content="دبلجة عربية آلية: تفريغ، ترجمة، صوت عصبي، ومزامنة زمنية." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet" />
 <style>
-:root{--bg:#080b12;--panel:#111722;--panel2:#171f2d;--line:#263247;--text:#edf3ff;--muted:#91a0b8;--cyan:#4de1d2;--blue:#6ea8ff;--amber:#f5c46a;--red:#ff7185;--green:#6ee7a0}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% -10%,#173454 0,#080b12 38%);color:var(--text);font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}button,input,select{font:inherit}button{cursor:pointer}.shell{display:grid;grid-template-columns:260px 1fr;min-height:100vh}.side{padding:28px 18px;border-left:1px solid var(--line);background:#0c111a}.brand{display:flex;gap:12px;align-items:center;margin-bottom:35px}.mark{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,var(--cyan),var(--blue));box-shadow:0 0 30px #4de1d244}.brand b{font-size:18px}.brand small{display:block;color:var(--muted);font-size:11px}.nav{display:grid;gap:8px}.nav a{color:var(--muted);text-decoration:none;padding:11px 12px;border-radius:10px}.nav a.active,.nav a:hover{background:#1b2b40;color:var(--text)}.side-foot{position:fixed;bottom:20px;color:var(--muted);font-size:12px;width:220px}.main{padding:28px 34px;max-width:1500px;width:100%;margin:auto}.top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:25px}.eyebrow{color:var(--cyan);font-size:12px;letter-spacing:.12em;text-transform:uppercase}.top h1{font-size:30px;margin:5px 0}.top p{color:var(--muted);margin:0}.status{background:#10281f;border:1px solid #24583e;color:var(--green);padding:8px 12px;border-radius:999px;font-size:12px}.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px}.card{background:linear-gradient(180deg,#141c29,#101620);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 18px 50px #0003}.card h2{font-size:17px;margin:0 0 16px}.sub{color:var(--muted);font-size:13px}.drop{border:1px dashed #3c597b;background:#0d1624;border-radius:14px;padding:24px;text-align:center;transition:.18s}.drop.over{border-color:var(--cyan);background:#102b37}.drop input{display:none}.drop label{display:inline-block;background:#213a58;color:#fff;padding:9px 14px;border-radius:9px;margin-top:10px}.file{margin-top:12px;display:flex;justify-content:space-between;color:var(--cyan);font-size:13px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:13px}.field label{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}.field select,.field input{width:100%;background:#0b111b;color:var(--text);border:1px solid var(--line);border-radius:9px;padding:10px}.toggle{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);padding:11px 12px;border-radius:10px;margin-top:12px}.toggle input{accent-color:var(--cyan);width:18px;height:18px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.primary{background:linear-gradient(135deg,var(--cyan),#318fd8);color:#041018;border:0;border-radius:10px;padding:11px 18px;font-weight:700}.ghost{background:transparent;color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px 15px}.pipeline{display:grid;gap:8px}.stage{display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;background:#0c131e;border:1px solid #1f2b3d}.num{width:25px;height:25px;display:grid;place-items:center;border-radius:8px;background:#203854;color:var(--cyan);font-size:12px}.stage small{color:var(--muted);display:block}.diag{display:grid;grid-template-columns:1fr 1fr;gap:9px}.check{padding:10px;border-radius:10px;background:#0c131e;border:1px solid var(--line);font-size:12px}.ok{color:var(--green)}.warn{color:var(--amber)}.video-list{display:grid;gap:10px;max-height:280px;overflow:auto}.video{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px;background:#0c131e;border:1px solid var(--line);border-radius:10px}.video a{color:var(--blue);text-decoration:none}.log{height:155px;overflow:auto;background:#070b11;border-radius:10px;padding:12px;color:#a9bdd7;font:12px/1.7 ui-monospace,monospace;white-space:pre-wrap}.wide{grid-column:1/-1}@media(max-width:900px){.shell{display:block}.side{border:0;border-bottom:1px solid var(--line)}.nav{display:flex;overflow:auto}.side-foot{display:none}.main{padding:22px 16px}.grid{grid-template-columns:1fr}.wide{grid-column:auto}}
-</style></head>
+  :root{
+    --bg:#07080c; --ink:#f4efe4; --muted:#b7b0a3;
+    --line:rgba(244,239,228,.12); --card:rgba(16,17,23,.78);
+    --gold:#e8b86d; --ok:#7dcea0;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
+    font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;
+    background-image:radial-gradient(circle at 15% 8%,rgba(232,184,109,.16),transparent 38%),
+                     radial-gradient(circle at 88% 82%,rgba(90,140,255,.10),transparent 34%);
+  }
+  header{padding:26px 6vw 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
+  .mark{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
+        background:linear-gradient(160deg,var(--gold),#9a6a2c);color:#1a1208;font-weight:700}
+  .brand strong{display:block;letter-spacing:.03em}
+  .brand small{color:var(--muted)}
+  nav a{color:var(--muted);text-decoration:none;font-size:14.5px;margin-inline-start:16px}
+  nav a:hover,nav a.on{color:var(--gold)}
+  main{max-width:1080px;margin:0 auto;padding:26px 6vw 60px}
+  h1{font-size:clamp(26px,4.4vw,42px);line-height:1.2;margin:18px 0 8px}
+  .lede{color:var(--muted);font-size:17px;max-width:60ch;margin:0 0 30px}
+  h2.sec{font-size:19px;margin:38px 0 16px}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;
+        overflow:hidden;display:flex;flex-direction:column;transition:.18s}
+  .card:hover{border-color:var(--gold);transform:translateY(-2px)}
+  .card video{width:100%;aspect-ratio:16/9;object-fit:cover;background:#000;display:block}
+  .card .body{padding:16px 18px 18px;display:flex;flex-direction:column;gap:10px;flex:1}
+  .card h3{margin:0;font-size:17px}
+  .facts{display:flex;flex-wrap:wrap;gap:6px}
+  .tag{font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .tag.ok{color:var(--ok);border-color:rgba(125,206,160,.35)}
+  .row{display:flex;gap:8px;margin-top:auto;padding-top:6px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:10px 16px;border-radius:10px;
+       text-decoration:none;font-weight:600;font-size:14px}
+  .primary{background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208}
+  .ghost{border:1px solid var(--line);color:var(--ink)}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px 24px}
+  .steps{margin:0;padding-inline-start:20px;color:var(--muted);line-height:1.95;font-size:14.5px}
+  .steps b{color:var(--ink)}
+  footer{color:var(--muted);font-size:13.5px;padding:0 6vw 40px;text-align:center}
+  a{color:var(--gold)}
+  code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:6px;font-size:13px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:760px){.two{grid-template-columns:1fr}}
+</style>
+</head>
 <body>
-<section id="ps-latest-dub" style="max-width:1100px;margin:20px auto;padding:0 16px;font-family:'Segoe UI',Tahoma,sans-serif" dir="rtl">
-  <div style="background:#12202b;border:1px solid #58a68d;border-radius:14px;padding:18px;color:#e6edf3">
-    <h2 style="font-size:17px;margin:0 0 6px;color:#7ee2a8">الفيديو المدبلج الأخير</h2>
-    <div style="font-size:12px;color:#9da7b3;margin-bottom:12px">يظهر هنا آخر فيديو مدبلج تلقائياً بعد اكتمال الدبلجة، للمعاينة والتحميل مباشرة.
-      <button id="psLatestRefresh" style="margin-inline-start:8px;padding:6px 14px;border:1px solid #30363d;background:#1c2330;color:#e6edf3;border-radius:8px;cursor:pointer">تحديث</button></div>
-    <div id="psLatest"><p style="color:#9da7b3">جارٍ التحميل...</p></div>
+
+<header>
+  <div class="brand">
+    <span class="mark">PS</span>
+    <div><strong>ProStudio</strong><small>دبلجة عربية آلية</small></div>
   </div>
-</section>
-<script>
-(function(){
-  const O="dhiyaddineb-hue",R="prostudio",BR="arena/01a03969-prostudio";
-  const tok=()=>localStorage.getItem("ps_token")||localStorage.getItem("token")||"";
-  function h(){const x={"Accept":"application/vnd.github+json"};const t=tok();if(t)x.Authorization="Bearer "+t;return x;}
-  async function load(){
-    const box=document.getElementById("psLatest");box.innerHTML="<p style='color:#9da7b3'>جارٍ التحميل...</p>";
-    try{
-      let r=await fetch(`https://api.github.com/repos/${O}/${R}/contents/output/dubbed?ref=${encodeURIComponent(BR)}`,{headers:h()});
-      let files=r.ok?await r.json():[];
-      let vids=(Array.isArray(files)?files:[]).filter(f=>/\.(mp4|mov|mkv|webm)$/i.test(f.name));
-      if(!vids.length){box.innerHTML="<p style='color:#9da7b3'>لا يوجد فيديو مدبلج بعد. شغّل الدبلجة وسيظهر هنا تلقائياً.</p>";return;}
-      const num=n=>{const m=n.match(/(\d+)\.(?:mp4|mov|mkv|webm)$/i);return m?parseInt(m[1]):0;};
-      vids.sort((a,b)=>num(b.name)-num(a.name));
-      const v=vids[0];
-      const raw=`https://raw.githubusercontent.com/${O}/${R}/${encodeURIComponent(BR)}/output/dubbed/${encodeURIComponent(v.name)}`;
-      box.innerHTML=`<video controls preload="metadata" src="${raw}" style="width:100%;max-height:420px;background:#000;border-radius:10px;display:block"></video>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-wrap:wrap;gap:8px">
-          <div style="font-size:13px;color:#e6edf3;word-break:break-all">${v.name}<br><span style="font-size:11px;color:#9da7b3">${(v.size/1048576).toFixed(2)} MB</span></div>
-          <a href="${raw}" download style="padding:9px 18px;background:#58a68d;color:#08130f;font-weight:700;border-radius:8px;text-decoration:none">تحميل الفيديو</a>
-        </div>${vids.length>1?`<div style="font-size:11px;color:#9da7b3;margin-top:8px">+${vids.length-1} فيديو مدبلج سابق في مكتبة الفيديوهات أدناه.</div>`:""}`;
-    }catch(e){box.innerHTML="<p style='color:#f85149'>خطأ: "+e+"</p>";}
-  }
-  document.getElementById("psLatestRefresh").addEventListener("click",load);
-  load();
-})();
-</script>
-<div class="shell"><aside class="side"><div class="brand"><div class="mark"></div><div><b>ProStudio</b><small>Production Control Room</small></div></div><nav class="nav"><a class="active" href="#control">لوحة التحكم</a><a href="#pipeline">خط الإنتاج</a><a href="#library">مكتبة المستودع</a><a href="#diagnostics">التشخيص</a><a href="https://github.com/dhiyaddineb-hue/prostudio/actions/workflows/dub.yml" target="_blank">GitHub Actions ↗</a></nav><div class="side-foot">No lip-sync stage<br>Audio-first dubbing pipeline</div></aside><main class="main"><header class="top"><div><div class="eyebrow">PRODUCTION / AUDIO DUBBING</div><h1>استوديو الدبلجة الاحترافي</h1><p>تحكم كامل في المصدر، المتحدثين، الاستنساخ، الترجمة، والخلفية الصوتية.</p></div><div class="status">● النظام جاهز للفحص</div></header><section class="grid" id="control"><div class="card"><h2>مصدر المشروع</h2><div class="drop" id="drop"><div style="font-size:30px">↑</div><b>ارفع فيديو أو ملفًا صوتيًا</b><div class="sub">سيظهر الملف هنا للمعاينة قبل تشغيل GitHub Actions</div><input id="file" type="file" accept="video/*,audio/*"><label for="file">اختيار ملف</label><div class="file" id="fileName">لم يتم اختيار ملف</div></div><div class="fields" style="margin-top:16px"><div class="field"><label>لغة المصدر</label><select id="source"><option value="auto">اكتشاف تلقائي</option><option value="en">English</option><option value="ar">العربية</option><option value="fr">Français</option><option value="es">Español</option></select></div><div class="field"><label>لغة الدبلجة</label><select id="target"><option value="ar">العربية</option><option value="en">English</option><option value="fr">Français</option><option value="es">Español</option><option value="tr">Türkçe</option></select></div><div class="field"><label>محرك الصوت</label><select id="engine"><option value="voxcpm">VoxCPM2 — local official model</option><option value="edge">Edge-TTS</option><option value="xtts">XTTS-v2 — اختيار يدوي فقط</option></select></div><div class="field"><label>جودة المعالجة</label><select id="quality"><option value="strict">Strict — احترافي</option><option value="balanced">Balanced</option><option value="safe">Safe</option></select></div></div><div class="toggle"><span>استنساخ صوت كل متحدث</span><input id="clone" type="checkbox" checked></div><div class="toggle"><span>فصل الكلام عن الموسيقى والمؤثرات أولًا</span><input id="separate" type="checkbox" checked></div><div class="toggle"><span>إعادة دمج الموسيقى والمؤثرات</span><input id="bg" type="checkbox" checked></div><div class="toggle"><span>اكتشاف المتحدثين تلقائيًا</span><input id="diarize" type="checkbox" checked></div><div class="fields" style="margin-top:12px"><div class="field"><label>نوع الناتج</label><select id="output"><option value="video">فيديو + صوت</option><option value="audio">صوت فقط</option><option value="both">فيديو + ترجمة</option></select></div><div class="field"><label>ملف الترجمة</label><select id="subtitle"><option value="srt">SRT</option><option value="none">بدون ترجمة</option></select></div></div><div class="field" style="margin-top:14px"><label>GitHub Personal Access Token <span class="sub">(لا يتم حفظه)</span></label><input id="token" type="password" autocomplete="off" placeholder="ghp_… أو github_pat_…"><div class="toggle"><span>تذكر التوكن على هذا الجهاز (اختياري)</span><input id="rememberToken" type="checkbox"></div><small class="sub">الصلاحيات المطلوبة: Contents read/write و Actions read/write لهذا المستودع فقط.</small></div><div class="actions"><button class="primary" id="run">ابدأ الدبلجة تلقائيًا</button><button class="ghost" id="save">حفظ محلي</button></div><div class="sub" style="margin-top:10px">زر التشغيل يفتح نموذج GitHub Actions بالإعدادات المختارة. رفع الملف إلى المستودع يتم عبر GitHub للحفاظ على الأسرار آمنة.</div></div><div class="card" id="pipeline"><h2>ترتيب خط الإنتاج</h2><div class="pipeline"><div class="stage"><span class="num">01</span><div><b>فصل الصوت</b><small>Demucs: dialogue / music / effects</small></div></div><div class="stage"><span class="num">02</span><div><b>التفريغ والتوقيت</b><small>Whisper على stem الحوار فقط</small></div></div><div class="stage"><span class="num">03</span><div><b>اكتشاف المتحدثين</b><small>Speaker diarization + confidence</small></div></div><div class="stage"><span class="num">04</span><div><b>بناء مراجع الهوية</b><small>مرجع مستقل ونظيف لكل متحدث</small></div></div><div class="stage"><span class="num">05</span><div><b>ترجمة واعية بالمدة</b><small>اختصار الجملة عند تجاوز نافذة التوقيت</small></div></div><div class="stage"><span class="num">06</span><div><b>توليد ومزامنة الصوت</b><small>بدون قص نهايات الكلام وبدون lip-sync</small></div></div><div class="stage"><span class="num">07</span><div><b>إعادة الدمج والتصدير</b><small>إرجاع الخلفية اختياريًا + تقرير تشخيص</small></div></div></div></div><div class="card" id="diagnostics"><h2>التشخيص</h2><div class="diag"><div class="check ok">✓ FFmpeg <small>مطلوب للمعالجة</small></div><div class="check ok">✓ GitHub Actions <small>متصل بالمستودع</small></div><div class="check warn">! HF_TOKEN <small>يتحقق منه التشغيل</small></div><div class="check ok">✓ Lip-sync <small>معطل عمدًا</small></div><div class="check" id="browserCheck">… الملف <small>لم يتم الفحص</small></div><div class="check">✓ Engine policy <small>XTTS opt-in فقط</small></div></div><div class="log" id="log">[ready] ProStudio control room initialized\n[policy] visual lip-sync is disabled\n[policy] XTTS is never selected automatically\n[stage] source separation precedes ASR and diarization</div></div><div class="card wide" id="library"><h2>مكتبة ملفات المستودع <span class="sub">— ملفات الفيديو الحالية والجديدة</span></h2><div class="video-list" id="videos"><div class="sub">جارِ تحميل الملفات…</div></div></div></section></main></div>
-<script>
-const $=id=>document.getElementById(id), log=t=>{$('log').textContent+=`\n${t}`;$('log').scrollTop=99999};
-const drop=$('drop'), file=$('file');
-['dragenter','dragover'].forEach(e=>drop.addEventListener(e,x=>{x.preventDefault();drop.classList.add('over')}));['dragleave','drop'].forEach(e=>drop.addEventListener(e,x=>{x.preventDefault();drop.classList.remove('over')}));drop.addEventListener('drop',e=>{file.files=e.dataTransfer.files;showFile()});file.addEventListener('change',showFile);function showFile(){const f=file.files[0];if(!f)return;$('fileName').textContent=`${f.name} · ${(f.size/1024/1024).toFixed(1)} MB`;$('browserCheck').className='check ok';$('browserCheck').innerHTML='✓ الملف <small>جاهز للرفع والمعالجة</small>';log(`[input] ${f.name}`)}
-function cfg(){return {source:$('source').value,target:$('target').value,engine:$('engine').value,quality:$('quality').value,clone:$('clone').checked,separate:$('separate').checked,bg:$('bg').checked,diarize:$('diarize').checked,output:$('output').value,subtitle:$('subtitle').value}}
-$('save').onclick=()=>{localStorage.prostudio=JSON.stringify(cfg());if($('rememberToken').checked&&$('token').value)localStorage.setItem('prostudio_github_token',$('token').value);log('[saved] settings saved locally')};$('engine').onchange=()=>{if($('engine').value==='xtts')log('[notice] XTTS selected manually; it will not be used otherwise')};$('run').onclick=async()=>{const token=$('token').value.trim()||localStorage.getItem('prostudio_github_token')||'';const f=file.files[0];if(!token){log('[error] أدخل GitHub Token أو فعّل التذكر بعد إدخاله');return}if(!f){log('[error] اختر ملفًا أولًا');return}try{$('run').disabled=true;log('[upload] رفع الملف إلى GitHub…');const name=`inbox/${Date.now()}-${f.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;const bytes=await f.arrayBuffer();let bin='';const data=new Uint8Array(bytes);for(let i=0;i<data.length;i+=0x8000)bin+=String.fromCharCode(...data.subarray(i,i+0x8000));const b64=btoa(bin);let r=await fetch(`https://api.github.com/repos/dhiyaddineb-hue/prostudio/contents/${name}`,{method:'PUT',headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json','Content-Type':'application/json'},body:JSON.stringify({message:`Upload source ${f.name}`,branch:'arena/01a03969-prostudio',content:b64})});if(!r.ok)throw new Error(`upload ${r.status}`);log('[dispatch] بدء Workflow تلقائيًا…');r=await fetch('https://api.github.com/repos/dhiyaddineb-hue/prostudio/actions/workflows/dub.yml/dispatches',{method:'POST',headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json','Content-Type':'application/json'},body:JSON.stringify({ref:'arena/01a03969-prostudio',inputs:{task:'dub',source_path:name,source_lang:$('source').value,target_lang:$('target').value,tts_engine:$('engine').value,mode:'dub',gender:'male',model:'base',diarize:String($('diarize').checked),separate_sources:String($('separate').checked),bg_music:String($('bg').checked),profile:'multi_speaker_cinematic',quality:$('quality').value}})});if(!r.ok)throw new Error(`dispatch ${r.status}`);log('[success] تم إرسال الطلب. جارٍ انتظار Workflow داخل الصفحة…');const startedAt=new Date(Date.now()-5000).toISOString();async function monitor(){for(let i=0;i<180;i++){await new Promise(r=>setTimeout(r,10000));const q=await fetch('https://api.github.com/repos/dhiyaddineb-hue/prostudio/actions/workflows/dub.yml/runs?branch=arena/01a03969-prostudio&event=workflow_dispatch&per_page=10',{headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json'}});if(!q.ok)throw new Error(`status ${q.status}`);const runs=(await q.json()).workflow_runs||[];const run=runs.find(x=>x.created_at>=startedAt)||runs[0];if(!run){log(`[wait] لم يظهر التشغيل بعد (${i+1}/180)`);continue}log(`[status] ${run.status}${run.conclusion?` / ${run.conclusion}`:''}`);if(run.status==='completed'){if(run.conclusion==='success'){log('[done] اكتملت الدبلجة بنجاح.');const ar=await fetch(`https://api.github.com/repos/dhiyaddineb-hue/prostudio/actions/runs/${run.id}/artifacts`,{headers:{Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json'}});const arts=await ar.json();const artifact=(arts.artifacts||[]).find(x=>x.name==='final-dubbed-video');if(artifact){log(`[artifact] الناتج جاهز: ${artifact.name}`);const a=document.createElement('a');a.href=artifact.archive_download_url;a.target='_blank';a.textContent='تحميل الناتج من GitHub';a.style='display:block;color:#4de1d2;margin-top:8px';$('log').appendChild(a)}else log('[notice] اكتمل التشغيل لكن الأرتيفاكت لم يظهر بعد.');}else log(`[failed] فشل التشغيل: ${run.conclusion}. افتح سجل التشخيص في GitHub عند الحاجة.`);return}}throw new Error('انتهت مهلة انتظار Workflow (30 دقيقة)')}await monitor();if(!$('rememberToken').checked)$('token').value='';}catch(e){log(`[error] ${e.message}`)}finally{$('run').disabled=false}};
-try{const c=JSON.parse(localStorage.prostudio||'{}');for(const [k,v] of Object.entries(c)){if($(k)){if($(k).type==='checkbox')$(k).checked=v;else $(k).value=v}}const savedToken=localStorage.getItem('prostudio_github_token');if(savedToken){$('token').value=savedToken;$('rememberToken').checked=true}}catch(e){}
-fetch('https://api.github.com/repos/dhiyaddineb-hue/prostudio/contents/samples?ref=arena/01a03969-prostudio').then(r=>r.json()).then(xs=>{$('videos').innerHTML='';(Array.isArray(xs)?xs:[]).filter(x=>/\.(mp4|webm|mov|mp3|wav)$/i.test(x.name)).forEach(x=>{$('videos').innerHTML+=`<div class="video"><span>${x.name}</span><a href="${x.html_url}" target="_blank">فتح في GitHub ↗</a></div>`});if(!$('videos').children.length)$('videos').innerHTML='<div class="sub">لا توجد ملفات فيديو في samples حاليًا.</div>'}).catch(()=>{$('videos').innerHTML='<div class="sub">تعذر قراءة المكتبة العامة.</div>'});
-</script>
-<section id="ps-video-library" style="max-width:1100px;margin:24px auto;padding:0 16px;font-family:'Segoe UI',Tahoma,sans-serif" dir="rtl">
-  <div style="background:#161b22;border:1px solid #30363d;border-radius:14px;padding:18px;color:#e6edf3">
-    <h2 style="font-size:16px;border-right:3px solid #58a68d;padding-right:10px;margin:0 0 6px">مكتبة الفيديوهات (معاينة تلقائية)</h2>
-    <div style="font-size:12px;color:#9da7b3;margin-bottom:12px">تُعرض كل فيديوهات المستودع تلقائياً — المدبلجة وغير المدبلجة. أي فيديو جديد يظهر عند الضغط على تحديث.
-      <button id="psRefresh" style="margin-inline-start:8px;padding:6px 14px;border:1px solid #30363d;background:#1c2330;color:#e6edf3;border-radius:8px;cursor:pointer">تحديث</button></div>
-    <div id="psGallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px"></div>
+  <nav>
+    <a href="index.html" class="on">الرئيسية</a>
+    <a href="dashboard.html">مركز التحكم</a>
+    <a href="preview.html">المعاينة</a>
+    <a href="voices.html" style="color:var(--muted);text-decoration:none;font-size:14.5px">الأصوات</a>
+    <a href="studio.html" style="color:var(--muted);text-decoration:none;font-size:14.5px">المصمّم</a>
+    <a href="send.html">إرسال فيديو</a>
+  </nav>
+</header>
+
+<main>
+  <h1>الدبلجات الجاهزة</h1>
+  <p class="lede">
+    كل مقطع هنا مبني بالكامل: حوار عربي مُعاد، موسيقى الخلفية محفوظة،
+    وكل جملة مثبّتة على توقيتها. الأرقام تحت كل مقطع مقيسة من الملف نفسه.
+  </p>
+
+  <div class="cards" id="cards">
+    <p style="color:var(--muted)">جارٍ التحميل…</p>
   </div>
-</section>
+
+  <h2 class="sec">أرسل مقطعك</h2>
+  <div class="two">
+    <section class="panel">
+      <p style="color:var(--muted);font-size:15px;line-height:1.9;margin:0 0 14px">
+        ارفع فيديو أو ملف صوت، ويرجع لك مدبلجاً بالعربية على هذه الصفحة.
+      </p>
+      <a class="btn primary" href="send.html">إرسال ملف ←</a>
+    </section>
+
+    <section class="panel">
+      <h3 style="margin:0 0 12px;font-size:16px">كيف تُصنع</h3>
+      <ol class="steps">
+        <li><b>استخراج النص</b> من الترجمة أو من الصوت</li>
+        <li><b>عزل الموسيقى</b> عن الحوار بفصل القناة المركزية</li>
+        <li><b>إعادة الصياغة</b> إلى العربية بلهجة المشروع</li>
+        <li><b>توليد الصوت</b> بمقاطع متصلة تحفظ التنغيم</li>
+        <li><b>المزامنة</b> بتقطيع نسبي لطول النص</li>
+      </ol>
+    </section>
+  </div>
+</main>
+
+<footer>
+  ProStudio · مبني على
+  <a href="https://github.com/mangodxd/youtube-auto-dub" target="_blank" rel="noreferrer">youtube-auto-dub</a>
+  · <a href="https://github.com/dhiyaddineb-hue/prostudio/tree/arena/01a03969-prostudio">المستودع</a>
+  · رخصة MIT
+</footer>
+
 <script>
-(function(){
-  const O="dhiyaddineb-hue",R="prostudio",BR="arena/01a03969-prostudio";
-  const tok=()=>localStorage.getItem("ps_token")||localStorage.getItem("token")||"";
-  function h(){const x={"Accept":"application/vnd.github+json"};const t=tok();if(t)x.Authorization="Bearer "+t;return x;}
-  async function load(){
-    const g=document.getElementById("psGallery");g.innerHTML="<p style='color:#9da7b3'>جارٍ التحميل...</p>";
-    try{
-      const r=await fetch(`https://api.github.com/repos/${O}/${R}/git/trees/${encodeURIComponent(BR)}?recursive=1`,{headers:h()});
-      if(!r.ok){g.innerHTML="<p style='color:#f85149'>تعذّر الجلب ("+r.status+")</p>";return;}
-      const t=await r.json();
-      const v=t.tree.filter(x=>x.type==="blob"&&/\.(mp4|mov|mkv|webm)$/i.test(x.path)).sort((a,b)=>a.path.localeCompare(b.path));
-      g.innerHTML=v.length?"":"<p style='color:#9da7b3'>لا توجد فيديوهات.</p>";
-      for(const it of v){
-        const dub=/output|seedvc|dub|enhanced|_en\.|english/i.test(it.path);
-        const raw=`https://raw.githubusercontent.com/${O}/${R}/${encodeURIComponent(BR)}/${it.path.split("/").map(encodeURIComponent).join("/")}`;
-        const c=document.createElement("div");c.style.cssText="background:#1c2330;border:1px solid #30363d;border-radius:12px;overflow:hidden";
-        c.innerHTML=`<video controls preload="metadata" src="${raw}" style="width:100%;max-height:210px;background:#000;display:block"></video>
-          <div style="padding:10px 12px"><div style="font-size:12px;font-weight:600;word-break:break-all;color:#e6edf3">${it.path}
-          <span style="font-size:10px;padding:2px 8px;border-radius:999px;margin-inline-start:6px;${dub?'background:#0f2417;color:#7ee2a8;border:1px solid #2ea043':'background:#161b22;color:#9da7b3;border:1px solid #30363d'}">${dub?'مدبلج':'مصدر'}</span></div>
-          <div style="font-size:11px;color:#9da7b3;margin-top:4px">${(it.size/1048576).toFixed(2)} MB · <a href="${raw}" target="_blank" style="color:#4f86c6">تحميل</a></div></div>`;
-        g.appendChild(c);
-      }
-    }catch(e){g.innerHTML="<p style='color:#f85149'>خطأ: "+e+"</p>";}
-  }
-  document.getElementById("psRefresh").addEventListener("click",load);
-  load();
-})();
+// One source of truth: projects.json is regenerated from the rendered files, so
+// a new dub appears here the moment it is published — no HTML edit, and no
+// number that can drift away from the file it describes.
+fetch('projects.json')
+  .then(r => r.json())
+  .then(({ projects }) => {
+    const box = document.getElementById('cards');
+    if (!projects.length) { box.innerHTML = '<p style="color:var(--muted)">لا توجد دبلجة بعد.</p>'; return; }
+    box.innerHTML = '';
+    projects.forEach(p => {
+      const m = p.metrics;
+      const card = document.createElement('article');
+      card.className = 'card';
+      card.innerHTML = `
+        <video muted playsinline preload="metadata" src="${p.video}#t=0.5"></video>
+        <div class="body">
+          <h3></h3>
+          <div class="facts">
+            <span class="tag">${m.cues} جملة</span>
+            <span class="tag">${Math.round(m.duration)} ثانية</span>
+            ${m.rate ? `<span class="tag">${m.rate} حرف/ث</span>` : ''}
+            <span class="tag ${m.overlaps ? '' : 'ok'}">${m.overlaps ? m.overlaps + ' تداخل' : 'بلا تداخل'}</span>
+            <span class="tag ${m.clipped ? '' : 'ok'}">${m.peak_dbfs} dBFS</span>
+          </div>
+          <div class="row">
+            <a class="btn primary" href="preview.html?p=${encodeURIComponent(p.slug)}">معاينة</a>
+            <a class="btn ghost" href="${p.video}" download>تحميل</a>
+            ${p.srt ? `<a class="btn ghost" href="${p.srt}" download>SRT</a>` : ''}
+          </div>
+        </div>`;
+      card.querySelector('h3').textContent = p.title;
+      const v = card.querySelector('video');
+      card.onmouseenter = () => { v.play().catch(() => {}); };
+      card.onmouseleave = () => { v.pause(); v.currentTime = 0.5; };
+      box.appendChild(card);
+    });
+  })
+  .catch(() => {
+    document.getElementById('cards').innerHTML =
+      '<p style="color:var(--muted)">تعذّر تحميل قائمة المشاريع.</p>';
+  });
 </script>
 
-</body></html>
+</body>
+</html>

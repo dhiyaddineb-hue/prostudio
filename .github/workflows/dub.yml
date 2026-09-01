@@ -55,35 +55,11 @@ on:
         default: "en-US-AndrewMultilingualNeural"
         type: string
       tts_engine:
-        description: "dub: speech engine (XTTS is opt-in and never selected automatically)"
+        description: "dub: speech engine (xtts clones the source voice)"
         required: false
-        default: "voxcpm"
+        default: "xtts"
         type: choice
         options: [xtts, edge, voxcpm]
-      voxcpm_backend:
-        description: "voxcpm: where to run it - space (fast, hosted GPU) or local (slow, reliable)"
-        required: false
-        default: "local"
-        type: choice
-        options: [space, local]
-      enhance_seedvc:
-        description: "voxcpm: apply Seed-VC timbre transfer after generation"
-        required: false
-        default: "true"
-        type: choice
-        options: ["true", "false"]
-      adapt_translation:
-        description: "dub: shorten translation to fit source timing (better sync)"
-        required: false
-        default: "true"
-        type: choice
-        options: ["true", "false"]
-      no_vad:
-        description: "dub: disable VAD and transcribe the whole audio (better coverage for continuous speech)"
-        required: false
-        default: "false"
-        type: choice
-        options: ["true", "false"]
       target_lang:
         description: "dub: target language"
         required: false
@@ -102,11 +78,11 @@ on:
         type: choice
         options: [male, female]
       model:
-        description: "dub: Whisper model (medium/large-v3 = far better Arabic coverage)"
+        description: "dub: Whisper model"
         required: false
         default: "base"
         type: choice
-        options: [tiny, base, small, medium, large-v3]
+        options: [tiny, base, small]
       bg_music:
         description: "dub: keep background music and effects when separation is reliable"
         required: false
@@ -120,8 +96,19 @@ on:
       separate_sources:
         description: "dub: neural separation of dialogue from music/effects"
         required: false
-        default: true
+        default: false
         type: boolean
+      lip_sync:
+        description: "deprecated: visual lip-sync is disabled; audio-only dubbing is used"
+        required: false
+        default: false
+        type: boolean
+      lip_sync_backend:
+        description: "dub: verified visual backend"
+        required: false
+        default: "wav2lip"
+        type: choice
+        options: [wav2lip, experiment]
       profile:
         description: "dub: pipeline profile"
         required: false
@@ -139,9 +126,6 @@ on:
         required: false
         default: ""
         type: string
-
-permissions:
-  contents: write
 
 jobs:
   clone:
@@ -289,24 +273,9 @@ jobs:
           print("XTTS-v2 ready")
           PY
 
-      - name: Install official VoxCPM2
-        if: inputs.tts_engine == 'voxcpm' && inputs.voxcpm_backend != 'space'
-        run: python -m pip install voxcpm
       - name: Install optional speaker diarization
         if: inputs.diarize == true
         run: python -m pip install pyannote.audio
-      - name: Verify Hugging Face token is available
-        if: inputs.diarize == true
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "$HF_TOKEN" ]; then
-            echo "HF_TOKEN is missing or unavailable to this workflow." >&2
-            echo "Add it under repository Settings > Secrets and variables > Actions." >&2
-            exit 1
-          fi
-          echo "HF_TOKEN is configured (value hidden)."
       - name: Install optional neural source separation
         if: inputs.separate_sources == true
         run: python -m pip install demucs
@@ -328,9 +297,6 @@ jobs:
           YAD_CACHE_DIR: .cache
           YAD_COOKIES_FILE: cookies.txt
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          YAD_VOXCPM_BACKEND: ${{ inputs.voxcpm_backend }}
-          YAD_FIXED_WINDOWS: "false"
-          YAD_FIXED_WINDOW_SECONDS: "6.0"
         run: |
           set -euo pipefail
           source="${{ inputs.youtube_url }}"
@@ -348,15 +314,6 @@ jobs:
           if [ "${{ inputs.diarize }}" = "true" ]; then
             extra+=(--diarize)
           fi
-          if [ "${{ inputs.separate_sources }}" = "true" ]; then
-            extra+=(--separate-sources)
-          fi
-          if [ "${{ inputs.no_vad }}" = "true" ]; then
-            extra+=(--no-vad)
-          fi
-          if [ "${{ inputs.adapt_translation }}" = "false" ]; then
-            extra+=(--no-adapt-translation)
-          fi
           python -m youtube_auto_dub "$source" \
             --lang "${{ inputs.target_lang }}" \
             --dub-lang "${{ inputs.target_lang }}" \
@@ -371,11 +328,7 @@ jobs:
           ls -lh output
 
       - name: Enhance voice with Seed-VC
-        # Seed-VC has one reference input. Never run it over a diarized mix:
-        # that would convert the male and female turns into one identity.
-        # It is therefore available only for an explicitly selected
-        # single-speaker VoxCPM job.
-        if: inputs.tts_engine == 'voxcpm' && inputs.diarize == false && inputs.enhance_seedvc == 'true'
+        if: inputs.tts_engine == 'xtts' || inputs.tts_engine == 'voxcpm'
         env:
           SOURCE_PATH: ${{ inputs.source_path }}
         run: |
@@ -400,6 +353,42 @@ jobs:
             "${extra[@]}"
           rm -f "$dubbed"
 
+      - name: Conditional lip synchronization
+        if: false
+        env:
+          WAV2LIP_CHECKPOINT: ${{ secrets.WAV2LIP_CHECKPOINT }}
+          WAV2LIP_CHECKPOINT_URL: ${{ secrets.WAV2LIP_CHECKPOINT_URL }}
+        run: |
+          set -euo pipefail
+          if [ -n "$WAV2LIP_CHECKPOINT_URL" ]; then
+            test -n "${{ inputs.wav2lip_sha256 }}" || { echo "wav2lip_sha256 is required when downloading a checkpoint" >&2; exit 1; }
+            curl --fail --location --retry 3 --output /tmp/wav2lip.pth "$WAV2LIP_CHECKPOINT_URL"
+            echo "${{ inputs.wav2lip_sha256 }}  /tmp/wav2lip.pth" | sha256sum --check
+            WAV2LIP_CHECKPOINT=/tmp/wav2lip.pth
+          fi
+          if [ -z "$WAV2LIP_CHECKPOINT" ]; then
+            echo "WAV2LIP_CHECKPOINT is not configured; preserving the validated Seed-VC audio dub."
+            printf '%s\n' '{"requested":true,"applied":false,"reason":"missing_verified_checkpoint","quality":"unvalidated"}' > output/lip-sync-report.json
+            exit 0
+          fi
+          if [ ! -f "$WAV2LIP_CHECKPOINT" ]; then
+            echo "WAV2LIP_CHECKPOINT does not exist on this runner; preserving the validated Seed-VC audio dub."
+            printf '%s\n' '{"requested":true,"applied":false,"reason":"checkpoint_path_missing","quality":"unvalidated"}' > output/lip-sync-report.json
+            exit 0
+          fi
+          python -m pip install opencv-python-headless
+          git clone --depth 1 https://github.com/Rudrabha/Wav2Lip.git /tmp/Wav2Lip
+          python lip_sync/run.py \
+            --video output/seedvc-enhanced.mp4 \
+            --audio output/seedvc-enhanced.seed-work/final-mixed.wav \
+            --wav2lip-repo /tmp/Wav2Lip \
+            --checkpoint "$WAV2LIP_CHECKPOINT" \
+            --output output/lipsynced.mp4 \
+            --min-coverage 0.20 \
+            --min-face-ratio 0.008
+          rm -f output/seedvc-enhanced.mp4
+          mv output/lipsynced.mp4 output/seedvc-enhanced.mp4
+
       - name: Upload the dubbed video
         uses: actions/upload-artifact@v4
         with:
@@ -413,26 +402,3 @@ jobs:
             output/**/*.log
           if-no-files-found: error
           retention-days: 14
-
-      - name: Save the dubbed video into the repository
-        if: always()
-        continue-on-error: true
-        run: |
-          set -e
-          final=$(find output -maxdepth 1 -type f -name '*.mp4' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
-          if [ -z "$final" ]; then echo "No mp4 to save"; exit 0; fi
-          mkdir -p output/dubbed
-          base=$(basename "${{ inputs.source_path }}" | sed 's/\.[^.]*$//')
-          [ -z "$base" ] && base="dub"
-          dest="output/dubbed/${base}-${{ inputs.target_lang }}-${{ github.run_id }}.mp4"
-          cp "$final" "$dest"
-          git config user.name "prostudio-bot"
-          git config user.email "actions@github.com"
-          git add -f "$dest"
-          git commit -m "output: dubbed video ${dest} (run ${{ github.run_id }})" || { echo "nothing to commit"; exit 0; }
-          for i in 1 2 3; do
-            git pull --rebase origin "${{ github.ref_name }}" || true
-            if git push origin "HEAD:${{ github.ref_name }}"; then echo "pushed"; break; fi
-            echo "push retry $i"; sleep 4
-          done
-          echo "Saved dubbed video to ${dest}"
