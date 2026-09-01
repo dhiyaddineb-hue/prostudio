@@ -1,0 +1,130 @@
+{
+  "slug": "final-dub-33568619646",
+  "title": "ar → en · verified",
+  "source_name": "newclip_1000235086.mp4",
+  "lang": "ar",
+  "dialect": "",
+  "created_at": "2026-09-01T23:16:26+00:00",
+  "cues": [
+    {
+      "i": 0,
+      "start": 0.0,
+      "end": 7.52,
+      "speaker": "speaker",
+      "text": "We find that some of our predecessors fasted for 40 years without anyone knowing about their fasting"
+    },
+    {
+      "i": 1,
+      "start": 8.21,
+      "end": 17.58,
+      "speaker": "speaker",
+      "text": "Someone spoiled him when they said that his wife didn't know that he was fasting. Wasn’t this 40 years, 40 years every day? I mean, he used to fast, he used to fast a lot, and no one taught him how to fast."
+    },
+    {
+      "i": 2,
+      "start": 18.42,
+      "end": 24.62,
+      "speaker": "speaker",
+      "text": "Whenever he left his house, he would take two loaves of loaf of bread. He was a trader in evil and would give them as charity on the way"
+    },
+    {
+      "i": 3,
+      "start": 25.56,
+      "end": 35.24,
+      "speaker": "speaker",
+      "text": "the people in the market think that he broke his fast at home, and his family thinks that he broke his fast in the market, and he comes back after sunset and eats normal food. They ate dinner at their house and had breakfast."
+    },
+    {
+      "i": 4,
+      "start": 36.11,
+      "end": 43.88,
+      "speaker": "speaker",
+      "text": "She didn't see him knowing the rules, nor did the people in the market know the rules., we know how women know them. We know them."
+    },
+    {
+      "i": 5,
+      "start": 47.92,
+      "end": 49.9,
+      "speaker": "speaker",
+      "text": "But I was affected, but that's nice"
+    },
+    {
+      "i": 6,
+      "start": 52.28,
+      "end": 58.87,
+      "speaker": "speaker",
+      "text": "Because of the passion of these matters, Rama, this was also an important thing"
+    },
+    {
+      "i": 7,
+      "start": 60.53,
+      "end": 68.8,
+      "speaker": "speaker",
+      "text": "When loyalty came to them, they would say this. Why would they reject themselves? Guys, do you imagine that one person is?"
+    },
+    {
+      "i": 8,
+      "start": 68.8,
+      "end": 71.54,
+      "speaker": "speaker",
+      "text": "At the bottom of the death ball, he can be seen"
+    },
+    {
+      "i": 9,
+      "start": 74.89,
+      "end": 84.12,
+      "speaker": "speaker",
+      "text": "He tells you that I was working and I was working, no, but they were doing it at this time, why do they hope for themselves? Why do they say to themselves?"
+    },
+    {
+      "i": 10,
+      "start": 84.53,
+      "end": 90.12,
+      "speaker": "speaker",
+      "text": "Whoever died, subscribe to the channel"
+    },
+    {
+      "i": 11,
+      "start": 91.45,
+      "end": 99.31,
+      "speaker": "speaker",
+      "text": "Their desires come to them thinking well of God. How come they talk to themselves about such obedience?"
+    }
+  ],
+  "voices": {
+    "engine": "voxcpm",
+    "seed_vc": true
+  },
+  "render": {
+    "settings": {
+      "target_lang": "en",
+      "bg_music": false,
+      "diarize": false
+    },
+    "measured": {
+      "source_duration": 99.967,
+      "transcript_source": "asr",
+      "source_active_ratio": 0.9679,
+      "required_segment_coverage": 0.72,
+      "final_duration": 100.1,
+      "duration_delta": 0.133,
+      "peak_db": -4.5,
+      "audio_stream": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      },
+      "source_longest_silence": 1.517,
+      "final_longest_silence": 2.452,
+      "segment_count": 12,
+      "mean_asr_confidence": 0.5763,
+      "frac_high_conf": 0.333,
+      "coverage": 0.8283,
+      "max_gap": 4.04,
+      "internal_max_gap": 4.04,
+      "leading_gap": 0.0,
+      "trailing_gap": 0.6567,
+      "placed": 12
+    }
+  }
+}
