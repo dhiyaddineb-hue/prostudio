@@ -1,0 +1,66 @@
+{
+  "slug": "final-dub-33556536441",
+  "title": "ar → en · verified",
+  "source_name": "okfgfhg_clip.mp4",
+  "lang": "ar",
+  "dialect": "",
+  "created_at": "2026-09-01T20:49:58+00:00",
+  "cues": [
+    {
+      "i": 0,
+      "start": 0.0,
+      "end": 7.76,
+      "speaker": "speaker",
+      "text": "Whoever had a burning beginning, had a bright end, had a bright end, a word that was human"
+    },
+    {
+      "i": 1,
+      "start": 8.37,
+      "end": 17.83,
+      "speaker": "speaker",
+      "text": "At the beginning of Ramadan, he is stronger, he is closer to God Almighty, he is closer to truth, he is closer to answers, and he is closer to acceptance."
+    },
+    {
+      "i": 2,
+      "start": 17.83,
+      "end": 20.81,
+      "speaker": "speaker",
+      "text": "Closer, this is the first thing I wanna emphasize"
+    }
+  ],
+  "voices": {
+    "engine": "voxcpm",
+    "seed_vc": true
+  },
+  "render": {
+    "settings": {
+      "target_lang": "en",
+      "bg_music": true,
+      "diarize": true
+    },
+    "measured": {
+      "source_duration": 21.014,
+      "transcript_source": "asr",
+      "source_active_ratio": 1.0,
+      "required_segment_coverage": 0.72,
+      "final_duration": 21.1,
+      "duration_delta": 0.086,
+      "peak_db": -5.6,
+      "audio_stream": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      },
+      "source_longest_silence": 0.0,
+      "final_longest_silence": 0.0,
+      "segment_count": 3,
+      "mean_asr_confidence": 0.8334,
+      "coverage": 0.9613,
+      "max_gap": 0.61,
+      "internal_max_gap": 0.61,
+      "leading_gap": 0.0,
+      "trailing_gap": 0.204,
+      "placed": 3
+    }
+  }
+}
