@@ -254,7 +254,7 @@ def align_segments(
         room = next_slot if not is_last else (source_duration - s["start"])
         room = max(room, 0.35)
         window = max(min(window, room), 0.35)
-        MAX_SLOWDOWN = 1.0 / 1.5      # do not slow a short line below this
+        MAX_SLOWDOWN = 1.0 / 2.6      # stretch a short line up to 2.6x to fill its window (no silent gap)
         HARD_MAX_SPEED = max(max_speed, 2.2)  # speed up rather than cut words
 
         # Speed needed to land inside the tight window.
