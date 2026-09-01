@@ -397,6 +397,9 @@ async def run(args, progress=None) -> Path:
             # Generate TTS per fixed/timed window. Remote failures are handled
             # per window so one failed request cannot erase later speech.
             async def synth_vox_resilient(seg, dest):
+                console.info(
+                    f"WINDOW {seg.start:.3f}-{seg.end:.3f}s | engine=VoxCPM | text={seg.translated_text_dub[:90]!r}"
+                )
                 try:
                     await speak_voxcpm(
                         seg.translated_text_dub,
@@ -410,6 +413,7 @@ async def run(args, progress=None) -> Path:
                             getattr(seg, "speaker", None), voxcpm_reference
                         ),
                     )
+                    console.success(f"WINDOW {seg.start:.3f}-{seg.end:.3f}s | used=VoxCPM | status=success")
                 except Exception as exc:
                     console.warning(f"VoxCPM exhausted retries for window {seg.start:.2f}s; trying XTTS: {exc}")
                     xtts_ref = speaker_references.get(
@@ -425,10 +429,13 @@ async def run(args, progress=None) -> Path:
                             dub_lang,
                             device,
                         )
+                    if xtts_ok:
+                        console.success(f"WINDOW {seg.start:.3f}-{seg.end:.3f}s | used=XTTS | status=success")
                     if not xtts_ok:
-                        console.warning(f"XTTS unavailable for window {seg.start:.2f}s; using Edge-TTS as final fallback")
+                        console.warning(f"WINDOW {seg.start:.2f}s | XTTS failed; using Edge-TTS as final fallback")
                         voice = pick_voice(dub_lang, args.gender, voice=getattr(args, "edge_voice", None))
                         await speak_edge(seg.translated_text_dub, voice, dest, lang=dub_lang, gender=args.gender)
+                        console.success(f"WINDOW {seg.start:.3f}-{seg.end:.3f}s | used=Edge-TTS | status=final-fallback")
 
             tasks = []
             for i, seg in enumerate(project.segments):
