@@ -1,6 +1,7 @@
 """Core pipeline — orchestrates download → transcribe → translate → speak → assemble → render."""
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -65,6 +66,26 @@ def _polish_english_dialogue(text: str) -> str:
     for pattern, replacement in replacements:
         polished = re.sub(pattern, replacement, polished, flags=re.IGNORECASE)
     return polished
+
+
+def _asr_timeline_metrics(raw: list[dict], duration: float) -> tuple[float, float]:
+    """Return (covered ratio, longest gap) for ASR segments."""
+    spans = sorted(
+        (max(0.0, float(x.get("start", 0.0))), min(duration, float(x.get("end", 0.0))))
+        for x in raw if float(x.get("end", 0.0)) > float(x.get("start", 0.0))
+    )
+    if not spans or duration <= 0:
+        return 0.0, max(duration, 0.0)
+    merged = []
+    for start, end in spans:
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    covered = sum(end - start for start, end in merged) / duration
+    gaps = [merged[0][0], max(0.0, duration - merged[-1][1])]
+    gaps.extend(merged[i + 1][0] - merged[i][1] for i in range(len(merged) - 1))
+    return covered, max(gaps + [0.0])
 
 
 def _report(progress, step: str, message: str, percent: int) -> None:
@@ -169,13 +190,38 @@ async def run(args, progress=None) -> Path:
                 if hint:
                     console.step("Prompting with video metadata")
                 try:
+                    requested_source = getattr(args, "source_lang", None)
+                    forced_language = None if requested_source in (None, "", "auto") else requested_source
+                    use_vad = not getattr(args, "no_vad", False)
                     raw, lang_detected = transcribe(
                         speech_audio,
                         model_name=model_name,
                         device=device,
+                        language=forced_language,
                         hint=hint,
-                        use_vad=not getattr(args, "no_vad", False),
+                        use_vad=use_vad,
                     )
+                    source_duration = float(project.metadata.duration) if project.metadata else 0.0
+                    coverage, max_gap = _asr_timeline_metrics(raw, source_duration)
+                    console.step(f"ASR timeline: {coverage:.1%} span coverage; longest gap {max_gap:.2f}s")
+                    # VAD can mistake low-energy Arabic speech for silence.  If it
+                    # creates a suspicious hole, rerun once without VAD and keep
+                    # only the objectively better timeline.
+                    if use_vad and source_duration > 0 and max_gap > 4.0:
+                        console.warning("Large ASR gap detected; retrying transcription without VAD")
+                        recovered, recovered_lang = transcribe(
+                            speech_audio,
+                            model_name=model_name,
+                            device=device,
+                            language=forced_language,
+                            hint=hint,
+                            use_vad=False,
+                        )
+                        recovered_coverage, recovered_gap = _asr_timeline_metrics(recovered, source_duration)
+                        if (recovered_gap, -recovered_coverage) < (max_gap, -coverage):
+                            raw, lang_detected = recovered, recovered_lang or lang_detected
+                            coverage, max_gap = recovered_coverage, recovered_gap
+                            console.step(f"Recovered ASR timeline: {coverage:.1%}; longest gap {max_gap:.2f}s")
                     console.success(f"Detected: {lang_detected}")
                 except Exception as exc:
                     console.warning(f"Whisper failed ({exc})")
@@ -566,6 +612,28 @@ async def run(args, progress=None) -> Path:
         )
         console.success("Video rendered")
         project.output_path = out
+
+        # Persist the real timing/text contract next to the deliverable.  Quality
+        # gates and the studio must inspect what was actually rendered instead of
+        # inferring coverage from a successful process exit code.
+        segment_report = out_root / "segments-report.json"
+        segment_report.write_text(json.dumps({
+            "source_duration": float(project.metadata.duration) if project.metadata else 0.0,
+            "source_language": lang_detected,
+            "target_language": dub_lang,
+            "segments": [
+                {
+                    "index": i,
+                    "start": round(float(seg.start), 3),
+                    "end": round(float(seg.end), 3),
+                    "source_text": seg.source_text,
+                    "translated_text": seg.translated_text_dub,
+                    "speaker": seg.speaker,
+                    "confidence": float(seg.confidence),
+                }
+                for i, seg in enumerate(project.segments)
+            ],
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
         _report(progress, "done", "اكتمل الدوبلاج", 100)
 
     console.print()

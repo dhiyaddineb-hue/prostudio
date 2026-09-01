@@ -3,6 +3,10 @@ name: Run YouTube Auto Dub
 permissions:
   contents: write
 
+concurrency:
+  group: prostudio-dub-${{ github.ref }}
+  cancel-in-progress: false
+
 # Two jobs, pick one from the "Run workflow" dropdown:
 #   clone  — re-record a project's lines in the original actor's voice (F5-TTS)
 #   dub    — dub a YouTube URL from scratch
@@ -17,7 +21,7 @@ on:
       task:
         description: "What to run"
         required: true
-        default: "clone"
+        default: "dub"
         type: choice
         options:
           - clone
@@ -83,7 +87,7 @@ on:
       model:
         description: "dub: Whisper model"
         required: false
-        default: "base"
+        default: "medium"
         type: choice
         options: [tiny, base, small, medium]
       bg_music:
@@ -98,6 +102,11 @@ on:
         type: boolean
       separate_sources:
         description: "dub: neural separation of dialogue from music/effects"
+        required: false
+        default: false
+        type: boolean
+      no_vad:
+        description: "dub: disable VAD only for continuous speech that VAD wrongly drops"
         required: false
         default: false
         type: boolean
@@ -116,7 +125,7 @@ on:
         required: false
         default: "wav2lip"
         type: choice
-        options: [wav2lip, experiment]
+        options: [none, wav2lip, experiment]
       profile:
         description: "dub: pipeline profile"
         required: false
@@ -370,6 +379,12 @@ jobs:
           if [ "${{ inputs.diarize }}" = "true" ]; then
             extra+=(--diarize)
           fi
+          if [ "${{ inputs.separate_sources }}" = "true" ]; then
+            extra+=(--separate-sources)
+          fi
+          if [ "${{ inputs.no_vad }}" = "true" ]; then
+            extra+=(--no-vad)
+          fi
           python -m youtube_auto_dub "$source" \
             --lang "${{ inputs.target_lang }}" \
             --dub-lang "${{ inputs.target_lang }}" \
@@ -426,6 +441,43 @@ jobs:
             cp output/dubbed-before-seedvc.mp4 output/seedvc-enhanced.mp4
           fi
 
+      - name: Normalize final delivery audio
+        run: |
+          set -euo pipefail
+          final="output/seedvc-enhanced.mp4"
+          if [ ! -f "$final" ]; then final=$(find output -maxdepth 1 -type f -name 'Output_*.mp4' | head -1); fi
+          test -n "$final" && test -f "$final"
+          ffmpeg -y -i "$final" -map 0:v:0 -map 0:a:0 \
+            -c:v copy -af "loudnorm=I=-16:TP=-1.5:LRA=11,alimiter=limit=0.891:level=false" \
+            -c:a aac -b:a 192k -movflags +faststart output/final-dub.mp4
+
+      - name: Validate final target language
+        run: |
+          set -euo pipefail
+          python scripts/validate_dub_language.py \
+            --video output/final-dub.mp4 \
+            --expected "${{ inputs.target_lang }}" \
+            --model "${{ inputs.model }}" \
+            --report output/language-integrity.json
+
+      - name: Enforce professional quality gate
+        env:
+          SOURCE_PATH: ${{ inputs.source_path }}
+        run: |
+          set -euo pipefail
+          quality_source="$SOURCE_PATH"
+          if [ ! -f "$quality_source" ]; then
+            quality_source=$(find temp -type f \( -name '*.mp4' -o -name '*.mkv' -o -name '*.webm' -o -name '*.wav' \) | head -1)
+          fi
+          test -n "$quality_source" && test -f "$quality_source"
+          python scripts/validate_dub_quality.py \
+            --source "$quality_source" \
+            --video output/final-dub.mp4 \
+            --segments output/segments-report.json \
+            --language-report output/language-integrity.json \
+            --policy "${{ inputs.quality }}" \
+            --report output/quality-report.json
+
       - name: Publish project, report, and Pages index
         if: success()
         env:
@@ -433,20 +485,33 @@ jobs:
           RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          final="output/seedvc-enhanced.mp4"
-          if [ ! -f "$final" ]; then final=$(find output -maxdepth 1 -type f -name '*.mp4' | head -1); fi
-          test -n "$final" && test -f "$final"
-          python scripts/publish_dub_run.py --video "$final" --source "$SOURCE_PATH" \
-            --source-lang "${{ inputs.source_lang }}" --target-lang "${{ inputs.target_lang }}" \
-            --engine "${{ inputs.tts_engine }}" --seed-vc "${{ inputs.seed_vc }}" \
-            --bg-music "${{ inputs.bg_music }}" --diarize "${{ inputs.diarize }}" --run-id "$RUN_ID"
-          python scripts/publish_docs.py
+          cp output/final-dub.mp4 /tmp/final-dub.mp4
+          cp output/quality-report.json /tmp/quality-report.json
+          cp output/segments-report.json /tmp/segments-report.json
+          cp output/language-integrity.json /tmp/language-integrity.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add projects docs/projects.json docs/*.mp4 docs/*.srt docs/*.vtt
-          git diff --cached --quiet || git commit -m "Publish dub $RUN_ID to project library"
-          git pull --rebase origin "${{ github.ref_name }}"
-          git push origin HEAD:${{ github.ref_name }}
+          for attempt in 1 2 3; do
+            git fetch origin "${{ github.ref_name }}"
+            git reset --hard "origin/${{ github.ref_name }}"
+            mkdir -p output
+            cp /tmp/final-dub.mp4 output/final-dub.mp4
+            cp /tmp/quality-report.json output/quality-report.json
+            cp /tmp/segments-report.json output/segments-report.json
+            cp /tmp/language-integrity.json output/language-integrity.json
+            python scripts/publish_dub_run.py --video output/final-dub.mp4 --source "$SOURCE_PATH" \
+              --source-lang "${{ inputs.source_lang }}" --target-lang "${{ inputs.target_lang }}" \
+              --engine "${{ inputs.tts_engine }}" --seed-vc "${{ inputs.seed_vc }}" \
+              --bg-music "${{ inputs.bg_music }}" --diarize "${{ inputs.diarize }}" --run-id "$RUN_ID"
+            python scripts/publish_docs.py
+            git add projects docs/projects.json docs/*.mp4 docs/*.srt docs/*.vtt
+            git diff --cached --quiet || git commit -m "Publish verified dub $RUN_ID"
+            if git push origin HEAD:"${{ github.ref_name }}"; then exit 0; fi
+            echo "Concurrent update detected; rebuilding publication from the latest branch ($attempt/3)"
+            sleep $((attempt * 3))
+          done
+          echo "The verified artifact is safe, but Pages publication could not be updated after 3 attempts" >&2
+          exit 1
 
       - name: Conditional lip synchronization
         if: false
@@ -484,16 +549,16 @@ jobs:
           rm -f output/seedvc-enhanced.mp4
           mv output/lipsynced.mp4 output/seedvc-enhanced.mp4
 
-      - name: Upload the dubbed video
+      - name: Upload final delivery and diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: final-dubbed-video
           path: |
-            output/*.mp4
-            output/*.srt
-            output/*.pipeline.json
-            output/*-report.json
-            output/**/*.json
-            output/**/*.log
+            output/final-dub.mp4
+            output/quality-report.json
+            output/segments-report.json
+            output/language-integrity.json
+            output/preflight.json
           if-no-files-found: error
           retention-days: 14

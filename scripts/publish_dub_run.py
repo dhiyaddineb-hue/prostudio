@@ -30,18 +30,23 @@ def main() -> None:
     (root / "source").mkdir(parents=True, exist_ok=True)
     (root / "output").mkdir(parents=True, exist_ok=True)
     shutil.copy2(args.video, root / "output" / f"{base}.mp4")
-    if args.source and args.source.exists(): shutil.copy2(args.source, root / "source" / args.source.name)
     for candidate in sorted(args.video.parent.glob("*.srt")):
         shutil.copy2(candidate, root / "output" / f"{base}.srt")
         break
-    reports = sorted(args.video.parent.glob("*.json"))
-    report = {"run_id": args.run_id, "engine": args.engine, "source_lang": args.source_lang, "target_lang": args.target_lang, "seed_vc": args.seed_vc == "true", "bg_music": args.bg_music == "true", "diarize": args.diarize == "true", "video": str(args.video), "published_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    for candidate in reports:
-        if candidate.name not in {"lip-sync-report.json"}:
-            try: report["pipeline_report"] = json.loads(candidate.read_text(encoding="utf-8")); break
-            except Exception: pass
+    def read_json(name: str) -> dict:
+        candidate = args.video.parent / name
+        return json.loads(candidate.read_text(encoding="utf-8")) if candidate.exists() else {}
+
+    quality = read_json("quality-report.json")
+    language = read_json("language-integrity.json")
+    segments_doc = read_json("segments-report.json")
+    segments = segments_doc.get("segments", [])
+    report = {"run_id": args.run_id, "engine": args.engine, "source_lang": args.source_lang, "target_lang": args.target_lang, "seed_vc": args.seed_vc == "true", "bg_music": args.bg_music == "true", "diarize": args.diarize == "true", "video": str(args.video), "published_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "quality": quality, "language": language, "pipeline_report": quality}
     (root / "output" / f"{base}.pipeline.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    manifest = {"slug": base, "title": f"{args.source_lang} → {args.target_lang} · {args.video.stem}", "source_name": args.source.name if args.source else "", "lang": args.source_lang, "dialect": "", "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "cues": [], "voices": {"engine": args.engine, "seed_vc": args.seed_vc == "true"}, "render": {"settings": {"target_lang": args.target_lang, "bg_music": args.bg_music == "true", "diarize": args.diarize == "true"}, "measured": {}}}
+    cues = [{"i": int(x.get("index", i)), "start": float(x["start"]), "end": float(x["end"]), "speaker": x.get("speaker") or "speaker", "text": x.get("translated_text") or ""} for i, x in enumerate(segments)]
+    measured = dict(quality.get("metrics") or {})
+    measured["placed"] = len(cues)
+    manifest = {"slug": base, "title": f"{args.source_lang} → {args.target_lang} · verified", "source_name": args.source.name if args.source else "", "lang": args.source_lang, "dialect": "", "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "cues": cues, "voices": {"engine": args.engine, "seed_vc": args.seed_vc == "true"}, "render": {"settings": {"target_lang": args.target_lang, "bg_music": args.bg_music == "true", "diarize": args.diarize == "true"}, "measured": measured}}
     (root / "project.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     print(root)
 
