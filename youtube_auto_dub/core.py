@@ -527,6 +527,8 @@ async def run(args, progress=None) -> Path:
                     )
                     console.success(f"WINDOW {seg.start:.3f}-{seg.end:.3f}s | used=VoxCPM | status=success")
                 except Exception as exc:
+                    if os.environ.get("YAD_REQUIRE_VOXCPM_SPACE", "false").lower() == "true":
+                        raise RuntimeError(f"Required VoxCPM Space failed for window {seg.start:.2f}s") from exc
                     console.warning(f"VoxCPM exhausted retries for window {seg.start:.2f}s; trying XTTS: {exc}")
                     xtts_ref = speaker_references.get(
                         getattr(seg, "speaker", None), voxcpm_reference

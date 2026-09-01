@@ -82,18 +82,30 @@ def main() -> None:
     run(["ffmpeg", "-y", "-i", args.dubbed, "-vn", "-ac", "1", "-ar", "22050",
          str(dubbed_wav)])
 
-    client = Client(args.space)
-    result = client.predict(
-        handle_file(str(dubbed_wav)),
-        handle_file(str(cleaned_ref)),
-        args.diffusion_steps,
-        args.length_adjust,
-        0.7,
-        False,
-        True,
-        0,
-        api_name="/predict_1",
-    )
+    result = None
+    last_error = None
+    for attempt in range(1, 9):
+        try:
+            client = Client(args.space)
+            result = client.predict(
+                handle_file(str(dubbed_wav)),
+                handle_file(str(cleaned_ref)),
+                args.diffusion_steps,
+                args.length_adjust,
+                0.7,
+                False,
+                True,
+                0,
+                api_name="/predict_1",
+            )
+            if isinstance(result, (list, tuple)) and len(result) >= 2 and result[1]:
+                break
+            raise RuntimeError(f"incomplete Seed-VC response: {result!r}")
+        except Exception as exc:
+            last_error = exc
+            if attempt == 8:
+                raise RuntimeError("Seed-VC Space failed after 8 attempts") from exc
+            time.sleep(min(5 * attempt, 30))
     if not isinstance(result, (list, tuple)) or len(result) < 2:
         raise RuntimeError(f"Unexpected Seed-VC response: {result!r}")
     full = result[1]

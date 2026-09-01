@@ -376,6 +376,8 @@ jobs:
         env:
           YAD_OUTPUT_DIR: output
           YAD_VOXCPM_BACKEND: "space"
+          YAD_VOXCPM_SPACE: "openbmb/VoxCPM-Demo"
+          YAD_REQUIRE_VOXCPM_SPACE: "true"
           YAD_TEMP_DIR: temp
           YAD_CACHE_DIR: .cache
           YAD_COOKIES_FILE: cookies.txt
@@ -437,6 +439,7 @@ jobs:
             extra+=(--separate-sources)
           fi
           python scripts/seed_vc_enhance.py \
+            --space "phuoc2005/seed-vc" \
             --original "$SOURCE_PATH" \
             --dubbed "$dubbed" \
             --output output/seedvc-enhanced.mp4 \
