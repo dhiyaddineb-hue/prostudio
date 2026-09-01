@@ -88,6 +88,14 @@ def _asr_timeline_metrics(raw: list[dict], duration: float) -> tuple[float, floa
     return covered, max(gaps + [0.0])
 
 
+def _asr_candidate_score(raw: list[dict], duration: float) -> float:
+    coverage, max_gap = _asr_timeline_metrics(raw, duration)
+    confidence = sum(float(x.get("confidence", 0.0)) for x in raw) / max(len(raw), 1)
+    no_speech = sum(float(x.get("no_speech_prob", 0.0)) for x in raw) / max(len(raw), 1)
+    gap_penalty = min(max_gap / max(duration, 1.0), 1.0)
+    return coverage + 0.65 * confidence - 0.35 * no_speech - 0.5 * gap_penalty
+
+
 def _report(progress, step: str, message: str, percent: int) -> None:
     if progress:
         progress(step, message, percent)
@@ -202,6 +210,23 @@ async def run(args, progress=None) -> Path:
                         use_vad=use_vad,
                     )
                     source_duration = float(project.metadata.duration) if project.metadata else 0.0
+                    asr_audio = speech_audio
+                    if speech_audio != project.audio_path:
+                        console.step("Cross-checking ASR against the original audio track")
+                        original_raw, original_lang = transcribe(
+                            project.audio_path,
+                            model_name=model_name,
+                            device=device,
+                            language=forced_language,
+                            hint=hint,
+                            use_vad=use_vad,
+                        )
+                        stem_score = _asr_candidate_score(raw, source_duration)
+                        original_score = _asr_candidate_score(original_raw, source_duration)
+                        console.step(f"ASR candidates: separated={stem_score:.3f}, original={original_score:.3f}")
+                        if original_score > stem_score:
+                            raw, lang_detected, asr_audio = original_raw, original_lang or lang_detected, project.audio_path
+                            console.step("Original track selected for transcription; separated stem remains the voice reference")
                     coverage, max_gap = _asr_timeline_metrics(raw, source_duration)
                     console.step(f"ASR timeline: {coverage:.1%} span coverage; longest gap {max_gap:.2f}s")
                     # VAD can mistake low-energy Arabic speech for silence.  If it
@@ -210,7 +235,7 @@ async def run(args, progress=None) -> Path:
                     if use_vad and source_duration > 0 and max_gap > 4.0:
                         console.warning("Large ASR gap detected; retrying transcription without VAD")
                         recovered, recovered_lang = transcribe(
-                            speech_audio,
+                            asr_audio,
                             model_name=model_name,
                             device=device,
                             language=forced_language,

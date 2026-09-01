@@ -100,6 +100,29 @@ def _generate_space(text, dest, control, reference_audio):
         raise RuntimeError(f"VoxCPM Space audio conversion failed: {proc.stderr[-300:]}")
 
 
+def _validate_generated_speech(path: Path) -> None:
+    """Reject technically valid files whose interior is mostly a long pause."""
+    import numpy as np
+    import soundfile as sf
+    audio, sr = sf.read(str(path), dtype="float32")
+    if getattr(audio, "ndim", 1) > 1:
+        audio = audio.mean(axis=1)
+    if len(audio) < int(0.15 * sr):
+        raise RuntimeError("generated speech is too short")
+    frame = max(int(0.02 * sr), 1)
+    count = len(audio) // frame
+    rms = np.sqrt(np.mean(audio[:count * frame].reshape(count, frame).astype(np.float64) ** 2, axis=1) + 1e-12)
+    quiet = rms < (10 ** (-45.0 / 20.0))
+    longest = current = 0
+    for is_quiet in quiet:
+        current = current + 1 if is_quiet else 0
+        longest = max(longest, current)
+    longest_seconds = longest * frame / sr
+    duration = len(audio) / sr
+    if longest_seconds > max(1.5, duration * 0.30):
+        raise RuntimeError(f"generated speech contains {longest_seconds:.2f}s internal silence")
+
+
 async def speak_voxcpm(text, dest, language="en", control="", reference_audio=None):
     generate = _generate_space if _BACKEND == "space" else _generate_local
     # Hosted Spaces can transiently reject queued requests. Keep the preferred
@@ -110,6 +133,7 @@ async def speak_voxcpm(text, dest, language="en", control="", reference_audio=No
         for attempt in range(attempts):
             try:
                 await asyncio.to_thread(generate, text, dest, control, reference_audio)
+                await asyncio.to_thread(_validate_generated_speech, dest)
                 return
             except Exception as exc:
                 last = exc

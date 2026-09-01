@@ -53,14 +53,16 @@ def main() -> None:
     ap.add_argument("--report",type=Path,required=True)
     a=ap.parse_args()
     limits={
-      "safe":{"duration":1.5,"peak":-0.1,"extra_silence":3.5,"segment_gap":8.0,"coverage":0.65},
-      "balanced":{"duration":1.0,"peak":-0.3,"extra_silence":2.5,"segment_gap":6.0,"coverage":0.72},
-      "strict":{"duration":0.75,"peak":-0.5,"extra_silence":1.5,"segment_gap":4.0,"coverage":0.78},
+      "safe":{"duration":1.5,"peak":-0.1,"extra_silence":3.5,"segment_gap":8.0,"coverage":0.65,"asr_confidence":0.25},
+      "balanced":{"duration":1.0,"peak":-0.3,"extra_silence":2.5,"segment_gap":6.0,"coverage":0.72,"asr_confidence":0.30},
+      "strict":{"duration":0.75,"peak":-0.5,"extra_silence":1.5,"segment_gap":4.0,"coverage":0.78,"asr_confidence":0.35},
     }[a.policy]
     source_dur=duration(a.source); final_dur=duration(a.video); peak=audio_peak_db(a.video)
     source_sil=silences(a.source); final_sil=silences(a.video)
     source_long=max([x["duration"] for x in source_sil]+[0.0]); final_long=max([x["duration"] for x in final_sil]+[0.0])
     segdoc=json.loads(a.segments.read_text(encoding="utf-8")); tm=timeline_metrics(segdoc.get("segments",[]),source_dur)
+    confidences=[float(x.get("confidence",0.0)) for x in segdoc.get("segments",[])]
+    mean_asr_confidence=sum(confidences)/max(len(confidences),1)
     language={}
     if a.language_report and a.language_report.exists(): language=json.loads(a.language_report.read_text(encoding="utf-8"))
     checks={
@@ -71,11 +73,12 @@ def main() -> None:
       "segment_coverage": tm["coverage"] >= limits["coverage"],
       "segment_gaps": tm["max_gap"] <= max(limits["segment_gap"],source_long+limits["extra_silence"]),
       "segments_present": len(segdoc.get("segments",[])) > 0,
+      "asr_confidence": mean_asr_confidence >= limits["asr_confidence"],
     }
     report={"ok":all(checks.values()),"policy":a.policy,"checks":checks,"metrics":{
       "source_duration":round(source_dur,3),"final_duration":round(final_dur,3),"duration_delta":round(final_dur-source_dur,3),
       "peak_db":peak,"source_longest_silence":round(source_long,3),"final_longest_silence":round(final_long,3),
-      "segment_count":len(segdoc.get("segments",[])),**{k:round(v,4) for k,v in tm.items()}},"limits":limits,"language":language}
+      "segment_count":len(segdoc.get("segments",[])),"mean_asr_confidence":round(mean_asr_confidence,4),**{k:round(v,4) for k,v in tm.items()}},"limits":limits,"language":language}
     a.report.parent.mkdir(parents=True,exist_ok=True); a.report.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
     print(json.dumps(report,ensure_ascii=False,indent=2))
     if not report["ok"]: raise SystemExit("quality gate failed: "+", ".join(k for k,v in checks.items() if not v))

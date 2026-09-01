@@ -1,5 +1,6 @@
 """Speech-to-text with Whisper — VAD, prompt conditioning, resegmentation."""
 
+import math
 import re
 import subprocess
 from pathlib import Path
@@ -144,7 +145,12 @@ def transcribe(
 
     raw = []
     for seg in segs_gen:
-        d = {"start": seg.start, "end": seg.end, "text": _scrub(seg.text.strip())}
+        avg_logprob = float(getattr(seg, "avg_logprob", -10.0))
+        d = {
+            "start": seg.start, "end": seg.end, "text": _scrub(seg.text.strip()),
+            "confidence": max(0.0, min(1.0, math.exp(avg_logprob))),
+            "no_speech_prob": float(getattr(seg, "no_speech_prob", 0.0)),
+        }
         if seg.words:
             d["words"] = [{"word": w.word, "start": w.start, "end": w.end} for w in seg.words]
         raw.append(d)
@@ -153,7 +159,15 @@ def transcribe(
     if device == "cuda":
         empty_cuda_cache()
 
-    return refine_segments(raw), detected
+    refined = refine_segments(raw)
+    # Preserve model confidence after word-level resegmentation.
+    for item in refined:
+        parents = [x for x in raw if min(float(item["end"]), float(x["end"])) > max(float(item["start"]), float(x["start"]))]
+        if parents:
+            parent = max(parents, key=lambda x: min(float(item["end"]), float(x["end"])) - max(float(item["start"]), float(x["start"])))
+            item["confidence"] = parent.get("confidence", 0.0)
+            item["no_speech_prob"] = parent.get("no_speech_prob", 0.0)
+    return refined, detected
 
 
 def _is_16k_mono(path: Path) -> bool:
