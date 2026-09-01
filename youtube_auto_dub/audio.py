@@ -280,7 +280,7 @@ def align_segments(
             audio = audio[:_find_trim_point(audio, sr, max_samples)]
 
         if is_last:
-            clip = int((budget + tail) * sr)
+            clip = int((window + tail) * sr)
             if len(audio) > clip:
                 audio = audio[:_find_trim_point(audio, sr, clip)]
                 audio = _crossfade(audio, sr, AUDIO_CROSSFADE_IN_MS, 150)
