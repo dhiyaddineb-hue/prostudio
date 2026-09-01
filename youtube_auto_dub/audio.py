@@ -244,38 +244,38 @@ def align_segments(
             if not is_last
             else (source_duration - s["start"])
         )
-        # Tight sync: fit the dubbed line to the ORIGINAL speaker's window
-        # (its own duration), so it starts and ends with the source speech
-        # instead of sprawling toward the next line. The gap before the next
-        # line is a real pause in the original and is kept as a pause.
+        # No word must be truncated: every original word gets its dubbed
+        # counterpart. We choose ONE playback speed so the whole line fits the
+        # available time by speeding up, never by cutting. Preference order:
+        #   1. fit the original speaker's own window (tight sync), else
+        #   2. fit the room up to the next line (avoid overlap),
+        # allowing a higher hard speed cap before ever trimming.
         window = declared if declared > 0.0 else next_slot
-        # Cap at the room before the next line so lines never overlap.
         room = next_slot if not is_last else (source_duration - s["start"])
-        budget = max(min(window, room), 0.35)
-        ratio = actual / budget
+        room = max(room, 0.35)
+        window = max(min(window, room), 0.35)
+        MAX_SLOWDOWN = 1.0 / 1.5      # do not slow a short line below this
+        HARD_MAX_SPEED = max(max_speed, 2.2)  # speed up rather than cut words
 
-        # Always stretch to land on the window: speed up long lines (up to
-        # max_speed) and slow down short lines (down to MAX_SLOWDOWN) so each
-        # line spans its slot -> no drift, no artificial silent holes.
-        MAX_SLOWDOWN = 1.0 / 1.5
-        if mode == "auto" and ratio > TEMPO_OVERBUDGET_RATIO:
+        # Speed needed to land inside the tight window.
+        speed = actual / window
+        if speed > HARD_MAX_SPEED:
+            # Too long even at the hard cap for the tight window: relax the
+            # target to the full room so it still fits without cutting.
+            speed = min(actual / room, HARD_MAX_SPEED)
+        speed = min(max(speed, MAX_SLOWDOWN), HARD_MAX_SPEED)
+
+        if mode == "auto" and abs(speed - 1.0) > 0.02:
+            suffix = "_sped.wav" if speed > 1.0 else "_slow.wav"
             audio = _stretch(
-                s["wav_path"],
-                min(ratio, max_speed),
-                Path(str(s["wav_path"]).replace(".wav", "_sped.wav")),
-                sr,
-            )
-        elif mode == "auto" and ratio < 0.97:
-            audio = _stretch(
-                s["wav_path"],
-                max(ratio, MAX_SLOWDOWN),
-                Path(str(s["wav_path"]).replace(".wav", "_slow.wav")),
-                sr,
+                s["wav_path"], speed,
+                Path(str(s["wav_path"]).replace(".wav", suffix)), sr,
             )
         else:
             audio = raw
-        # Never play past the next line.
-        max_samples = max(int(budget * sr), 1)
+        # Absolute last-resort guard against overrunning the NEXT line only
+        # (never trim to the tight window). This almost never triggers now.
+        max_samples = max(int(room * sr), 1)
         if len(audio) > max_samples:
             audio = audio[:_find_trim_point(audio, sr, max_samples)]
 
