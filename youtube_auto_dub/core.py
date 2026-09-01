@@ -411,9 +411,24 @@ async def run(args, progress=None) -> Path:
                         ),
                     )
                 except Exception as exc:
-                    console.warning(f"VoxCPM failed for window {seg.start:.2f}s; using Edge-TTS fallback: {exc}")
-                    voice = pick_voice(dub_lang, args.gender, voice=getattr(args, "edge_voice", None))
-                    await speak_edge(seg.translated_text_dub, voice, dest, lang=dub_lang, gender=args.gender)
+                    console.warning(f"VoxCPM exhausted retries for window {seg.start:.2f}s; trying XTTS: {exc}")
+                    xtts_ref = speaker_references.get(
+                        getattr(seg, "speaker", None), voxcpm_reference
+                    )
+                    xtts_ok = False
+                    if xtts_ref and xtts_clone.available():
+                        xtts_ok = await asyncio.to_thread(
+                            xtts_clone.clone_speak,
+                            seg.translated_text_dub,
+                            xtts_ref,
+                            dest,
+                            dub_lang,
+                            device,
+                        )
+                    if not xtts_ok:
+                        console.warning(f"XTTS unavailable for window {seg.start:.2f}s; using Edge-TTS as final fallback")
+                        voice = pick_voice(dub_lang, args.gender, voice=getattr(args, "edge_voice", None))
+                        await speak_edge(seg.translated_text_dub, voice, dest, lang=dub_lang, gender=args.gender)
 
             tasks = []
             for i, seg in enumerate(project.segments):

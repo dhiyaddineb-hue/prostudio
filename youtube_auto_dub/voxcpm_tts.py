@@ -102,7 +102,9 @@ def _generate_space(text, dest, control, reference_audio):
 
 async def speak_voxcpm(text, dest, language="en", control="", reference_audio=None):
     generate = _generate_space if _BACKEND == "space" else _generate_local
-    attempts = 4 if _BACKEND == "space" else 2
+    # Hosted Spaces can transiently reject queued requests. Keep the preferred
+    # engine alive through several independent attempts before falling back.
+    attempts = 7 if _BACKEND == "space" else 3
     last = None
     async with _LOCK:
         for attempt in range(attempts):
@@ -112,8 +114,11 @@ async def speak_voxcpm(text, dest, language="en", control="", reference_audio=No
             except Exception as exc:
                 last = exc
                 dest.unlink(missing_ok=True)
+                if _BACKEND == "space" and attempt >= 1:
+                    global _CLIENT
+                    _CLIENT = None
                 log.warning("VoxCPM[%s] attempt %d/%d failed for %s: %s",
                             _BACKEND, attempt + 1, attempts, language, exc)
                 if attempt < attempts - 1:
-                    await asyncio.sleep(min(5 * (2 ** attempt), 40))
+                    await asyncio.sleep(min(6 * (2 ** attempt), 60))
     raise RuntimeError(f"VoxCPM[{_BACKEND}] failed for {language} speech") from last
