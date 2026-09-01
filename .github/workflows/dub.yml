@@ -98,7 +98,7 @@ on:
       model:
         description: "dub: Whisper model (medium/large-v3 = far better Arabic coverage)"
         required: false
-        default: "small"
+        default: "base"
         type: choice
         options: [tiny, base, small, medium, large-v3]
       bg_music:
@@ -114,7 +114,7 @@ on:
       separate_sources:
         description: "dub: neural separation of dialogue from music/effects"
         required: false
-        default: false
+        default: true
         type: boolean
       profile:
         description: "dub: pipeline profile"
