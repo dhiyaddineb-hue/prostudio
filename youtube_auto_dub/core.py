@@ -166,8 +166,10 @@ async def run(args, progress=None) -> Path:
         _report(progress, "transcribe", f"تفريغ الصوت ({model_name})", 22)
 
         cached = project.load_cache("segments")
+        transcript_source = "asr"
         transcript = (getattr(args, "transcript", None) or "").strip()
         if transcript:
+            transcript_source = "provided"
             from youtube_auto_dub.align_text import segments_from_transcript
             console.step("Using provided transcript")
             duration = float(project.metadata.duration) if project.metadata else 0.0
@@ -180,6 +182,7 @@ async def run(args, progress=None) -> Path:
             console.step(f"Source language: {lang_detected}")
         elif not str(args.url).startswith(("http://", "https://")) and Path(args.url).with_suffix(".srt").exists():
             sidecar = Path(args.url).with_suffix(".srt")
+            transcript_source = "sidecar"
             console.step(f"Using trusted sidecar transcript: {sidecar.name}")
             entries = read_srt(str(sidecar))
             project.segments = [
@@ -195,6 +198,7 @@ async def run(args, progress=None) -> Path:
                 " ".join(seg.source_text for seg in project.segments)
             )
         elif cached and not getattr(args, "refresh", False):
+            transcript_source = "cache"
             console.step("Using cached transcription")
             project.segments = [
                 SubtitleSegment(
@@ -660,6 +664,7 @@ async def run(args, progress=None) -> Path:
         segment_report = out_root / "segments-report.json"
         segment_report.write_text(json.dumps({
             "source_duration": float(project.metadata.duration) if project.metadata else 0.0,
+            "transcript_source": transcript_source,
             "source_language": lang_detected,
             "target_language": dub_lang,
             "segments": [

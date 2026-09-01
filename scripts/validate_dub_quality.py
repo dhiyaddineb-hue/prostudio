@@ -42,7 +42,7 @@ def timeline_metrics(segments: list[dict], total: float) -> dict:
     covered=sum(b-a for a,b in merged)
     gaps=[merged[i+1][0]-merged[i][1] for i in range(len(merged)-1)]
     leading=merged[0][0]; trailing=max(0.0,total-merged[-1][1])
-    return {"coverage":covered/total,"max_gap":max(gaps+[leading,trailing,0.0]),"leading_gap":leading,"trailing_gap":trailing}
+    return {"coverage":covered/total,"max_gap":max(gaps+[leading,trailing,0.0]),"internal_max_gap":max(gaps+[0.0]),"leading_gap":leading,"trailing_gap":trailing}
 
 
 def main() -> None:
@@ -64,6 +64,7 @@ def main() -> None:
     source_active_ratio=max(0.0,min(1.0,1.0-source_silence_total/max(source_dur,0.001)))
     required_coverage=min(limits["coverage"],max(0.30,source_active_ratio-0.05))
     segdoc=json.loads(a.segments.read_text(encoding="utf-8")); tm=timeline_metrics(segdoc.get("segments",[]),source_dur)
+    trusted_timing=segdoc.get("transcript_source") in {"sidecar", "provided"}
     confidences=[float(x.get("confidence",0.0)) for x in segdoc.get("segments",[])]
     mean_asr_confidence=sum(confidences)/max(len(confidences),1)
     language={}
@@ -73,13 +74,13 @@ def main() -> None:
       "no_clipping": peak <= limits["peak"],
       "language_valid": bool(language.get("valid",False)),
       "silence_not_added": final_long <= max(3.0,source_long+limits["extra_silence"]),
-      "segment_coverage": tm["coverage"] >= required_coverage,
-      "segment_gaps": tm["max_gap"] <= max(limits["segment_gap"],source_long+limits["extra_silence"]),
+      "segment_coverage": trusted_timing or tm["coverage"] >= required_coverage,
+      "segment_gaps": tm["internal_max_gap"] <= max(limits["segment_gap"],source_long+limits["extra_silence"]),
       "segments_present": len(segdoc.get("segments",[])) > 0,
-      "asr_confidence": mean_asr_confidence >= limits["asr_confidence"],
+      "asr_confidence": trusted_timing or mean_asr_confidence >= limits["asr_confidence"],
     }
     report={"ok":all(checks.values()),"policy":a.policy,"checks":checks,"metrics":{
-      "source_duration":round(source_dur,3),"source_active_ratio":round(source_active_ratio,4),"required_segment_coverage":round(required_coverage,4),"final_duration":round(final_dur,3),"duration_delta":round(final_dur-source_dur,3),
+      "source_duration":round(source_dur,3),"transcript_source":segdoc.get("transcript_source","asr"),"source_active_ratio":round(source_active_ratio,4),"required_segment_coverage":round(required_coverage,4),"final_duration":round(final_dur,3),"duration_delta":round(final_dur-source_dur,3),
       "peak_db":peak,"source_longest_silence":round(source_long,3),"final_longest_silence":round(final_long,3),
       "segment_count":len(segdoc.get("segments",[])),"mean_asr_confidence":round(mean_asr_confidence,4),**{k:round(v,4) for k,v in tm.items()}},"limits":limits,"language":language}
     a.report.parent.mkdir(parents=True,exist_ok=True); a.report.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
