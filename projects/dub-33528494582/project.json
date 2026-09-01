@@ -1,0 +1,21 @@
+{
+  "slug": "dub-33528494582",
+  "title": "ar → en · seedvc-enhanced",
+  "source_name": "new_english_dub_test.mp4",
+  "lang": "ar",
+  "dialect": "",
+  "created_at": "2026-09-01T15:59:10+00:00",
+  "cues": [],
+  "voices": {
+    "engine": "voxcpm",
+    "seed_vc": true
+  },
+  "render": {
+    "settings": {
+      "target_lang": "en",
+      "bg_music": true,
+      "diarize": false
+    },
+    "measured": {}
+  }
+}

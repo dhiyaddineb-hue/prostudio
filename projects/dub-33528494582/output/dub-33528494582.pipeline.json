@@ -1,0 +1,18 @@
+{
+  "run_id": "33528494582",
+  "engine": "voxcpm",
+  "source_lang": "ar",
+  "target_lang": "en",
+  "seed_vc": true,
+  "bg_music": true,
+  "diarize": false,
+  "video": "output/seedvc-enhanced.mp4",
+  "published_at": "2026-09-01T15:59:10+00:00",
+  "pipeline_report": {
+    "expected": "en",
+    "detected": "ar",
+    "probability": 0.4647,
+    "text_chars": 141,
+    "valid": false
+  }
+}

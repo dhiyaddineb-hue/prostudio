@@ -1,6 +1,32 @@
 {
   "projects": [
     {
+      "slug": "dub-33528494582",
+      "title": "ar → en · seedvc-enhanced",
+      "dialect": "",
+      "created_at": "2026-09-01T15:59:10+00:00",
+      "video": "dub-33528494582.mp4",
+      "srt": null,
+      "vtt": null,
+      "size": 1562369,
+      "cast": {
+        "engine": "voxcpm",
+        "seed_vc": true
+      },
+      "metrics": {
+        "cues": 0,
+        "placed": null,
+        "rate": null,
+        "min_gap": null,
+        "overlaps": null,
+        "measured": false,
+        "speakers": [],
+        "duration": 21.03,
+        "peak_dbfs": -0.53,
+        "clipped": false
+      }
+    },
+    {
       "slug": "dub-33527644609",
       "title": "ar → en · seedvc-enhanced",
       "dialect": "",
