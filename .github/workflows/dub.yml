@@ -348,6 +348,7 @@ jobs:
       - name: Run the dub
         env:
           YAD_OUTPUT_DIR: output
+          YAD_VOXCPM_BACKEND: "space"
           YAD_TEMP_DIR: temp
           YAD_CACHE_DIR: .cache
           YAD_COOKIES_FILE: cookies.txt
