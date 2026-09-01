@@ -65,6 +65,9 @@ def _parser() -> argparse.ArgumentParser:
                       help="Mix original background audio into dub")
     proc.add_argument("--diarize", action="store_true",
                       help="Automatically identify speakers when HF_TOKEN is available")
+    proc.add_argument("--no-adapt-translation", dest="adapt_translation",
+                      action="store_false", default=True,
+                      help="Do not shorten translations to fit source timing")
     proc.add_argument("--separate-sources", action="store_true",
                       help="Separate dialogue from music/effects with Demucs")
     proc.add_argument("-o", "--output-dir",
