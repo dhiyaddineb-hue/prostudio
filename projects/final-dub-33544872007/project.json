@@ -1,0 +1,80 @@
+{
+  "slug": "final-dub-33544872007",
+  "title": "en → ar · verified",
+  "source_name": "user_multi2.mp4",
+  "lang": "en",
+  "dialect": "",
+  "created_at": "2026-09-01T18:51:10+00:00",
+  "cues": [
+    {
+      "i": 0,
+      "start": 0.0,
+      "end": 5.9,
+      "speaker": "speaker",
+      "text": "أحبك بعد فوات الأوان. أنا لا أحبك بعد الآن."
+    },
+    {
+      "i": 1,
+      "start": 8.31,
+      "end": 12.0,
+      "speaker": "SPEAKER_00",
+      "text": "كنت سأحبك إلى الأبد"
+    },
+    {
+      "i": 2,
+      "start": 14.58,
+      "end": 22.74,
+      "speaker": "SPEAKER_00",
+      "text": "الآن من فضلك اذهب.  لا تفعلي هذا يا أليس، تحدثي معي. أحبك!  أين؟  ماذا؟  أرِنِي! أين هذا الحب؟  أنا..."
+    },
+    {
+      "i": 3,
+      "start": 23.48,
+      "end": 33.22,
+      "speaker": "SPEAKER_00",
+      "text": "لا أستطيع رؤيته لا أستطيع لمسه لا أستطيع الشعور به أستطيع سماعه أستطيع سماع بعض الكلمات لكن لا أستطيع فعل أي شيء"
+    },
+    {
+      "i": 4,
+      "start": 33.22,
+      "end": 40.39,
+      "speaker": "SPEAKER_00",
+      "text": "بكلماتك السهلة، مهما قلت، فقد فات الأوان. شكرا على المشاهدة"
+    }
+  ],
+  "voices": {
+    "engine": "voxcpm",
+    "seed_vc": true
+  },
+  "render": {
+    "settings": {
+      "target_lang": "ar",
+      "bg_music": false,
+      "diarize": true
+    },
+    "measured": {
+      "source_duration": 40.633,
+      "transcript_source": "asr",
+      "source_active_ratio": 1.0,
+      "required_segment_coverage": 0.78,
+      "final_duration": 40.7,
+      "duration_delta": 0.067,
+      "peak_db": -5.6,
+      "audio_stream": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      },
+      "source_longest_silence": 0.0,
+      "final_longest_silence": 2.427,
+      "segment_count": 5,
+      "mean_asr_confidence": 0.6216,
+      "coverage": 0.853,
+      "max_gap": 2.58,
+      "internal_max_gap": 2.58,
+      "leading_gap": 0.0,
+      "trailing_gap": 0.2433,
+      "placed": 5
+    }
+  }
+}

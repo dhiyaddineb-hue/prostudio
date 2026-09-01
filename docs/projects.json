@@ -1,6 +1,35 @@
 {
   "projects": [
     {
+      "slug": "final-dub-33544872007",
+      "title": "en → ar · verified",
+      "dialect": "",
+      "created_at": "2026-09-01T18:51:10+00:00",
+      "video": "final-dub-33544872007.mp4",
+      "srt": null,
+      "vtt": null,
+      "size": 3882804,
+      "cast": {
+        "engine": "voxcpm",
+        "seed_vc": true
+      },
+      "metrics": {
+        "cues": 5,
+        "placed": 5,
+        "rate": null,
+        "min_gap": null,
+        "overlaps": null,
+        "measured": true,
+        "speakers": [
+          "SPEAKER_00",
+          "speaker"
+        ],
+        "duration": 40.66,
+        "peak_dbfs": -5.63,
+        "clipped": false
+      }
+    },
+    {
       "slug": "final-dub-33543352015",
       "title": "ar → en · verified",
       "dialect": "",

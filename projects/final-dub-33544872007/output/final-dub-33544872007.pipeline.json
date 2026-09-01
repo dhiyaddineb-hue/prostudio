@@ -1,0 +1,124 @@
+{
+  "run_id": "33544872007",
+  "engine": "voxcpm",
+  "source_lang": "en",
+  "target_lang": "ar",
+  "seed_vc": true,
+  "bg_music": false,
+  "diarize": true,
+  "video": "output/final-dub.mp4",
+  "published_at": "2026-09-01T18:51:10+00:00",
+  "quality": {
+    "ok": true,
+    "policy": "strict",
+    "checks": {
+      "duration_match": true,
+      "no_clipping": true,
+      "playback_compatible_audio": true,
+      "language_valid": true,
+      "silence_not_added": true,
+      "segment_coverage": true,
+      "segment_gaps": true,
+      "segments_present": true,
+      "asr_confidence": true
+    },
+    "metrics": {
+      "source_duration": 40.633,
+      "transcript_source": "asr",
+      "source_active_ratio": 1.0,
+      "required_segment_coverage": 0.78,
+      "final_duration": 40.7,
+      "duration_delta": 0.067,
+      "peak_db": -5.6,
+      "audio_stream": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      },
+      "source_longest_silence": 0.0,
+      "final_longest_silence": 2.427,
+      "segment_count": 5,
+      "mean_asr_confidence": 0.6216,
+      "coverage": 0.853,
+      "max_gap": 2.58,
+      "internal_max_gap": 2.58,
+      "leading_gap": 0.0,
+      "trailing_gap": 0.2433
+    },
+    "limits": {
+      "duration": 0.75,
+      "peak": -0.5,
+      "extra_silence": 1.5,
+      "segment_gap": 4.0,
+      "coverage": 0.78,
+      "asr_confidence": 0.5
+    },
+    "language": {
+      "expected": "ar",
+      "detected": "ar",
+      "probability": 0.9725,
+      "text_chars": 339,
+      "valid": true
+    }
+  },
+  "language": {
+    "expected": "ar",
+    "detected": "ar",
+    "probability": 0.9725,
+    "text_chars": 339,
+    "valid": true
+  },
+  "pipeline_report": {
+    "ok": true,
+    "policy": "strict",
+    "checks": {
+      "duration_match": true,
+      "no_clipping": true,
+      "playback_compatible_audio": true,
+      "language_valid": true,
+      "silence_not_added": true,
+      "segment_coverage": true,
+      "segment_gaps": true,
+      "segments_present": true,
+      "asr_confidence": true
+    },
+    "metrics": {
+      "source_duration": 40.633,
+      "transcript_source": "asr",
+      "source_active_ratio": 1.0,
+      "required_segment_coverage": 0.78,
+      "final_duration": 40.7,
+      "duration_delta": 0.067,
+      "peak_db": -5.6,
+      "audio_stream": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      },
+      "source_longest_silence": 0.0,
+      "final_longest_silence": 2.427,
+      "segment_count": 5,
+      "mean_asr_confidence": 0.6216,
+      "coverage": 0.853,
+      "max_gap": 2.58,
+      "internal_max_gap": 2.58,
+      "leading_gap": 0.0,
+      "trailing_gap": 0.2433
+    },
+    "limits": {
+      "duration": 0.75,
+      "peak": -0.5,
+      "extra_silence": 1.5,
+      "segment_gap": 4.0,
+      "coverage": 0.78,
+      "asr_confidence": 0.5
+    },
+    "language": {
+      "expected": "ar",
+      "detected": "ar",
+      "probability": 0.9725,
+      "text_chars": 339,
+      "valid": true
+    }
+  }
+}
