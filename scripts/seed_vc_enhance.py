@@ -41,6 +41,63 @@ def atempo_filter(factor: float) -> str:
     return f"atempo={factor:.6f}"
 
 
+
+def _do_per_speaker_seed(dubbed_wav, target_duration, seg_conv, refs, work, args, out_wav):
+    """Run Seed-VC once per role, then place each converted piece at its own
+    timeline slot so distinct timbres (e.g. a male and a female speaker) survive.
+    Falls back to the single-reference path if anything goes wrong."""
+    from gradio_client import Client, handle_file
+    pieces = []
+    for (a, b), sp in sorted(seg_conv.items()):
+        ref = refs.get(sp)
+        if not ref or not Path(ref).exists():
+            continue
+        seg = work / f"{sp}-seg.wav"
+        run(["ffmpeg", "-y", "-i", str(dubbed_wav), "-ss", f"{a:.3f}", "-t", f"{b-a:.3f}",
+             "-ac", "1", "-ar", "22050", str(seg)])
+        result = None
+        for attempt in range(1, 6):
+            try:
+                client = Client(args.space)
+                result = client.predict(
+                    handle_file(str(seg)),
+                    handle_file(str(ref)),
+                    args.diffusion_steps,
+                    args.length_adjust,
+                    0.7, False, True, 0,
+                    api_name="/predict_1",
+                )
+                if isinstance(result, (list, tuple)) and len(result) >= 2 and result[1]:
+                    break
+            except Exception:
+                result = None
+                time.sleep(min(5 * attempt, 30))
+        if not result:
+            continue
+        full = result[1] if isinstance(result, (list, tuple)) else result
+        if isinstance(full, dict):
+            full = full.get("path") or full.get("url")
+        if not full:
+            continue
+        conv = work / f"{sp}-conv.wav"
+        run(["ffmpeg", "-y", "-i", str(full), "-ar", "24000", "-ac", "1", str(conv)])
+        pieces.append((a, b, sp, conv))
+    if not pieces:
+        return False
+    # Assemble all per-speaker pieces at their correct offsets.
+    parts = []
+    for a, b, sp, conv in sorted(pieces, key=lambda x: x[0]):
+        prt = work / f"{sp}-placed.wav"
+        run(["ffmpeg", "-y", "-i", str(conv), "-af", f"adelay={int(a*1000)}|{int(a*1000)}",
+             "-ar", "24000", "-ac", "1", str(prt)])
+        parts.append(str(prt))
+    run(["ffmpeg", "-y"] + sum([["-i", pr] for pr in parts], []) +
+        ["-filter_complex",
+         "amix=inputs=%d:duration=longest:normalize=0" % len(parts),
+         "-ar", "24000", "-ac", "1", str(out_wav)])
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--original", required=True)
