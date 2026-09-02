@@ -114,7 +114,7 @@ def annotate_segments(audio: Path, segments: list[dict], token: str | None = Non
         annotation = getattr(diarization, "speaker_diarization", diarization)
         raw = [(float(t.start), float(t.end), str(s[0])) for t, _, s in annotation.itertracks(yield_label=True)]
         turns = resolve_overlaps(refine_turns(raw))
-        speakers = {s for _, _, s in turns}
+        speakers = {t.speaker for t in turns}
         log.info("Diarization initial: %d turns; speakers=%s", len(turns), stats(turns))
         # For a 2-way dialogue that was squashed into a single speaker, force
         # the segmenter to find two roles. This is the fix for the "male voice
@@ -126,7 +126,7 @@ def annotate_segments(audio: Path, segments: list[dict], token: str | None = Non
                 ann2 = getattr(diar2, "speaker_diarization", diar2)
                 raw2 = [(float(t.start), float(t.end), str(s[0])) for t, _, s in ann2.itertracks(yield_label=True)]
                 turns2 = resolve_overlaps(refine_turns(raw2))
-                if len({s for _, _, s in turns2}) >= 2:
+                if len({t.speaker for t in turns2}) >= 2:
                     log.info("Diarization recovered 2 speakers via num_speakers=2 (%d turns)", len(turns2))
                     turns = turns2
             except Exception as e:
