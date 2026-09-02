@@ -45,7 +45,7 @@ from youtube_auto_dub.voice import (
 )
 from youtube_auto_dub.voxcpm_tts import speak_voxcpm
 from youtube_auto_dub.emotion import infer_emotion
-from youtube_auto_dub.speaker_diarization import annotate_segments
+from youtube_auto_dub.speaker_diarization import annotate_segments, speaker_genders
 from youtube_auto_dub.source_separation import separate_dialogue_background, validate_stems
 from youtube_auto_dub import xtts_clone
 from youtube_auto_dub.youtube import load_source
@@ -697,9 +697,14 @@ async def run(args, progress=None) -> Path:
             _map = []
             for _seg in project.segments:
                 _sp = getattr(_seg, "speaker", None)
+                _gendermap = {}
+                if _seg and _sp:
+                    _gendermap = speaker_genders(project.audio_path, [{ "speaker": s.speaker, "start": s.start, "end": s.end } for s in sorted(project.segments, key=lambda x: x.start)])
                 if _sp and _sp in speaker_references:
+                    _gen = _gendermap.get(_sp, {}).get("gender", "unknown") if _gendermap else "unknown"
                     _map.append({"start": round(float(_seg.start),3), "end": round(float(_seg.end),3),
                                  "speaker": _sp,
+                                 "gender": _gen,
                                  "ref": str(speaker_references[_sp])})
             _map_out = out_root / "speaker-map.json"
             _map_out.write_text(json.dumps(_map, ensure_ascii=False, indent=2), encoding="utf-8")
