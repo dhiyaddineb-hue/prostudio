@@ -91,7 +91,11 @@ def main() -> None:
     speakers={str(x.get("speaker")) for x in segdoc.get("segments",[]) if x.get("speaker") is not None}
     speaker_count=len(speakers)
     turn_allowance=1.5 if speaker_count > 1 else 0.0
-    silence_limit=max(3.0+turn_allowance, source_long+limits["extra_silence"]+turn_allowance, source_long*1.25)
+    # A silence in the render is not "added" when the SOURCE transcript itself
+    # leaves that long a gap between spoken segments: the dub simply has no
+    # words to place there. Calibrate against the transcript timeline.
+    silence_limit=max(3.0+turn_allowance, source_long+limits["extra_silence"]+turn_allowance,
+                      source_long*1.25, tm["internal_max_gap"]+0.5)
     gap_limit=max(limits["segment_gap"], source_long+limits["extra_silence"])+turn_allowance
     language={}
     if a.language_report and a.language_report.exists(): language=json.loads(a.language_report.read_text(encoding="utf-8"))
