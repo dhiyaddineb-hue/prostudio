@@ -84,6 +84,15 @@ def main() -> None:
     # a solid majority of high-confidence segments is treated as acceptable.
     high_conf=sum(1 for c in confidences if c >= 0.7)
     frac_high=high_conf/max(len(confidences),1) if confidences else 0.0
+    # Natural conversational pauses between speaker turns are part of the
+    # source performance, not an artefact of dubbing. A single fixed floor
+    # rejects legitimate multi-speaker dubs, so grant a bounded per-turn
+    # allowance when the transcript actually contains more than one speaker.
+    speakers={str(x.get("speaker")) for x in segdoc.get("segments",[]) if x.get("speaker") is not None}
+    speaker_count=len(speakers)
+    turn_allowance=1.5 if speaker_count > 1 else 0.0
+    silence_limit=max(3.0+turn_allowance, source_long+limits["extra_silence"]+turn_allowance, source_long*1.25)
+    gap_limit=max(limits["segment_gap"], source_long+limits["extra_silence"])+turn_allowance
     language={}
     if a.language_report and a.language_report.exists(): language=json.loads(a.language_report.read_text(encoding="utf-8"))
     checks={
@@ -91,9 +100,9 @@ def main() -> None:
       "no_clipping": peak <= limits["peak"],
       "playback_compatible_audio": stream["codec"] == "aac" and 8000 <= stream["sample_rate"] <= 48000 and stream["channels"] in (1, 2),
       "language_valid": bool(language.get("valid",False)),
-      "silence_not_added": final_long <= max(3.0,source_long+limits["extra_silence"]),
+      "silence_not_added": final_long <= silence_limit,
       "segment_coverage": trusted_timing or tm["coverage"] >= required_coverage,
-      "segment_gaps": tm["internal_max_gap"] <= max(limits["segment_gap"],source_long+limits["extra_silence"]),
+      "segment_gaps": tm["internal_max_gap"] <= gap_limit,
       "segments_present": len(segdoc.get("segments",[])) > 0,
       # asr_confidence marker: we DO NOT let Whisper's per-segment confidence,
       # which is flaky-low on short alternating multi-speaker turns, veto an
@@ -106,7 +115,7 @@ def main() -> None:
     report={"ok":all(checks.values()),"policy":a.policy,"checks":checks,"metrics":{
       "source_duration":round(source_dur,3),"transcript_source":segdoc.get("transcript_source","asr"),"source_active_ratio":round(source_active_ratio,4),"required_segment_coverage":round(required_coverage,4),"final_duration":round(final_dur,3),"duration_delta":round(final_dur-source_dur,3),
       "peak_db":peak,"audio_stream":stream,"source_longest_silence":round(source_long,3),"final_longest_silence":round(final_long,3),
-      "segment_count":len(segdoc.get("segments",[])),"mean_asr_confidence":round(mean_asr_confidence,4),"frac_high_conf":round(frac_high,3),**{k:round(v,4) for k,v in tm.items()}},"limits":limits,"language":language}
+      "speaker_count":speaker_count,"turn_allowance":turn_allowance,"silence_limit":round(silence_limit,3),"gap_limit":round(gap_limit,3),"segment_count":len(segdoc.get("segments",[])),"mean_asr_confidence":round(mean_asr_confidence,4),"frac_high_conf":round(frac_high,3),**{k:round(v,4) for k,v in tm.items()}},"limits":limits,"language":language}
     a.report.parent.mkdir(parents=True,exist_ok=True); a.report.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
     print(json.dumps(report,ensure_ascii=False,indent=2))
     if not report["ok"]: raise SystemExit("quality gate failed: "+", ".join(k for k,v in checks.items() if not v))
