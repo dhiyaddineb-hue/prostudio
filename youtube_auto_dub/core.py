@@ -425,11 +425,12 @@ async def run(args, progress=None) -> Path:
                         continue
                     ref = TEMP_DIR / f"voxcpm_reference_{re.sub(r'[^A-Za-z0-9_-]', '_', str(speaker))}.wav"
                     dur = float(seg.end) - float(seg.start)
-                    if dur >= 6.0:
-                        # take the central 6s of a long turn: the most stable
+                    if dur >= 12.0:
+                        # take the central 12s of a long turn: the most stable
                         # timbre zone (noisy lead-in / trailing are excluded).
-                        start = max(0.0, float(seg.start) + (dur - 6.0) / 2.0)
-                        length = 6.0
+                        # Longer ref = more faithful per-speaker clone.
+                        start = max(0.0, float(seg.start) + (dur - 12.0) / 2.0)
+                        length = 12.0
                     else:
                         start = max(0.0, float(seg.start) - 0.25)
                         length = min(20.0, dur + 0.5)
