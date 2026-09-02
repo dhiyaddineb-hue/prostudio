@@ -26,6 +26,75 @@ def _run_pipeline(audio, pipeline, token, num_speakers=None):
     return raw
 
 
+
+def _detect_gender(audio: Path, start: float, end: float) -> str:
+    """Classify a speaker's gender from a short excerpt by spectral balance.
+
+    Male voices concentrate energy at lower frequencies than female voices.
+    We compute the energy ratio between low (<~150Hz) and high (>~250Hz)
+    bands on a mono excerpt and pick male/female from the ratio. The model is
+    a strong heuristic and is only used to tag the cloned role, not to pick it.
+    """
+    import subprocess, tempfile, os, shutil
+    tmp = tempfile.mkdtemp()
+    try:
+        out = os.path.join(tmp, "g.wav")
+        subprocess.run(
+            ["ffmpeg","-y","-ss",f"{start:.3f}","-t",f"{max(0.05,end-start):.3f}",
+             "-i",str(audio),"-ac","1","-ar","16000","-vn",str(out)],
+            check=True, capture_output=True)
+        import numpy as np
+        from scipy.io import wavfile
+        try:
+            sr, x = wavfile.read(out)
+        except Exception:
+            return "unknown"
+        if x.ndim > 1:
+            x = x.mean(axis=1)
+        x = x.astype(np.float32)
+        if x.size < 1600:
+            return "unknown"
+        n = len(x)
+        X = np.abs(np.fft.rfft(x))
+        freqs = np.fft.rfftfreq(n, 1.0 / sr)
+        low = np.sum(X[(freqs >= 60) & (freqs <= 150)])
+        high = np.sum(X[(freqs >= 250) & (freqs <= 4000)])
+        if low + high <= 0:
+            return "unknown"
+        ratio = low / high
+        # male: more low-freq energy; female: flatter/brighter spectrum
+        if ratio >= 0.9:
+            return "male"
+        if ratio <= 0.45:
+            return "female"
+        return "unknown"
+    except Exception:
+        return "unknown"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def speaker_genders(audio: Path, segments: list[dict]) -> dict:
+    """Map speaker -> {gender, start, end} using the longest turn per speaker."""
+    by_speaker = {}
+    for seg in segments:
+        sp = seg.get("speaker")
+        if not sp:
+            continue
+        st, en = float(seg["start"]), float(seg["end"])
+        prev = by_speaker.get(sp)
+        if prev is None or (en - st) > (prev["end"] - prev["start"]):
+            by_speaker[sp] = {"start": st, "end": en}
+    result = {}
+    for sp, span in by_speaker.items():
+        result[sp] = {
+            "gender": _detect_gender(audio, span["start"], span["end"]),
+            "start": span["start"],
+            "end": span["end"],
+        }
+    return result
+
+
 def annotate_segments(audio: Path, segments: list[dict], token: str | None = None, model: str | None = None, min_overlap: float = .45) -> list[dict]:
     """Attach labels only when real pyannote turns cover a segment conservatively.
 
