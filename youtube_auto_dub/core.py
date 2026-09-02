@@ -194,6 +194,25 @@ async def run(args, progress=None) -> Path:
             ]
             if not project.segments:
                 raise RuntimeError(f"Sidecar transcript is empty: {sidecar}")
+            if getattr(args, "diarize", False):
+                # A sidecar transcript pins trusted timing/text, but it never
+                # carries speaker roles. When diarization is requested, assign
+                # each segment a speaker from real pyannote turns over the
+                # separated speech audio so per-speaker references / cloning
+                # still work on samples that ship with an .srt (else every
+                # such sample silently degrades to a single generic voice and
+                # reports speaker_count=0).
+                console.info("Identifying speakers (sidecar transcript)")
+                _seg_dicts = [
+                    {"start": float(s.start), "end": float(s.end),
+                     "text": s.source_text} for s in project.segments
+                ]
+                _annotated = annotate_segments(speech_audio, _seg_dicts)
+                for s, a in zip(project.segments, _annotated):
+                    if a.get("speaker"):
+                        s.speaker = a["speaker"]
+                        s.confidence = float(a.get("speaker_confidence",
+                                                   getattr(s, "confidence", 1.0)))
             lang_detected = getattr(args, "source_lang", None) or guess_language(
                 " ".join(seg.source_text for seg in project.segments)
             )
