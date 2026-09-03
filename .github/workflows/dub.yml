@@ -52,9 +52,9 @@ on:
         default: "samples/ProStudio_Arabic_Demo.mp4"
         type: string
       source_lang:
-        description: "dub: original audio language ('auto' = detect from source audio)"
+        description: "dub: original audio language"
         required: false
-        default: "auto"
+        default: "ar"
         type: string
       voice:
         description: "dub: Edge-TTS voice short name"
