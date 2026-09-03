@@ -1,0 +1,95 @@
+{
+  "slug": "final-dub-33737767731",
+  "title": "auto → en · verified",
+  "source_name": "test_restore.mp4",
+  "lang": "auto",
+  "dialect": "",
+  "created_at": "2026-09-03T09:27:45+00:00",
+  "cues": [
+    {
+      "i": 0,
+      "start": 0.02,
+      "end": 6.84,
+      "speaker": "speaker",
+      "text": "don't be a Sufi. God Almighty says, “Has it not yet come for those who believe?”"
+    },
+    {
+      "i": 1,
+      "start": 6.84,
+      "end": 16.05,
+      "speaker": "speaker",
+      "text": "That their hearts should be humbled by the remembrance of God and what has been revealed of the truth. Didn’t it come? I mean, what did it come to? I mean, now you're watching me now"
+    },
+    {
+      "i": 2,
+      "start": 16.88,
+      "end": 25.87,
+      "speaker": "speaker",
+      "text": "Thanks what? Lord, here is the beginning with you, Lord"
+    },
+    {
+      "i": 3,
+      "start": 26.36,
+      "end": 31.66,
+      "speaker": "speaker",
+      "text": "The first steps from here to you, Lord"
+    },
+    {
+      "i": 4,
+      "start": 32.34,
+      "end": 40.67,
+      "speaker": "speaker",
+      "text": "This is the first inch that I walk to you, Lord, at this hour"
+    },
+    {
+      "i": 5,
+      "start": 41.17,
+      "end": 49.88,
+      "speaker": "speaker",
+      "text": "Oh, a new birth with you, and we will die. If you accept God, He will not accept you"
+    },
+    {
+      "i": 6,
+      "start": 51.68,
+      "end": 55.14,
+      "speaker": "speaker",
+      "text": "Do you think that if you repent, you will be expelled?"
+    }
+  ],
+  "voices": {
+    "engine": "voxcpm",
+    "seed_vc": true
+  },
+  "render": {
+    "settings": {
+      "target_lang": "en",
+      "bg_music": false,
+      "diarize": false
+    },
+    "measured": {
+      "source_duration": 56.028,
+      "transcript_source": "asr",
+      "source_active_ratio": 1.0,
+      "required_segment_coverage": 0.72,
+      "final_duration": 56.1,
+      "duration_delta": 0.072,
+      "peak_db": -4.9,
+      "audio_stream": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      },
+      "source_longest_silence": 0.0,
+      "final_longest_silence": 1.744,
+      "segment_count": 7,
+      "mean_asr_confidence": 0.666,
+      "frac_high_conf": 0.571,
+      "coverage": 0.907,
+      "max_gap": 1.8,
+      "internal_max_gap": 1.8,
+      "leading_gap": 0.02,
+      "trailing_gap": 0.8883,
+      "placed": 7
+    }
+  }
+}
