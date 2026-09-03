@@ -45,7 +45,7 @@ from youtube_auto_dub.voice import (
 )
 from youtube_auto_dub.voxcpm_tts import speak_voxcpm
 from youtube_auto_dub.emotion import infer_emotion
-from youtube_auto_dub.speaker_diarization import annotate_segments, speaker_genders
+from youtube_auto_dub.speaker_diarization import annotate_segments
 from youtube_auto_dub.source_separation import separate_dialogue_background, validate_stems
 from youtube_auto_dub import xtts_clone
 from youtube_auto_dub.youtube import load_source
@@ -194,25 +194,6 @@ async def run(args, progress=None) -> Path:
             ]
             if not project.segments:
                 raise RuntimeError(f"Sidecar transcript is empty: {sidecar}")
-            if getattr(args, "diarize", False):
-                # A sidecar transcript pins trusted timing/text, but it never
-                # carries speaker roles. When diarization is requested, assign
-                # each segment a speaker from real pyannote turns over the
-                # separated speech audio so per-speaker references / cloning
-                # still work on samples that ship with an .srt (else every
-                # such sample silently degrades to a single generic voice and
-                # reports speaker_count=0).
-                console.info("Identifying speakers (sidecar transcript)")
-                _seg_dicts = [
-                    {"start": float(s.start), "end": float(s.end),
-                     "text": s.source_text} for s in project.segments
-                ]
-                _annotated = annotate_segments(speech_audio, _seg_dicts)
-                for s, a in zip(project.segments, _annotated):
-                    if a.get("speaker"):
-                        s.speaker = a["speaker"]
-                        s.confidence = float(a.get("speaker_confidence",
-                                                   getattr(s, "confidence", 1.0)))
             lang_detected = getattr(args, "source_lang", None) or guess_language(
                 " ".join(seg.source_text for seg in project.segments)
             )
@@ -444,12 +425,11 @@ async def run(args, progress=None) -> Path:
                         continue
                     ref = TEMP_DIR / f"voxcpm_reference_{re.sub(r'[^A-Za-z0-9_-]', '_', str(speaker))}.wav"
                     dur = float(seg.end) - float(seg.start)
-                    if dur >= 12.0:
-                        # take the central 12s of a long turn: the most stable
+                    if dur >= 6.0:
+                        # take the central 6s of a long turn: the most stable
                         # timbre zone (noisy lead-in / trailing are excluded).
-                        # Longer ref = more faithful per-speaker clone.
-                        start = max(0.0, float(seg.start) + (dur - 12.0) / 2.0)
-                        length = 12.0
+                        start = max(0.0, float(seg.start) + (dur - 6.0) / 2.0)
+                        length = 6.0
                     else:
                         start = max(0.0, float(seg.start) - 0.25)
                         length = min(20.0, dur + 0.5)
@@ -629,7 +609,7 @@ async def run(args, progress=None) -> Path:
                 trimmed = seg.tts_audio_path.with_name(seg.tts_audio_path.stem + "_trim.wav")
                 subprocess.run([
                     "ffmpeg", "-y", "-i", str(seg.tts_audio_path),
-                    "-af", "silenceremove=start_periods=1:start_duration=0.08:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_duration=0.12:start_threshold=-45dB,areverse,silenceremove=stop_periods=-1:stop_duration=0.80:stop_threshold=-45dB:stop_silence=0.20",
+                    "-af", "silenceremove=start_periods=1:start_duration=0.08:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_duration=0.12:start_threshold=-45dB,areverse",
                     "-ar", str(SR_TTS), "-ac", "1", str(trimmed),
                 ], check=True, capture_output=True)
                 if trimmed.exists() and trimmed.stat().st_size > 1024:
@@ -716,14 +696,9 @@ async def run(args, progress=None) -> Path:
             _map = []
             for _seg in project.segments:
                 _sp = getattr(_seg, "speaker", None)
-                _gendermap = {}
-                if _seg and _sp:
-                    _gendermap = speaker_genders(project.audio_path, [{ "speaker": s.speaker, "start": s.start, "end": s.end } for s in sorted(project.segments, key=lambda x: x.start)])
                 if _sp and _sp in speaker_references:
-                    _gen = _gendermap.get(_sp, {}).get("gender", "unknown") if _gendermap else "unknown"
                     _map.append({"start": round(float(_seg.start),3), "end": round(float(_seg.end),3),
                                  "speaker": _sp,
-                                 "gender": _gen,
                                  "ref": str(speaker_references[_sp])})
             _map_out = out_root / "speaker-map.json"
             _map_out.write_text(json.dumps(_map, ensure_ascii=False, indent=2), encoding="utf-8")
