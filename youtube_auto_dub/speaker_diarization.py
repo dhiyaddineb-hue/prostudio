@@ -112,7 +112,7 @@ def annotate_segments(audio: Path, segments: list[dict], token: str | None = Non
         pipeline.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
         diarization = pipeline(str(audio))
         annotation = getattr(diarization, "speaker_diarization", diarization)
-        raw = [(float(t.start), float(t.end), str(s[0])) for t, _, s in annotation.itertracks(yield_label=True)]
+        raw = [(float(t.start), float(t.end), str(s)) for t, _, s in annotation.itertracks(yield_label=True)]
         turns = resolve_overlaps(refine_turns(raw))
         speakers = {t.speaker for t in turns}
         log.info("Diarization initial: %d turns; speakers=%s", len(turns), stats(turns))
@@ -128,7 +128,7 @@ def annotate_segments(audio: Path, segments: list[dict], token: str | None = Non
                     else:
                         diar2 = pipeline(str(audio), num_speakers=2)
                     ann2 = getattr(diar2, "speaker_diarization", diar2)
-                    raw2 = [(float(t.start), float(t.end), str(s[0])) for t, _, s in ann2.itertracks(yield_label=True)]
+                    raw2 = [(float(t.start), float(t.end), str(s)) for t, _, s in ann2.itertracks(yield_label=True)]
                     turns2 = resolve_overlaps(refine_turns(raw2))
                     if len({t.speaker for t in turns2}) >= 2:
                         log.info("Diarization recovered 2 speakers (%s) with %d turns", attempt, len(turns2))
