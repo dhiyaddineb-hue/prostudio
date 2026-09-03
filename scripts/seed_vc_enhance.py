@@ -36,87 +36,9 @@ def duration(path: str | Path) -> float:
 
 
 def atempo_filter(factor: float) -> str:
-    """Return an ffmpeg atempo chain for any positive duration ratio."""
-    factor = max(float(factor), 0.01)
-    parts = []
-    while factor > 2.0:
-        parts.append(2.0)
-        factor /= 2.0
-    while factor < 0.5:
-        parts.append(0.5)
-        factor /= 0.5
-    parts.append(factor)
-    return ",".join(f"atempo={part:.6f}" for part in parts)
-
-
-
-def _do_per_speaker_seed(dubbed_wav, target_duration, seg_conv, refs, work, args, out_wav):
-    """Run Seed-VC once per role, then place each converted piece at its own
-    timeline slot so distinct timbres (e.g. a male and a female speaker) survive.
-    Falls back to the single-reference path if anything goes wrong."""
-    from gradio_client import Client, handle_file
-    pieces = []
-    expected = len(seg_conv)
-    for index, ((a, b), sp) in enumerate(sorted(seg_conv.items())):
-        ref = refs.get(sp)
-        if not ref or not Path(ref).exists():
-            continue
-        safe_sp = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in sp)
-        prefix = f"{index:04d}-{safe_sp}"
-        seg = work / f"{prefix}-seg.wav"
-        run(["ffmpeg", "-y", "-i", str(dubbed_wav), "-ss", f"{a:.3f}", "-t", f"{b-a:.3f}",
-             "-ac", "1", "-ar", "22050", str(seg)])
-        result = None
-        for attempt in range(1, 6):
-            try:
-                client = Client(args.space)
-                result = client.predict(
-                    handle_file(str(seg)),
-                    handle_file(str(ref)),
-                    args.diffusion_steps,
-                    args.length_adjust,
-                    0.7, False, True, 0,
-                    api_name="/predict_1",
-                )
-                if isinstance(result, (list, tuple)) and len(result) >= 2 and result[1]:
-                    break
-            except Exception:
-                result = None
-                time.sleep(min(5 * attempt, 30))
-        if not result:
-            continue
-        full = result[1] if isinstance(result, (list, tuple)) else result
-        if isinstance(full, dict):
-            full = full.get("path") or full.get("url")
-        if not full:
-            continue
-        conv = work / f"{prefix}-conv.wav"
-        run(["ffmpeg", "-y", "-i", str(full), "-ar", "24000", "-ac", "1", str(conv)])
-        slot = max(b - a, 0.05)
-        conv_duration = duration(conv)
-        fitted = work / f"{prefix}-fitted.wav"
-        tempo = conv_duration / slot if conv_duration > 0 else 1.0
-        run(["ffmpeg", "-y", "-i", str(conv), "-af",
-             f"{atempo_filter(tempo)},apad,atrim=0:{slot:.3f}",
-             "-ar", "24000", "-ac", "1", str(fitted)])
-        pieces.append((a, b, sp, prefix, fitted))
-    # Partial conversion would silently erase dialogue. Fall back to the safer
-    # single-reference path unless every mapped segment converted successfully.
-    if not pieces or len(pieces) != expected:
-        return False
-    # Assemble all per-speaker pieces at their correct offsets.
-    parts = []
-    for a, b, sp, prefix, conv in sorted(pieces, key=lambda x: x[0]):
-        prt = work / f"{prefix}-placed.wav"
-        run(["ffmpeg", "-y", "-i", str(conv), "-af", f"adelay={int(a*1000)}|{int(a*1000)}",
-             "-ar", "24000", "-ac", "1", str(prt)])
-        parts.append(str(prt))
-    run(["ffmpeg", "-y"] + sum([["-i", pr] for pr in parts], []) +
-        ["-filter_complex",
-         ("amix=inputs=%d:duration=longest:normalize=0," % len(parts)) +
-         f"apad,atrim=0:{target_duration:.3f}",
-         "-ar", "24000", "-ac", "1", str(out_wav)])
-    return True
+    # ffmpeg atempo accepts 0.5..2.0 per filter; chain for safety.
+    factor = max(0.5, min(2.0, factor))
+    return f"atempo={factor:.6f}"
 
 
 def main() -> None:
@@ -195,7 +117,7 @@ def main() -> None:
             ])
             print(json.dumps({"ok": True, "output": args.output, "space": args.space,
                               "speaker_mode": "per-speaker",
-                              "roles": sorted(set(seg_conv.values())),
+                              "roles": sorted(set(s for _,_,s,_ in seg_files)) if False else sorted(set(seg_conv.values())),
                               "pieces": len(seg_conv)}))
             return
 
