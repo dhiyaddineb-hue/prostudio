@@ -117,37 +117,40 @@ def annotate_segments(audio: Path, segments: list[dict], token: str | None = Non
         speakers = {t.speaker for t in turns}
         log.info("Diarization initial: %d turns; speakers=%s", len(turns), stats(turns))
         # For a 2-way dialogue that was squashed into a single speaker, force
-        # the segmenter to find two roles. This is the fix for the "male voice
-        # missing" defect: the clip contains two voices but pyannote collapsed
-        # them, so the male never got an isolated reference.
+        # the segmenter to find two roles. Use min/max_speakers=2 (more
+        # reliable than bare num_speakers) so the two roles surface even when
+        # their voices are close, and keep turns if they split cleanly.
         if len(speakers) < 2:
-            try:
-                diar2 = pipeline(str(audio), num_speakers=2)
-                ann2 = getattr(diar2, "speaker_diarization", diar2)
-                raw2 = [(float(t.start), float(t.end), str(s[0])) for t, _, s in ann2.itertracks(yield_label=True)]
-                turns2 = resolve_overlaps(refine_turns(raw2))
-                if len({t.speaker for t in turns2}) >= 2:
-                    log.info("Diarization recovered 2 speakers via num_speakers=2 (%d turns)", len(turns2))
-                    turns = turns2
-            except Exception as e:
-                log.warning("2-speaker re-run failed; keeping initial turns: %s", e)
+            for attempt in ("minmax", "num"):
+                try:
+                    if attempt == "minmax":
+                        diar2 = pipeline(str(audio), min_speakers=2, max_speakers=2)
+                    else:
+                        diar2 = pipeline(str(audio), num_speakers=2)
+                    ann2 = getattr(diar2, "speaker_diarization", diar2)
+                    raw2 = [(float(t.start), float(t.end), str(s[0])) for t, _, s in ann2.itertracks(yield_label=True)]
+                    turns2 = resolve_overlaps(refine_turns(raw2))
+                    if len({t.speaker for t in turns2}) >= 2:
+                        log.info("Diarization recovered 2 speakers (%s) with %d turns", attempt, len(turns2))
+                        turns = turns2
+                        break
+                except Exception as e:
+                    log.warning("2-speaker re-run (%s) failed; keeping initial turns: %s", attempt, e)
     except Exception as exc:
         log.warning("Speaker diarization unavailable; keeping conservative mode: %s", exc); return segments
 
-    # Relax the assignment floor so a segment never loses its speaker just
-    # because the winning role covered < the conservative threshold. The won
-    # speaker still carries its real role and a cloned reference.
+    # Assign with a low floor so a tightly-interleaved dialog does not lose a
+    # role merely because no single segment overwhelmingly overlaps one speaker.
+    # Every segment still gets its real dominant role + a clone reference.
     out = []
     for seg in segments:
         start, end = float(seg["start"]), float(seg["end"])
         item = dict(seg)
-        assigned, confidence = assign_segment(start, end, turns, min_overlap=min(.30, min_overlap))
+        assigned, confidence = assign_segment(start, end, turns, min_overlap=min(.12, min_overlap))
         if assigned:
             item["speaker"] = assigned
             item["speaker_confidence"] = confidence
         else:
-            # still prefer the best-scoring role over None so the reference
-            # lookup does not silently fall back to a global generic voice.
             best = _best_speaker(start, end, turns)
             if best:
                 item["speaker"] = best[0]
@@ -156,6 +159,40 @@ def annotate_segments(audio: Path, segments: list[dict], token: str | None = Non
                 item.pop("speaker", None)
                 item["speaker_confidence"] = 0.0
         out.append(item)
+
+    # Guarantee BOTH roles surface. If only one distinct speaker ended up
+    # assigned (e.g. the second role was consumed by the conservative floor or
+    # an early voice is thinner), re-open the assignment so the longest genuine
+    # turn of each detected role is represented. This is what makes the
+    # per-speaker cloning / speaker-map actually carry two roles for a dialog.
+    assigned_spk = {x.get("speaker") for x in out if x.get("speaker")}
+    det = {t.speaker for t in turns}
+    if len(assigned_spk) < 2 and len(det) >= 2:
+        # Tally per-segment best speaker without floor, then re-assign the
+        # currently-under-represented role to its most dominant segment.
+        for role in sorted(det):
+            if role in assigned_spk:
+                continue
+            # longest turn for this role = stable clone reference
+            role_turns = [t for t in turns if t.speaker == role]
+            if not role_turns:
+                continue
+            longest = max(role_turns, key=lambda t: t.duration)
+            best_seg = None
+            best_ov = 0.0
+            for x in out:
+                if x.get("speaker") or x.get("speaker_confidence", 0) > 0:
+                    continue
+                ov = min(longest.end, float(x["end"])) - max(longest.start, float(x["start"]))
+                if ov > best_ov:
+                    best_ov = ov; best_seg = x
+            if best_seg is None and out:
+                # fall back to the segment overlapping longest anywhere
+                best_seg = max(out, key=lambda x: min(longest.end, float(x["end"])) - max(longest.start, float(x["start"])))
+            if best_seg is not None:
+                best_seg["speaker"] = role
+                best_seg["speaker_confidence"] = 1.0
+                assigned_spk.add(role)
     return out
 
 
