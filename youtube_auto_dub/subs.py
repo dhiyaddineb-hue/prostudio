@@ -70,10 +70,12 @@ def _split_words(words: List[dict], max_chars: int, max_dur: float) -> List[dict
             up_to = len(buf)
         if up_to > 0:
             chunk_text = " ".join(w.get("word", "") for w in buf[:up_to]).strip()
+            selected = [dict(word) for word in buf[:up_to]]
             chunks.append({
                 "start": bstart,
                 "end": buf[up_to - 1].get("end", bstart),
                 "text": chunk_text,
+                "words": selected,
             })
         buf = buf[up_to:]
         btext = " ".join(w.get("word", "") for w in buf).strip() if buf else ""
@@ -147,7 +149,7 @@ def refine_segments(segments: List[dict]) -> List[dict]:
         text = seg.get("text", "").strip()
         s, e = seg["start"], seg["end"]
         if len(text) <= _DEFAULT_MAX_CHARS and (e - s) <= _DEFAULT_MAX_DUR:
-            out.append({"start": s, "end": e, "text": text})
+            out.append(dict(seg))
             continue
         words = seg.get("words", [])
         if words and all("start" in w and "end" in w for w in words):

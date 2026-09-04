@@ -111,7 +111,7 @@ on:
         default: false
         type: boolean
       seed_vc:
-        description: "dub: transfer the source voice identity with Seed-VC"
+        description: "apply Seed-VC independently to every spoken smart chunk"
         required: false
         default: true
         type: boolean
@@ -138,6 +138,11 @@ on:
         default: "balanced"
         type: choice
         options: [safe, balanced, strict]
+      chunk_seconds:
+        description: "dub: speech-aware hard maximum per resumable chunk (max 10)"
+        required: false
+        default: "10"
+        type: string
       wav2lip_sha256:
         description: "sha256 for the approved Wav2Lip checkpoint downloaded from WAV2LIP_CHECKPOINT_URL"
         required: false
@@ -391,149 +396,88 @@ jobs:
             fi
           fi
 
-      - name: Run the dub
+      - name: Prepare resumable smart-chunk project
+        id: smart_project
+        run: |
+          set -euo pipefail
+          source="${REASSEMBLED_SOURCE:-}"
+          if [ -z "$source" ]; then source="${{ inputs.youtube_url }}"; fi
+          if [ -z "$source" ]; then source="${{ inputs.source_path }}"; fi
+          test -n "$source"
+          if [[ "$source" == http://* || "$source" == https://* ]]; then
+            digest=$(printf '%s' "$source" | sha256sum | cut -c1-12)
+            base="youtube"
+          else
+            test -f "$source"
+            digest=$(sha256sum "$source" | cut -c1-12)
+            base=$(basename "$source")
+            base="${base%.*}"
+            base=$(printf '%s' "$base" | tr -cs '[:alnum:]._-' '-' | sed 's/^-//;s/-$//' | cut -c1-40)
+          fi
+          config=$(printf '%s' "${{ inputs.source_lang }}|${{ inputs.target_lang }}|${{ inputs.tts_engine }}|${{ inputs.voice }}|${{ inputs.gender }}|${{ inputs.model }}|${{ inputs.separate_sources }}|${{ inputs.bg_music }}|${{ inputs.diarize }}|${{ inputs.no_vad }}|${{ inputs.seed_vc }}|${{ inputs.chunk_seconds }}" | sha256sum | cut -c1-8)
+          project_id="${base}-${digest}-${{ inputs.target_lang }}-${config}"
+          echo "source=$source" >> "$GITHUB_OUTPUT"
+          echo "id=$project_id" >> "$GITHUB_OUTPUT"
+          echo "release_tag=checkpoint-$project_id" >> "$GITHUB_OUTPUT"
+          echo "Smart project: $project_id"
+
+      - name: Run resumable speech-aware smart chunks
+        id: smart_dub
         env:
+          GH_TOKEN: ${{ github.token }}
           YAD_OUTPUT_DIR: output
           YAD_VOXCPM_BACKEND: "space"
           YAD_VOXCPM_SPACE: "openbmb/VoxCPM-Demo"
-          YAD_REQUIRE_VOXCPM_SPACE: "true"
+          YAD_VOXCPM_ATTEMPTS: "4"
           YAD_TEMP_DIR: temp
           YAD_CACHE_DIR: .cache
           YAD_COOKIES_FILE: cookies.txt
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set -euo pipefail
-          source="${REASSEMBLED_SOURCE:-}"
-          if [ -z "$source" ]; then
-            source="${{ inputs.youtube_url }}"
-          fi
-          if [ -z "$source" ]; then
-            source="${{ inputs.source_path }}"
-          fi
-          if [ -z "$source" ] || [ ! -e "$source" ] && [[ "$source" != http* ]]; then
-            echo "No valid youtube_url or source_path was supplied" >&2
-            exit 1
-          fi
+          chunk_max="${{ inputs.chunk_seconds }}"
+          python - <<PY
+          value=float("$chunk_max")
+          assert 1.0 <= value <= 10.0, "chunk_seconds must be between 1 and 10"
+          PY
           extra=()
-          if [ "${{ inputs.bg_music }}" = "true" ]; then
-            extra+=(--bg-music)
-          fi
-          if [ "${{ inputs.diarize }}" = "true" ]; then
-            extra+=(--diarize)
-          fi
-          if [ "${{ inputs.separate_sources }}" = "true" ]; then
-            extra+=(--separate-sources)
-          fi
-          if [ "${{ inputs.no_vad }}" = "true" ]; then
-            extra+=(--no-vad)
-          fi
-          # --- Chunked fast dubbing: split source into short units, dub each, then concat ---
-          CHUNK_SECS="${{ inputs.chunk_seconds }}"
-          [ -z "$CHUNK_SECS" ] && CHUNK_SECS=10
-          rm -rf chunks outchunks list.txt
-          mkdir -p chunks outchunks
-          # split (lossless container copy: fast, no re-encode)
-          ffmpeg -y -i "$source" -c copy -map 0 -f segment -segment_time "$CHUNK_SECS" \
-            -reset_timestamps 1 chunks/chunk_%03d.mp4 2>/dev/null
-          ls chunks
-          # dub each chunk independently (fast, robust per small clip)
-          i=0
-          for c in chunks/chunk_*.mp4; do
-            [ -e "$c" ] || continue
-            printf -v tag "%03d" "$i"
-            i=$((i+1))
-            python -m youtube_auto_dub "$c" \
-              --lang "${{ inputs.target_lang }}" \
-              --dub-lang "${{ inputs.target_lang }}" \
-              --source-lang "${{ inputs.source_lang }}" \
-              --voice "${{ inputs.voice }}" \
-              --tts-engine "${{ inputs.tts_engine }}" \
-              --mode "${{ inputs.mode }}" \
-              --gender "${{ inputs.gender }}" \
-              --model "${{ inputs.model }}" \
-              -o outchunks/${tag} "${extra[@]}" || echo "chunk $tag failed (continuing)"
-          done
-          # assemble concat list of produced dubbed mp4s
-          : > list.txt
-          for dir in $(ls -d outchunks/*/ 2>/dev/null | sort); do
-            out=$(find "$dir" -maxdepth 1 -type f -name 'Output_*.mp4' | head -1)
-            if [ -n "$out" ]; then
-              echo "file '$PWD/$out'" >> list.txt
-            fi
-          done
-          cat list.txt
-          # concat into the expected final location the pipeline looks for
-          mkdir -p output
-          if [ -s list.txt ]; then
-            ffmpeg -y -f concat -safe 0 -i list.txt -c copy \
-              -movflags +faststart "output/concat.mp4"
-            # copy to the canonical Output_ name the Seed-VC step expects
-            cp output/concat.mp4 "output/Output_both_L-${CHUNK_SECS}_D-0.mp4"
-          fi
-          ls -lh output
-
-      - name: Enhance voice with Seed-VC
-        if: inputs.seed_vc == true
-        env:
-          SOURCE_PATH: ${{ inputs.source_path }}
-        run: |
-          set -euo pipefail
-          # The renderer names outputs as Output_both_L-*_D-*.mp4; choose the newest one.
-          dubbed=$(find output -maxdepth 1 -type f -name 'Output_*.mp4' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
-          if [ -z "$dubbed" ]; then
-            echo "No dubbed video found for Seed-VC" >&2
-            exit 1
-          fi
-          cp "$dubbed" output/dubbed-before-seedvc.mp4
-          extra=()
-          if [ "${{ inputs.bg_music }}" = "true" ]; then
-            extra+=(--keep-background)
-          fi
-          if [ "${{ inputs.separate_sources }}" = "true" ]; then
-            extra+=(--separate-sources)
-          fi
-          # If core.py produced a per-speaker map (distinct roles), generate
-          # --speaker-refs/--speaker-map via a helper so Seed-VC keeps each
-          # role's cloned timbre instead of flattening to one reference voice.
-          SPR_ARGS=()
-          MAP_OUT=$(python scripts/build_speaker_args.py --map output/speaker-map.json)
-          if echo "$MAP_OUT" | grep -q '^REFS='; then
-            SPR_ARGS+=(--speaker-refs "$(echo "$MAP_OUT" | grep '^REFS=' | cut -d= -f2-)")
-            SPR_ARGS+=(--speaker-map "$(echo "$MAP_OUT" | grep '^MAP=' | cut -d= -f2-)")
-          fi
-          python scripts/seed_vc_enhance.py \
-            --space "phuoc2005/seed-vc" \
-            --original "$SOURCE_PATH" \
-            --dubbed "$dubbed" \
-            --output output/seedvc-enhanced.mp4 \
-            "${extra[@]}" "${SPR_ARGS[@]}"
-          rm -f "$dubbed"
-
-      - name: Validate target-language audio after Seed-VC
-        if: inputs.seed_vc == true
-        run: |
-          set -euo pipefail
-          if python scripts/validate_dub_language.py \
-            --video output/seedvc-enhanced.mp4 \
-            --expected "${{ inputs.target_lang }}" \
+          if [ "${{ inputs.separate_sources }}" = "true" ]; then extra+=(--separate-sources); fi
+          if [ "${{ inputs.bg_music }}" = "true" ]; then extra+=(--preserve-background); fi
+          if [ "${{ inputs.diarize }}" = "true" ]; then extra+=(--diarize); fi
+          if [ "${{ inputs.no_vad }}" = "true" ]; then extra+=(--no-vad); fi
+          if [ "${{ inputs.seed_vc }}" = "true" ]; then extra+=(--seed-vc); fi
+          python scripts/resumable_smart_dub.py \
+            --source "${{ steps.smart_project.outputs.source }}" \
+            --project-id "${{ steps.smart_project.outputs.id }}" \
+            --release-tag "${{ steps.smart_project.outputs.release_tag }}" \
+            --checkpoint-root checkpoints \
+            --output-dir output \
+            --source-lang "${{ inputs.source_lang }}" \
+            --target-lang "${{ inputs.target_lang }}" \
+            --tts-engine "${{ inputs.tts_engine }}" \
+            --voice "${{ inputs.voice }}" \
+            --gender "${{ inputs.gender }}" \
             --model "${{ inputs.model }}" \
-            --report output/language-integrity.json; then
-            echo "Seed-VC target-language integrity passed"
-          else
-            echo "Seed-VC changed or obscured the target language; restoring the verified raw translated dub"
-            cat output/language-integrity.json
-            cp output/dubbed-before-seedvc.mp4 output/seedvc-enhanced.mp4
-          fi
+            --max-seconds "$chunk_max" \
+            --target-seconds "8" \
+            --min-seconds "2.5" \
+            "${extra[@]}"
 
-      - name: Normalize final delivery audio
+      - name: Confirm complete resumable delivery
         run: |
           set -euo pipefail
-          final="output/seedvc-enhanced.mp4"
-          if [ ! -f "$final" ]; then final=$(find output -maxdepth 1 -type f -name 'Output_*.mp4' | head -1); fi
-          test -n "$final" && test -f "$final"
-          ffmpeg -y -i "$final" -map 0:v:0 -map 0:a:0 \
-            -c:v copy -af "volume=6dB,acompressor=threshold=-18dB:ratio=2:attack=5:release=80,loudnorm=I=-16:TP=-1.5:LRA=11,alimiter=limit=0.891:level=false" \
-            -c:a aac -b:a 192k -ar 48000 -ac 2 -movflags +faststart output/final-dub.mp4
+          test -s output/final-dub.mp4
+          test -s output/segments-report.json
+          test -s output/progress-report.json
+          test -s output/checkpoint-manifest.json
+          python - <<'PY'
+          import json
+          p=json.load(open("output/progress-report.json",encoding="utf-8"))
+          assert p["state"] == "completed_waiting_for_cleanup_approval", p
+          assert p["by_status"].get("completed",0) == p["total"], p
+          assert p["cleanup_authorized"] is False, p
+          print(json.dumps(p,ensure_ascii=False,indent=2))
+          PY
 
       - name: Validate final target language
         run: |
@@ -550,8 +494,9 @@ jobs:
         run: |
           set -euo pipefail
           quality_source="$SOURCE_PATH"
+          if [ -s output/source-path.txt ]; then quality_source=$(cat output/source-path.txt); fi
           if [ ! -f "$quality_source" ]; then
-            quality_source=$(find temp -type f \( -name '*.mp4' -o -name '*.mkv' -o -name '*.webm' -o -name '*.wav' \) | head -1)
+            quality_source=$(find .cache temp -type f \( -name '*.mp4' -o -name '*.mkv' -o -name '*.webm' -o -name '*.wav' \) | head -1)
           fi
           test -n "$quality_source" && test -f "$quality_source"
           python scripts/validate_dub_quality.py \
@@ -573,6 +518,7 @@ jobs:
           cp output/quality-report.json /tmp/quality-report.json
           cp output/segments-report.json /tmp/segments-report.json
           cp output/language-integrity.json /tmp/language-integrity.json
+          cp output/source-path.txt /tmp/source-path.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           for attempt in 1 2 3; do
@@ -583,7 +529,8 @@ jobs:
             cp /tmp/quality-report.json output/quality-report.json
             cp /tmp/segments-report.json output/segments-report.json
             cp /tmp/language-integrity.json output/language-integrity.json
-            python scripts/publish_dub_run.py --video output/final-dub.mp4 --source "$SOURCE_PATH" \
+            source_for_publish=$(cat /tmp/source-path.txt)
+            python scripts/publish_dub_run.py --video output/final-dub.mp4 --source "$source_for_publish" \
               --source-lang "${{ inputs.source_lang }}" --target-lang "${{ inputs.target_lang }}" \
               --engine "${{ inputs.tts_engine }}" --seed-vc "${{ inputs.seed_vc }}" \
               --bg-music "${{ inputs.bg_music }}" --diarize "${{ inputs.diarize }}" --run-id "$RUN_ID"
@@ -644,5 +591,7 @@ jobs:
             output/segments-report.json
             output/language-integrity.json
             output/preflight.json
+            output/progress-report.json
+            output/checkpoint-manifest.json
           if-no-files-found: error
           retention-days: 14

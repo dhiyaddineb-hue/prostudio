@@ -1,0 +1,70 @@
+name: Delete Smart Dub Checkpoints (Explicit Approval Only)
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: "Exact smart-dub project id"
+        required: true
+        type: string
+      final_path:
+        description: "Published final MP4 path under docs/"
+        required: true
+        type: string
+      confirmation:
+        description: "Type exactly: DELETE <project_id>"
+        required: true
+        type: string
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out published branch
+        uses: actions/checkout@v4
+
+      - name: Verify explicit approval and final delivery
+        env:
+          PROJECT_ID: ${{ inputs.project_id }}
+          FINAL_PATH: ${{ inputs.final_path }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [[ "$PROJECT_ID" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "Unsafe project id" >&2; exit 1; }
+          expected="DELETE $PROJECT_ID"
+          [ "$CONFIRMATION" = "$expected" ] || {
+            echo "Deletion refused: confirmation must be exactly '$expected'" >&2
+            exit 1
+          }
+          case "$FINAL_PATH" in
+            docs/*.mp4) ;;
+            *) echo "Deletion refused: final_path must be a published docs/*.mp4" >&2; exit 1 ;;
+          esac
+          test -s "$FINAL_PATH" || { echo "Deletion refused: published final is missing" >&2; exit 1; }
+          git ls-files --error-unmatch "$FINAL_PATH" >/dev/null || {
+            echo "Deletion refused: final MP4 is not committed" >&2
+            exit 1
+          }
+          echo "Approval validated. Final delivery is committed: $FINAL_PATH"
+
+      - name: Show checkpoint assets before deletion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROJECT_ID: ${{ inputs.project_id }}
+        run: |
+          set -euo pipefail
+          gh release view "checkpoint-$PROJECT_ID" --json tagName,isDraft,assets
+
+      - name: Delete only the approved checkpoint release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROJECT_ID: ${{ inputs.project_id }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          [ "$CONFIRMATION" = "DELETE $PROJECT_ID" ]
+          gh release delete "checkpoint-$PROJECT_ID" --yes --cleanup-tag
+          echo "Deleted checkpoint release for $PROJECT_ID; published final was preserved."

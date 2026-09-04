@@ -126,7 +126,11 @@ def main() -> None:
     last_error = None
     for attempt in range(1, 9):
         try:
-            client = Client(args.space)
+            token = os.environ.get("HF_TOKEN") or None
+            try:
+                client = Client(args.space, hf_token=token) if token else Client(args.space)
+            except TypeError:
+                client = Client(args.space)
             result = client.predict(
                 handle_file(str(dubbed_wav)),
                 handle_file(str(cleaned_ref)),
