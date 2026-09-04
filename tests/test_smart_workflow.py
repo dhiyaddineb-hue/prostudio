@@ -43,3 +43,13 @@ def test_script_adds_repository_root_before_local_imports():
     root_insert = text.index("sys.path.insert(0, str(Path(__file__).resolve().parents[1]))")
     local_import = text.index("from youtube_auto_dub.emotion import infer_emotion")
     assert root_insert < local_import
+
+
+def test_seed_audio_is_tempo_fitted_without_sample_slicing():
+    text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    assert "seedvc.fitted.wav" in text
+    assert "budget_samples" in text
+    fit_block = text.split("def fit_without_cutting", 1)[1].split("def convert_analysis_audio", 1)[0]
+    assert "atempo_filter" in fit_block
+    assert "audio[:" not in fit_block
+    assert ".unlink(" not in fit_block

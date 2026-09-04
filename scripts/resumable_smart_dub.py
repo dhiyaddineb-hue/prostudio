@@ -105,31 +105,47 @@ def trim_generated(source: Path, destination: Path) -> Path:
 
 
 def fit_without_cutting(source: Path, destination: Path, budget: float) -> tuple[Path, float, float]:
-    """Fit complete generated speech by tempo adjustment; never truncate samples."""
+    """Fit complete speech to an exact sample budget using tempo only.
+
+    Codec padding and sample-rate rounding can add a few milliseconds even when
+    ffprobe reports a matching duration. Compare real decoded sample counts and
+    apply a tiny additional atempo correction; never slice or discard samples.
+    """
     if budget <= 0.10:
         raise RuntimeError(f"invalid speech budget: {budget:.3f}s")
-    actual = ffprobe_duration(source)
-    speed = max(actual / budget, 1.0)
-    if speed <= 1.01:
+    source_info = sf.info(str(source))
+    source_rate = int(source_info.samplerate or SR_TTS)
+    actual = source_info.frames / max(source_rate, 1)
+    budget_samples = max(1, int(round(budget * SR_TTS)))
+    speed = max((actual * SR_TTS) / budget_samples, 1.0)
+    if speed <= 1.0:
         shutil.copy2(source, destination)
     else:
         run([
-            "ffmpeg", "-y", "-i", str(source), "-filter:a", atempo_filter(speed * 1.005),
+            "ffmpeg", "-y", "-i", str(source), "-filter:a", atempo_filter(speed * 1.002),
             "-ar", str(SR_TTS), "-ac", "1", str(destination),
         ])
-    fitted = ffprobe_duration(destination)
-    if fitted > budget + 0.08:
-        correction = fitted / budget
-        corrected = destination.with_name(destination.stem + ".corrected.wav")
+
+    # atempo/filter rounding is codec-dependent. Correct again if needed, still
+    # by changing tempo only. Three passes are ample for sub-frame differences.
+    for attempt in range(3):
+        info = sf.info(str(destination))
+        frames = int(info.frames)
+        rate = int(info.samplerate or SR_TTS)
+        normalized_frames = int(round(frames * SR_TTS / max(rate, 1)))
+        if normalized_frames <= budget_samples:
+            fitted = normalized_frames / SR_TTS
+            return destination, actual, fitted
+        correction = normalized_frames / budget_samples
+        corrected = destination.with_name(f"{destination.stem}.corrected-{attempt}.wav")
         run([
-            "ffmpeg", "-y", "-i", str(destination), "-filter:a", atempo_filter(correction * 1.01),
+            "ffmpeg", "-y", "-i", str(destination), "-filter:a", atempo_filter(correction * 1.002),
             "-ar", str(SR_TTS), "-ac", "1", str(corrected),
         ])
         os.replace(corrected, destination)
-        fitted = ffprobe_duration(destination)
-    if fitted > budget + 0.10:
-        raise RuntimeError(f"complete speech does not fit chunk: {fitted:.3f}s > {budget:.3f}s")
-    return destination, actual, fitted
+    final_info = sf.info(str(destination))
+    final_frames = int(round(final_info.frames * SR_TTS / max(int(final_info.samplerate or SR_TTS), 1)))
+    raise RuntimeError(f"complete speech does not fit chunk after tempo correction: {final_frames} > {budget_samples} samples")
 
 
 def convert_analysis_audio(source: Path, speech: Path, background: Path | None = None) -> None:
@@ -598,12 +614,20 @@ async def main_async(args) -> None:
                     seed_video = apply_seed_vc(
                         source_chunk, raw_dubbed, seed_video, args.seed_vc_space,
                     )
-                final_voice = directory / "seedvc.wav"
-                if not final_voice.exists() or final_voice.stat().st_size < 1024:
-                    final_voice = extract_audio(seed_video, final_voice)
+                seed_voice = directory / "seedvc.wav"
+                if not seed_voice.exists() or seed_voice.stat().st_size < 1024:
+                    seed_voice = extract_audio(seed_video, seed_voice)
+                seed_budget = float(chunk["end"]) - float(chunk["start"])
+                final_voice, seed_original_duration, seed_fitted_duration = fit_without_cutting(
+                    seed_voice, directory / "seedvc.fitted.wav", seed_budget,
+                )
                 full_timeline = True
                 seed_applied = True
-                store.update_chunk(index, status="seed_vc_completed", seed_vc_applied=True)
+                store.update_chunk(
+                    index, status="seed_vc_completed", seed_vc_applied=True,
+                    seed_original_duration=round(seed_original_duration, 3),
+                    seed_fitted_duration=round(seed_fitted_duration, 3),
+                )
             chunk_audio = build_chunk_audio(
                 store.chunk(index), final_voice,
                 background_audio if args.preserve_background and background_audio.exists() else None,
