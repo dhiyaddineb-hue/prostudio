@@ -36,3 +36,10 @@ def test_seed_vc_uses_huggingface_token_when_available():
     text = (ROOT / "scripts/seed_vc_enhance.py").read_text(encoding="utf-8")
     assert 'os.environ.get("HF_TOKEN")' in text
     assert "Client(args.space, hf_token=token)" in text
+
+
+def test_script_adds_repository_root_before_local_imports():
+    text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    root_insert = text.index("sys.path.insert(0, str(Path(__file__).resolve().parents[1]))")
+    local_import = text.index("from youtube_auto_dub.emotion import infer_emotion")
+    assert root_insert < local_import

@@ -20,6 +20,10 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+# Running ``python scripts/resumable_smart_dub.py`` makes scripts/ sys.path[0].
+# Add the repository root before importing the local youtube_auto_dub package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import numpy as np
 import soundfile as sf
 
