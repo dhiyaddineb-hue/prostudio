@@ -427,17 +427,49 @@ jobs:
           if [ "${{ inputs.no_vad }}" = "true" ]; then
             extra+=(--no-vad)
           fi
-          python -m youtube_auto_dub "$source" \
-            --lang "${{ inputs.target_lang }}" \
-            --dub-lang "${{ inputs.target_lang }}" \
-            --source-lang "${{ inputs.source_lang }}" \
-            --voice "${{ inputs.voice }}" \
-            --tts-engine "${{ inputs.tts_engine }}" \
-            --mode "${{ inputs.mode }}" \
-            --gender "${{ inputs.gender }}" \
-            --model "${{ inputs.model }}" \
-            -o output \
-            "${extra[@]}"
+          # --- Chunked fast dubbing: split source into short units, dub each, then concat ---
+          CHUNK_SECS="${{ inputs.chunk_seconds }}"
+          [ -z "$CHUNK_SECS" ] && CHUNK_SECS=10
+          rm -rf chunks outchunks list.txt
+          mkdir -p chunks outchunks
+          # split (lossless container copy: fast, no re-encode)
+          ffmpeg -y -i "$source" -c copy -map 0 -f segment -segment_time "$CHUNK_SECS" \
+            -reset_timestamps 1 chunks/chunk_%03d.mp4 2>/dev/null
+          ls chunks
+          # dub each chunk independently (fast, robust per small clip)
+          i=0
+          for c in chunks/chunk_*.mp4; do
+            [ -e "$c" ] || continue
+            printf -v tag "%03d" "$i"
+            i=$((i+1))
+            python -m youtube_auto_dub "$c" \
+              --lang "${{ inputs.target_lang }}" \
+              --dub-lang "${{ inputs.target_lang }}" \
+              --source-lang "${{ inputs.source_lang }}" \
+              --voice "${{ inputs.voice }}" \
+              --tts-engine "${{ inputs.tts_engine }}" \
+              --mode "${{ inputs.mode }}" \
+              --gender "${{ inputs.gender }}" \
+              --model "${{ inputs.model }}" \
+              -o outchunks/${tag} "${extra[@]}" || echo "chunk $tag failed (continuing)"
+          done
+          # assemble concat list of produced dubbed mp4s
+          : > list.txt
+          for dir in $(ls -d outchunks/*/ 2>/dev/null | sort); do
+            out=$(find "$dir" -maxdepth 1 -type f -name 'Output_*.mp4' | head -1)
+            if [ -n "$out" ]; then
+              echo "file '$PWD/$out'" >> list.txt
+            fi
+          done
+          cat list.txt
+          # concat into the expected final location the pipeline looks for
+          mkdir -p output
+          if [ -s list.txt ]; then
+            ffmpeg -y -f concat -safe 0 -i list.txt -c copy \
+              -movflags +faststart "output/concat.mp4"
+            # copy to the canonical Output_ name the Seed-VC step expects
+            cp output/concat.mp4 "output/Output_both_L-${CHUNK_SECS}_D-0.mp4"
+          fi
           ls -lh output
 
       - name: Enhance voice with Seed-VC
