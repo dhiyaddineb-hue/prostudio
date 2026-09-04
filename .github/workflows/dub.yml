@@ -440,6 +440,14 @@ jobs:
             "${extra[@]}"
           ls -lh output
 
+      - name: Preserve raw dubbed video
+        run: |
+          set -euo pipefail
+          dubbed=$(find output -maxdepth 1 -type f -name 'Output_*.mp4' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)
+          test -n "$dubbed" && test -f "$dubbed"
+          cp "$dubbed" output/dubbed-before-seedvc.mp4
+          ls -lh output/dubbed-before-seedvc.mp4
+
       - name: Enhance voice with Seed-VC
         if: inputs.seed_vc == true
         env:
@@ -517,7 +525,7 @@ jobs:
           SOURCE_PATH: ${{ inputs.source_path }}
         run: |
           set -euo pipefail
-          quality_source="$SOURCE_PATH"
+          quality_source="${REASSEMBLED_SOURCE:-$SOURCE_PATH}"
           if [ ! -f "$quality_source" ]; then
             quality_source=$(find temp -type f \( -name '*.mp4' -o -name '*.mkv' -o -name '*.webm' -o -name '*.wav' \) | head -1)
           fi
@@ -608,6 +616,8 @@ jobs:
           name: final-dubbed-video
           path: |
             output/final-dub.mp4
+            output/dubbed-before-seedvc.mp4
+            output/Output_*.mp4
             output/quality-report.json
             output/segments-report.json
             output/language-integrity.json
