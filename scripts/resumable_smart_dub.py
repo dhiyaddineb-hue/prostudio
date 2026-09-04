@@ -148,6 +148,41 @@ def fit_without_cutting(source: Path, destination: Path, budget: float) -> tuple
     raise RuntimeError(f"complete speech does not fit chunk after tempo correction: {final_frames} > {budget_samples} samples")
 
 
+def match_duration_without_cutting(source: Path, destination: Path, target_duration: float) -> tuple[Path, float, float]:
+    """Match the source speech window in both directions using tempo only.
+
+    Short translated speech is slowed to end with the original phrase; long
+    speech is accelerated. No atrim, sample slicing, or text shortening occurs.
+    """
+    if target_duration <= 0.10:
+        raise RuntimeError(f"invalid sync target: {target_duration:.3f}s")
+    info = sf.info(str(source))
+    actual = info.frames / max(int(info.samplerate or SR_TTS), 1)
+    target_samples = max(1, int(round(target_duration * SR_TTS)))
+    current = source
+    for attempt in range(5):
+        current_info = sf.info(str(current))
+        current_samples = int(round(current_info.frames * SR_TTS / max(int(current_info.samplerate or SR_TTS), 1)))
+        if abs(current_samples - target_samples) <= int(0.012 * SR_TTS):
+            if current != destination:
+                shutil.copy2(current, destination)
+            fitted = current_samples / SR_TTS
+            return destination, actual, fitted
+        factor = current_samples / target_samples
+        candidate = destination.with_name(f"{destination.stem}.sync-{attempt}.wav")
+        run([
+            "ffmpeg", "-y", "-i", str(current), "-filter:a", atempo_filter(factor),
+            "-ar", str(SR_TTS), "-ac", "1", str(candidate),
+        ])
+        current = candidate
+    final_info = sf.info(str(current))
+    final_samples = int(round(final_info.frames * SR_TTS / max(int(final_info.samplerate or SR_TTS), 1)))
+    if abs(final_samples - target_samples) > int(0.025 * SR_TTS):
+        raise RuntimeError(f"speech sync mismatch after tempo correction: {final_samples} vs {target_samples} samples")
+    os.replace(current, destination)
+    return destination, actual, final_samples / SR_TTS
+
+
 def convert_analysis_audio(source: Path, speech: Path, background: Path | None = None) -> None:
     speech.parent.mkdir(parents=True, exist_ok=True)
     run(["ffmpeg", "-y", "-i", str(source), "-ar", "24000", "-ac", "1", "-c:a", "flac", str(speech)])
@@ -563,12 +598,12 @@ async def main_async(args) -> None:
     for chunk in store.data["chunks"]:
         index = int(chunk["index"])
         complete = store.completed_file(index)
-        seed_mode_current = chunk.get("seed_vc_mode") == "voice_only_v2"
+        seed_mode_current = chunk.get("seed_vc_mode") == "voice_only_sync_v3"
         if complete and (not args.seed_vc or seed_mode_current):
             print(f"Chunk {index:04d}: restored and validated; skipping")
             continue
         if complete and args.seed_vc and not seed_mode_current:
-            print(f"Chunk {index:04d}: old full-timeline Seed-VC detected; rebuilding voice conversion only")
+            print(f"Chunk {index:04d}: outdated Seed-VC timing detected; rebuilding alignment only")
         directory = store.chunk_dir(index)
         write_text_files(store, index)
         attempts = int(chunk.get("attempts", 0)) + 1
@@ -615,19 +650,20 @@ async def main_async(args) -> None:
                     seed_voice = apply_seed_vc_audio(
                         reference, fitted_voice, seed_voice, args.seed_vc_space,
                     )
-                seed_budget = max(0.12, float(chunk["end"]) - float(chunk["speech_start"]) - 0.03)
-                final_voice, seed_original_duration, seed_fitted_duration = fit_without_cutting(
-                    seed_voice, directory / "seedvc.voice-only.fitted.wav", seed_budget,
+                speech_target = max(0.12, float(chunk["speech_end"]) - float(chunk["speech_start"]))
+                final_voice, seed_original_duration, seed_fitted_duration = match_duration_without_cutting(
+                    seed_voice, directory / "seedvc.voice-only.synced.wav", speech_target,
                 )
-                # The converted voice is placed at speech_start; timeline silence
-                # remains true silence and cannot be turned into breath/hiss.
+                # The converted voice is placed at speech_start and ends with
+                # the original ASR phrase window; trailing media silence remains silent.
                 full_timeline = False
                 seed_applied = True
                 store.update_chunk(
                     index, status="seed_vc_completed", seed_vc_applied=True,
-                    seed_vc_mode="voice_only_v2",
+                    seed_vc_mode="voice_only_sync_v3",
                     seed_original_duration=round(seed_original_duration, 3),
                     seed_fitted_duration=round(seed_fitted_duration, 3),
+                    speech_target_duration=round(speech_target, 3),
                 )
             chunk_audio = build_chunk_audio(
                 store.chunk(index), final_voice,

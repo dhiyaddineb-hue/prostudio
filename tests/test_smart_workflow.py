@@ -47,7 +47,7 @@ def test_script_adds_repository_root_before_local_imports():
 
 def test_seed_audio_is_tempo_fitted_without_sample_slicing():
     text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
-    assert "seedvc.voice-only.fitted.wav" in text
+    assert "seedvc.voice-only.synced.wav" in text
     assert "budget_samples" in text
     fit_block = text.split("def fit_without_cutting", 1)[1].split("def convert_analysis_audio", 1)[0]
     assert "atempo_filter" in fit_block
@@ -60,7 +60,7 @@ def test_seed_vc_never_receives_timeline_silence():
     seed = (ROOT / "scripts/seed_vc_enhance.py").read_text(encoding="utf-8")
     assert "apply_seed_vc_audio" in smart
     assert "seedvc.voice-only.wav" in smart
-    assert 'seed_vc_mode="voice_only_v2"' in smart
+    assert 'seed_vc_mode="voice_only_sync_v3"' in smart
     assert 'parser.add_argument("--audio-only"' in seed
     audio_only = seed.split("if args.audio_only:", 1)[1].split("# Keep video untouched", 1)[0]
     assert '"-t"' not in audio_only
@@ -69,5 +69,15 @@ def test_seed_vc_never_receives_timeline_silence():
 
 def test_old_full_timeline_seed_checkpoints_are_invalidated():
     text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
-    assert 'seed_mode_current = chunk.get("seed_vc_mode") == "voice_only_v2"' in text
-    assert "old full-timeline Seed-VC detected" in text
+    assert 'seed_mode_current = chunk.get("seed_vc_mode") == "voice_only_sync_v3"' in text
+    assert "outdated Seed-VC timing detected" in text
+
+
+def test_post_seed_sync_uses_bidirectional_tempo_without_trimming():
+    text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    block = text.split("def match_duration_without_cutting", 1)[1].split("def convert_analysis_audio", 1)[0]
+    assert "atempo_filter(factor)" in block
+    assert "max(factor, 1.0)" not in block
+    assert '"atrim=' not in block
+    assert "audio[:" not in block
+    assert 'seed_vc_mode="voice_only_sync_v3"' in text
