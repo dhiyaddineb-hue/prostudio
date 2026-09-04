@@ -372,6 +372,28 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Reassemble split source parts
+        if: endsWith(inputs.source_path, '.part0')
+        run: |
+          set -euo pipefail
+          base="${inputs.source_path%.part0}"
+          full="${base}.mp4"
+          if [ -f "${inputs.source_path}.1" ]; then
+            printf 'FOUND .part0.1\n'
+          fi
+          # parts are committed as <base>.part0 and <base>.part1
+          p0="${base}.part0"
+          p1="${base}.part1"
+          if [ -f "$p0" ] && [ -f "$p1" ]; then
+            cat "$p0" "$p1" > "$full"
+            echo "Reassembled $p0 + $p1 -> $full"
+            ls -la "$full"
+            # point subsequent steps at the reassembled file by exporting a var
+            echo "REASSEMBLED_SOURCE=$full" >> "$GITHUB_ENV"
+          else
+            echo "part0/part1 missing; continuing with given source" >&2
+          fi
+
       - name: Run the dub
         env:
           YAD_OUTPUT_DIR: output
@@ -384,7 +406,10 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set -euo pipefail
-          source="${{ inputs.youtube_url }}"
+          source="${REASSEMBLED_SOURCE:-}"
+          if [ -z "$source" ]; then
+            source="${{ inputs.youtube_url }}"
+          fi
           if [ -z "$source" ]; then
             source="${{ inputs.source_path }}"
           fi
