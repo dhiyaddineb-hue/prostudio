@@ -376,22 +376,19 @@ jobs:
         if: endsWith(inputs.source_path, '.part0')
         run: |
           set -euo pipefail
-          base="${inputs.source_path%.part0}"
-          full="${base}.mp4"
-          if [ -f "${inputs.source_path}.1" ]; then
-            printf 'FOUND .part0.1\n'
-          fi
-          # parts are committed as <base>.part0 and <base>.part1
-          p0="${base}.part0"
-          p1="${base}.part1"
-          if [ -f "$p0" ] && [ -f "$p1" ]; then
-            cat "$p0" "$p1" > "$full"
-            echo "Reassembled $p0 + $p1 -> $full"
-            ls -la "$full"
-            # point subsequent steps at the reassembled file by exporting a var
-            echo "REASSEMBLED_SOURCE=$full" >> "$GITHUB_ENV"
-          else
-            echo "part0/part1 missing; continuing with given source" >&2
+          sp="${{ inputs.source_path }}"
+          if [[ "$sp" == *.part0 ]]; then
+            base="${sp%.part0}"
+            full="${base}.mp4"
+            p0="${base}.part0"
+            p1="${base}.part1"
+            if [ -f "$p0" ] && [ -f "$p1" ]; then
+              cat "$p0" "$p1" > "$full"
+              echo "Reassembled $p0 + $p1 -> $full ($(wc -c < "$full") bytes)"
+              echo "REASSEMBLED_SOURCE=${full}" >> "$GITHUB_ENV"
+            else
+              echo "parts missing; continuing with $sp" >&2
+            fi
           fi
 
       - name: Run the dub
