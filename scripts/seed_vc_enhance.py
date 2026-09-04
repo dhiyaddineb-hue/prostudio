@@ -49,6 +49,8 @@ def main() -> None:
     parser.add_argument("--space", default="phuoc2005/seed-vc")
     parser.add_argument("--diffusion-steps", type=int, default=40)
     parser.add_argument("--length-adjust", type=float, default=1.0)
+    parser.add_argument("--audio-only", action="store_true",
+                        help="write converted voice audio only; caller restores timeline/background")
     parser.add_argument("--keep-background", action="store_true",
                         help="Mix an isolated background bed back in; off by default to prevent original speech leakage")
     parser.add_argument("--separate-sources", action="store_true",
@@ -178,6 +180,15 @@ def main() -> None:
              "-map", "[out]", "-ar", "24000", "-ac", "1", str(final_audio)])
     else:
         run(["ffmpeg", "-y", "-i", str(timed_wav), "-ar", "24000", "-ac", "1", str(final_audio)])
+
+    if args.audio_only:
+        # Return every converted sample. Timeline fitting is performed by the
+        # resumable caller with atempo; no -t/atrim/sample slicing is allowed.
+        run(["ffmpeg", "-y", "-i", str(final_audio), "-ar", "24000", "-ac", "1",
+             "-c:a", "pcm_s16le", args.output])
+        print(json.dumps({"ok": True, "output": args.output, "audio_only": True,
+                          "space": args.space, "duration_factor": round(factor, 4)}))
+        return
 
     # Keep video untouched, pad only tiny tails, and never let a long VC result
     # truncate the last words or extend beyond the original video.

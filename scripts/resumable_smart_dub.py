@@ -244,21 +244,17 @@ def slice_source_chunk(source_video: Path, chunk: dict, destination: Path) -> Pa
     return destination
 
 
-def apply_seed_vc(source_chunk: Path, raw_dubbed: Path, destination: Path, space: str) -> Path:
+def apply_seed_vc_audio(reference_audio: Path, voice_audio: Path, destination: Path, space: str) -> Path:
+    """Convert only spoken voice; never send timeline silence/background to Seed-VC."""
     command = [
         sys.executable, str(Path(__file__).with_name("seed_vc_enhance.py")),
-        "--original", str(source_chunk), "--dubbed", str(raw_dubbed),
-        "--output", str(destination), "--space", space,
+        "--original", str(reference_audio), "--dubbed", str(voice_audio),
+        "--output", str(destination), "--space", space, "--audio-only",
     ]
     result = run(command, check=False)
     if result.returncode != 0 or not destination.exists() or destination.stat().st_size < 1024:
         detail = ((result.stderr or "") + "\n" + (result.stdout or ""))[-1600:]
         raise RuntimeError(f"Seed-VC failed for this chunk: {detail.strip()}")
-    return destination
-
-
-def extract_audio(source: Path, destination: Path) -> Path:
-    run(["ffmpeg", "-y", "-i", str(source), "-vn", "-ar", str(SR_TTS), "-ac", "1", str(destination)])
     return destination
 
 
@@ -567,9 +563,12 @@ async def main_async(args) -> None:
     for chunk in store.data["chunks"]:
         index = int(chunk["index"])
         complete = store.completed_file(index)
-        if complete:
+        seed_mode_current = chunk.get("seed_vc_mode") == "voice_only_v2"
+        if complete and (not args.seed_vc or seed_mode_current):
             print(f"Chunk {index:04d}: restored and validated; skipping")
             continue
+        if complete and args.seed_vc and not seed_mode_current:
+            print(f"Chunk {index:04d}: old full-timeline Seed-VC detected; rebuilding voice conversion only")
         directory = store.chunk_dir(index)
         write_text_files(store, index)
         attempts = int(chunk.get("attempts", 0)) + 1
@@ -608,23 +607,25 @@ async def main_async(args) -> None:
             seed_applied = False
             if args.seed_vc and chunk.get("source_text"):
                 store.update_chunk(index, status="seed_vc_processing")
-                source_chunk = slice_source_chunk(loaded.video_path, store.chunk(index), directory / "source.mp4")
-                seed_video = directory / "seedvc.mp4"
-                if not seed_video.exists() or seed_video.stat().st_size < 1024:
-                    seed_video = apply_seed_vc(
-                        source_chunk, raw_dubbed, seed_video, args.seed_vc_space,
-                    )
-                seed_voice = directory / "seedvc.wav"
+                # Keep the original media slice for audit, but use the stable
+                # global clean speaker reference and voice-only content for VC.
+                slice_source_chunk(loaded.video_path, store.chunk(index), directory / "source.mp4")
+                seed_voice = directory / "seedvc.voice-only.wav"
                 if not seed_voice.exists() or seed_voice.stat().st_size < 1024:
-                    seed_voice = extract_audio(seed_video, seed_voice)
-                seed_budget = float(chunk["end"]) - float(chunk["start"])
+                    seed_voice = apply_seed_vc_audio(
+                        reference, fitted_voice, seed_voice, args.seed_vc_space,
+                    )
+                seed_budget = max(0.12, float(chunk["end"]) - float(chunk["speech_start"]) - 0.03)
                 final_voice, seed_original_duration, seed_fitted_duration = fit_without_cutting(
-                    seed_voice, directory / "seedvc.fitted.wav", seed_budget,
+                    seed_voice, directory / "seedvc.voice-only.fitted.wav", seed_budget,
                 )
-                full_timeline = True
+                # The converted voice is placed at speech_start; timeline silence
+                # remains true silence and cannot be turned into breath/hiss.
+                full_timeline = False
                 seed_applied = True
                 store.update_chunk(
                     index, status="seed_vc_completed", seed_vc_applied=True,
+                    seed_vc_mode="voice_only_v2",
                     seed_original_duration=round(seed_original_duration, 3),
                     seed_fitted_duration=round(seed_fitted_duration, 3),
                 )
