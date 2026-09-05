@@ -94,3 +94,22 @@ def test_non_speech_labels_and_short_speech_do_not_create_orphan_chunks():
     assert not any("music" in chunk["source_text"].lower() for chunk in chunks)
     observed_text = " ".join(chunk["source_text"] for chunk in chunks)
     assert "hello" in observed_text and "again." in observed_text
+
+
+def test_speaker_change_forces_a_safe_chunk_boundary():
+    raw = [{
+        "start": 0.0, "end": 7.0, "text": "one two three four", "confidence": 0.9,
+        "words": [
+            {"word": "one", "start": 0.2, "end": 1.0, "speaker": "SPEAKER_00"},
+            {"word": "two", "start": 1.1, "end": 2.0, "speaker": "SPEAKER_00"},
+            {"word": "three", "start": 2.2, "end": 3.0, "speaker": "SPEAKER_01"},
+            {"word": "four", "start": 3.1, "end": 4.0, "speaker": "SPEAKER_01"},
+        ],
+    }]
+    chunks = plan_smart_chunks(raw, 7.0, max_seconds=10.0, target_seconds=8.0, min_seconds=2.5)
+    assert chunks[0]["end"] == 2.0
+    assert chunks[0]["cut_reason"] == "speaker_change"
+    assert chunks[0]["speaker"] == "SPEAKER_00"
+    assert chunks[1]["speaker"] == "SPEAKER_01"
+    for chunk in chunks:
+        assert len({word["speaker"] for word in chunk["source_words"] if word.get("speaker")}) <= 1

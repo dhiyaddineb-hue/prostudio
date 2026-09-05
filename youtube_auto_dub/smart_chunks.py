@@ -136,7 +136,12 @@ def _boundary_score(words: list[dict], index: int, cursor: float, target_seconds
     gap = max(0.0, next_start - boundary)
     reason = "word_boundary"
     score = max(0.0, 28.0 - abs((boundary - cursor) - target_seconds) * 4.0)
-    if _SENTENCE_END.search(token):
+    current_speaker = word.get("speaker")
+    next_speaker = words[index + 1].get("speaker") if index + 1 < len(words) else current_speaker
+    if current_speaker and next_speaker and current_speaker != next_speaker:
+        score += 180.0
+        reason = "speaker_change"
+    elif _SENTENCE_END.search(token):
         score += 130.0
         reason = "sentence_end"
     elif gap >= 0.45:
@@ -179,13 +184,34 @@ def plan_smart_chunks(
     while cursor < duration - eps:
         hard = min(duration, cursor + max_seconds)
         if hard >= duration - eps:
-            boundary, reason = duration, "source_end"
+            speaker_changes = [
+                index for index, word in enumerate(words[:-1])
+                if word["end"] > cursor + eps
+                and word["end"] <= hard + eps
+                and word.get("speaker")
+                and words[index + 1].get("speaker")
+                and word.get("speaker") != words[index + 1].get("speaker")
+            ]
+            if speaker_changes:
+                boundary = float(words[speaker_changes[0]]["end"])
+                reason = "speaker_change"
+            else:
+                boundary, reason = duration, "source_end"
         else:
             eligible = [
                 index for index, word in enumerate(words)
                 if word["end"] > cursor + eps and word["end"] <= hard + eps
             ]
-            preferred = [index for index in eligible if words[index]["end"] >= cursor + min_seconds - eps]
+            preferred = [
+                index for index in eligible
+                if words[index]["end"] >= cursor + min_seconds - eps
+                or (
+                    index + 1 < len(words)
+                    and words[index].get("speaker")
+                    and words[index + 1].get("speaker")
+                    and words[index].get("speaker") != words[index + 1].get("speaker")
+                )
+            ]
             pool = preferred or eligible
             if pool:
                 # If the only completed speech is shorter than the minimum and
@@ -228,6 +254,11 @@ def plan_smart_chunks(
             "speech_start": round(min((word["start"] for word in members), default=cursor), 3),
             "speech_end": round(max((word["end"] for word in members), default=cursor), 3),
             "source_text": text,
+            "source_words": [
+                {"id": word["id"], "word": word["word"], "start": round(float(word["start"]), 3),
+                 "end": round(float(word["end"]), 3), "speaker": word.get("speaker")}
+                for word in members
+            ],
             "word_ids": [word["id"] for word in members],
             "word_count": len(members),
             "confidence": min((word["confidence"] for word in members), default=1.0),

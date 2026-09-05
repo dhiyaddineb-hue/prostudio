@@ -14,7 +14,7 @@ def test_seed_vc_is_enabled_and_applied_per_chunk():
     script = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
     assert "status=\"seed_vc_processing\"" in script
     assert "status=\"seed_vc_completed\"" in script
-    assert "dubbed-before-seedvc.mp4" in script
+    assert 'dubbed-before-seedvc{variant}.mp4' in script
 
 
 def test_no_automatic_cleanup_and_no_unapproved_fallback():
@@ -47,7 +47,7 @@ def test_script_adds_repository_root_before_local_imports():
 
 def test_seed_audio_is_tempo_fitted_without_sample_slicing():
     text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
-    assert "seedvc.voice-only.synced.wav" in text
+    assert 'seedvc.voice-only{variant}.synced.wav' in text
     assert "budget_samples" in text
     fit_block = text.split("def fit_without_cutting", 1)[1].split("def convert_analysis_audio", 1)[0]
     assert "atempo_filter" in fit_block
@@ -59,7 +59,7 @@ def test_seed_vc_never_receives_timeline_silence():
     smart = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
     seed = (ROOT / "scripts/seed_vc_enhance.py").read_text(encoding="utf-8")
     assert "apply_seed_vc_audio" in smart
-    assert "seedvc.voice-only.wav" in smart
+    assert 'seedvc.voice-only{variant}.wav' in smart
     assert 'seed_vc_mode="voice_only_sync_v3"' in smart
     assert 'parser.add_argument("--audio-only"' in seed
     audio_only = seed.split("if args.audio_only:", 1)[1].split("# Keep video untouched", 1)[0]
@@ -81,3 +81,15 @@ def test_post_seed_sync_uses_bidirectional_tempo_without_trimming():
     assert '"atrim=' not in block
     assert "audio[:" not in block
     assert 'seed_vc_mode="voice_only_sync_v3"' in text
+
+
+def test_selected_character_quality_features_are_wired():
+    text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    for marker in (
+        "load_voice_profiles", "prepare_profile_references", "voice_profile_hash",
+        "validate_spoken_content", "word_timing_report", "content-validation.json",
+        "word-alignment.json", "comparison.json", "mix-report.json",
+    ):
+        assert marker in text
+    assert "duck_floor = 0.28" in text
+    assert "profile.get(\"tts_engine\")" in text

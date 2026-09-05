@@ -28,6 +28,8 @@ import numpy as np
 import soundfile as sf
 
 from youtube_auto_dub.emotion import infer_emotion
+from youtube_auto_dub.content_validation import validate_spoken_content, word_timing_report
+from youtube_auto_dub.voice_profiles import load_voice_profiles, template_for_speakers
 from youtube_auto_dub.googlev4 import GoogleTranslator
 from youtube_auto_dub.models import SR_TTS
 from youtube_auto_dub.runtime import pick_device
@@ -128,7 +130,7 @@ def fit_without_cutting(source: Path, destination: Path, budget: float) -> tuple
 
     # atempo/filter rounding is codec-dependent. Correct again if needed, still
     # by changing tempo only. Three passes are ample for sub-frame differences.
-    for attempt in range(3):
+    for attempt in range(8):
         info = sf.info(str(destination))
         frames = int(info.frames)
         rate = int(info.samplerate or SR_TTS)
@@ -139,7 +141,7 @@ def fit_without_cutting(source: Path, destination: Path, budget: float) -> tuple
         correction = normalized_frames / budget_samples
         corrected = destination.with_name(f"{destination.stem}.corrected-{attempt}.wav")
         run([
-            "ffmpeg", "-y", "-i", str(destination), "-filter:a", atempo_filter(correction * 1.002),
+            "ffmpeg", "-y", "-i", str(destination), "-filter:a", atempo_filter(correction * 1.006),
             "-ar", str(SR_TTS), "-ac", "1", str(corrected),
         ])
         os.replace(corrected, destination)
@@ -209,7 +211,8 @@ def build_chunk_audio(
 ) -> Path:
     duration = float(chunk["end"]) - float(chunk["start"])
     total = max(1, int(round(duration * SR_TTS)))
-    mix = np.zeros(total, dtype=np.float32)
+    voice_track = np.zeros(total, dtype=np.float32)
+    bed_track = np.zeros(total, dtype=np.float32)
 
     if background_audio and background_audio.exists():
         background_clip = destination.with_name("background.wav")
@@ -218,7 +221,7 @@ def build_chunk_audio(
         if getattr(bed, "ndim", 1) > 1:
             bed = bed.mean(axis=1)
         count = min(total, len(bed))
-        mix[:count] += bed[:count] * float(background_gain)
+        bed_track[:count] = bed[:count]
 
     if fitted_voice and fitted_voice.exists():
         voice, _ = sf.read(str(fitted_voice), dtype="float32")
@@ -231,18 +234,37 @@ def build_chunk_audio(
             raise RuntimeError(f"fitted voice would be truncated: {len(voice)} samples > {available}")
         count = len(voice)
         if count > 0:
-            # Tiny fades prevent clicks without deleting spoken content.
             fade = min(int(0.015 * SR_TTS), count // 2)
             voice = voice.copy()
             if fade > 1:
                 voice[:fade] *= np.linspace(0.0, 1.0, fade, dtype=np.float32)
                 voice[-fade:] *= np.linspace(1.0, 0.0, fade, dtype=np.float32)
-            mix[offset:offset + count] += voice
+            voice_track[offset:offset + count] = voice
+
+    # Duck the background only while translated speech is active. A smoothed
+    # envelope avoids pumping at word boundaries and restores full ambience in silence.
+    active = (np.abs(voice_track) > (10 ** (-44.0 / 20.0))).astype(np.float32)
+    smooth_samples = max(1, int(0.12 * SR_TTS))
+    if np.any(active):
+        envelope = np.convolve(active, np.ones(smooth_samples, dtype=np.float32) / smooth_samples, mode="same")
+        envelope = np.clip(envelope * 2.0, 0.0, 1.0)
+    else:
+        envelope = active
+    duck_floor = 0.28
+    duck_curve = 1.0 - envelope * (1.0 - duck_floor)
+    mix = voice_track + bed_track * float(background_gain) * duck_curve
 
     peak = float(np.max(np.abs(mix))) if len(mix) else 0.0
     if peak > 0.94:
         mix *= 0.94 / peak
     sf.write(str(destination), mix, SR_TTS, subtype="PCM_16")
+    atomic_write_json(destination.with_name("mix-report.json"), {
+        "background_present": bool(background_audio and background_audio.exists()),
+        "background_gain": float(background_gain),
+        "duck_floor": duck_floor,
+        "speech_active_ratio": round(float(np.mean(active)), 4),
+        "peak_before_limit": round(peak, 6),
+    })
     return destination
 
 
@@ -291,6 +313,28 @@ def apply_seed_vc_audio(reference_audio: Path, voice_audio: Path, destination: P
         detail = ((result.stderr or "") + "\n" + (result.stdout or ""))[-1600:]
         raise RuntimeError(f"Seed-VC failed for this chunk: {detail.strip()}")
     return destination
+
+
+def create_comparison_previews(
+    source_chunk: Path, before_seed: Path, after_seed_voice: Path | None,
+    final_chunk: Path, directory: Path,
+) -> dict[str, str | None]:
+    sources = {
+        "original": source_chunk,
+        "before_seed_vc": before_seed,
+        "after_seed_vc": after_seed_voice,
+        "final": final_chunk,
+    }
+    result: dict[str, str | None] = {}
+    for label, source in sources.items():
+        if not source or not Path(source).exists():
+            result[label] = None
+            continue
+        destination = directory / f"preview-{label}.mp3"
+        run(["ffmpeg", "-y", "-i", str(source), "-vn", "-ar", "24000", "-ac", "1",
+             "-c:a", "libmp3lame", "-b:a", "64k", str(destination)])
+        result[label] = destination.name
+    return result
 
 
 def concatenate_chunks(paths: list[Path], destination: Path) -> Path:
@@ -369,7 +413,13 @@ class ReleaseMirror:
         self._upload(asset)
 
     def upload_chunk(self, store: CheckpointStore, index: int) -> None:
-        self.upload_tree(f"chunk-{index:04d}.zip", store.root, store.chunk_dir(index))
+        directory = store.chunk_dir(index)
+        self.upload_tree(f"chunk-{index:04d}.zip", store.root, directory)
+        if self.enabled:
+            for preview in sorted(directory.glob("preview-*.mp3")):
+                asset = self.tmp / f"chunk-{index:04d}-{preview.name}"
+                shutil.copy2(preview, asset)
+                self._upload(asset)
         self.upload_manifest(store)
 
     def upload_final(self, path: Path) -> None:
@@ -387,12 +437,61 @@ def write_text_files(store: CheckpointStore, index: int) -> None:
     (directory / "translation.txt").write_text(chunk.get("translated_text", ""), encoding="utf-8")
 
 
-async def synthesize(args, text: str, destination: Path, reference: Path | None) -> str:
-    if args.tts_engine == "voxcpm":
+def prepare_profile_references(
+    profiles: dict[str, dict], chunks: list[dict], speech_audio: Path,
+    global_reference: Path, analysis_dir: Path,
+) -> dict[str, Path | None]:
+    out: dict[str, Path | None] = {}
+    root = analysis_dir / "speaker-references"
+    root.mkdir(parents=True, exist_ok=True)
+    for speaker, profile in profiles.items():
+        mode = profile.get("reference_mode")
+        if mode == "synthetic":
+            out[speaker] = None
+            continue
+        destination = root / f"{safe_project_id(speaker)}-{stable_hash(profile)[:10]}.wav"
+        if destination.exists() and destination.stat().st_size > 1024:
+            out[speaker] = destination
+            continue
+        if mode == "custom":
+            source = Path(profile["reference_path"])
+            run(["ffmpeg", "-y", "-i", str(source), "-af",
+                 "highpass=f=80,lowpass=f=9000,afftdn=nr=10,dynaudnorm=f=150:g=7",
+                 "-ar", "22050", "-ac", "1", str(destination)])
+        else:
+            turns = [chunk for chunk in chunks if (chunk.get("speaker") or "SPEAKER_00") == speaker and chunk.get("source_text")]
+            if not turns:
+                shutil.copy2(global_reference, destination)
+            else:
+                best = max(turns, key=lambda item: float(item["speech_end"]) - float(item["speech_start"]))
+                start = float(best["speech_start"])
+                duration = min(12.0, max(1.0, float(best["speech_end"]) - start))
+                run(["ffmpeg", "-y", "-ss", f"{start:.3f}", "-t", f"{duration:.3f}",
+                     "-i", str(speech_audio), "-af",
+                     "highpass=f=80,lowpass=f=9000,afftdn=nr=10,dynaudnorm=f=150:g=7",
+                     "-ar", "22050", "-ac", "1", str(destination)])
+        if not destination.exists() or destination.stat().st_size < 1024:
+            raise RuntimeError(f"invalid voice reference for {speaker}")
+        out[speaker] = destination
+    return out
+
+
+def observed_transcript(raw: list[dict]) -> tuple[str, list[dict]]:
+    text = " ".join(str(item.get("text", "")).strip() for item in raw).strip()
+    words = []
+    for item in raw:
+        words.extend(item.get("words") or [])
+    return text, words
+
+
+async def synthesize(args, profile: dict, text: str, destination: Path, reference: Path | None) -> str:
+    engine = profile.get("tts_engine") or args.tts_engine
+    style = profile.get("style") or "natural"
+    if engine == "voxcpm":
         try:
             await speak_voxcpm(
                 text, destination, language=args.target_lang,
-                control=f"A natural, clear narrator; delivery: {infer_emotion(text)}",
+                control=f"{style}; delivery: {infer_emotion(text)}",
                 reference_audio=reference,
             )
             return "voxcpm"
@@ -400,7 +499,7 @@ async def synthesize(args, text: str, destination: Path, reference: Path | None)
             if not args.fallback_edge:
                 raise
             print(f"VoxCPM failed, using Edge-TTS fallback: {exc}")
-    elif args.tts_engine == "xtts":
+    elif engine == "xtts":
         if not reference:
             raise RuntimeError("XTTS requires the persisted source voice reference")
         ok = await asyncio.to_thread(
@@ -410,14 +509,14 @@ async def synthesize(args, text: str, destination: Path, reference: Path | None)
         if not ok:
             raise RuntimeError("XTTS failed for this chunk")
         return "xtts"
-    elif args.tts_engine == "qwen":
+    elif engine == "qwen":
         await speak_qwen(
             text, destination, voice_sample=reference,
             language=args.target_lang, device=f"{pick_device()}:0",
         )
         return "qwen"
-    voice = args.voice or pick_voice(args.target_lang, args.gender)
-    await speak_edge(text, voice, destination, lang=args.target_lang, gender=args.gender)
+    voice = profile.get("voice") or args.voice or pick_voice(args.target_lang, profile.get("gender") or args.gender)
+    await speak_edge(text, voice, destination, lang=args.target_lang, gender=profile.get("gender") or args.gender)
     return "edge"
 
 
@@ -445,6 +544,11 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--seed-vc", action="store_true")
     ap.add_argument("--seed-vc-space", default="phuoc2005/seed-vc")
     ap.add_argument("--no-fallback-edge", dest="fallback_edge", action="store_false")
+    ap.add_argument("--speaker-voices", type=Path)
+    ap.add_argument("--require-voice-approval", action="store_true")
+    ap.add_argument("--validate-content", action="store_true")
+    ap.add_argument("--content-min-recall", type=float, default=0.70)
+    ap.add_argument("--content-min-sequence", type=float, default=0.58)
     ap.add_argument("--release-tag")
     return ap
 
@@ -490,6 +594,7 @@ async def main_async(args) -> None:
     }
 
     source_duration = float(loaded.metadata.duration)
+    device = pick_device()
     analysis = store.analysis_dir
     asr_path = analysis / "asr.json"
     meta_path = analysis / "analysis.json"
@@ -520,7 +625,6 @@ async def main_async(args) -> None:
             else:
                 print(f"Demucs rejected: {stem_report.get('reason')}; using original audio")
         forced = None if args.source_lang in ("", "auto") else args.source_lang
-        device = pick_device()
         use_vad = not args.no_vad
         raw, detected_language = transcribe(
             working_speech, model_name=args.model, device=device, language=forced, use_vad=use_vad,
@@ -565,11 +669,48 @@ async def main_async(args) -> None:
         raw, source_duration, max_seconds=args.max_seconds,
         target_seconds=args.target_seconds, min_seconds=args.min_seconds,
     )
+    speakers = sorted({str(chunk.get("speaker") or "SPEAKER_00") for chunk in plans if chunk.get("source_text")}) or ["SPEAKER_00"]
+    profile_defaults = {
+        "reference_mode": "source",
+        "tts_engine": args.tts_engine,
+        "voice": args.voice or "",
+        "voice_conversion": "seed-vc" if args.seed_vc else "none",
+        "gender": args.gender,
+        "style": "natural",
+        "approved": not args.require_voice_approval,
+    }
+    profiles = load_voice_profiles(
+        args.speaker_voices, speakers, defaults=profile_defaults,
+        require_approval=args.require_voice_approval,
+    )
+    atomic_write_json(analysis / "voice-profiles-template.json", template_for_speakers(speakers, profile_defaults))
+    atomic_write_json(analysis / "voice-profiles-active.json", {"version": 1, "speakers": profiles})
+    profile_references = prepare_profile_references(
+        profiles, plans, speech_audio if speech_audio.exists() else loaded.audio_path,
+        reference, analysis,
+    )
+    speaker_analysis = {
+        "project_id": project_id,
+        "speakers": [
+            {
+                "speaker": speaker,
+                "profile": profiles[speaker],
+                "reference": str(profile_references.get(speaker) or ""),
+                "chunk_count": sum(1 for chunk in plans if (chunk.get("speaker") or "SPEAKER_00") == speaker),
+                "spoken_seconds": round(sum(max(0.0, float(chunk["speech_end"]) - float(chunk["speech_start"])) for chunk in plans if (chunk.get("speaker") or "SPEAKER_00") == speaker), 3),
+            }
+            for speaker in speakers
+        ],
+    }
+    atomic_write_json(analysis / "speaker-analysis.json", speaker_analysis)
+    mirror.upload_tree("analysis.zip", project_root, analysis)
     store.initialize(
         source={"path": source_path.name, "sha256": source_hash, "duration": source_duration},
         config=config,
         chunks=plans,
     )
+    store.data["voice_profiles"] = profiles
+    store.save()
     mirror.upload_manifest(store)
 
     missing_translation = [chunk for chunk in store.data["chunks"] if chunk.get("source_text") and not chunk.get("translated_text")]
@@ -597,12 +738,19 @@ async def main_async(args) -> None:
     failures: list[int] = []
     for chunk in store.data["chunks"]:
         index = int(chunk["index"])
+        speaker = str(chunk.get("speaker") or "SPEAKER_00")
+        profile = profiles[speaker]
+        profile_hash = stable_hash(profile)
+        variant = f".{profile_hash[:10]}" if args.speaker_voices else ""
+        seed_required = profile.get("voice_conversion") == "seed-vc" and bool(chunk.get("source_text"))
+        profile_current = not args.speaker_voices or chunk.get("voice_profile_hash") == profile_hash
+        content_current = not args.validate_content or bool((chunk.get("content_validation") or {}).get("ok"))
         complete = store.completed_file(index)
         seed_mode_current = chunk.get("seed_vc_mode") == "voice_only_sync_v3"
-        if complete and (not args.seed_vc or seed_mode_current):
+        if complete and profile_current and content_current and (not seed_required or seed_mode_current):
             print(f"Chunk {index:04d}: restored and validated; skipping")
             continue
-        if complete and args.seed_vc and not seed_mode_current:
+        if complete and seed_required and not seed_mode_current:
             print(f"Chunk {index:04d}: outdated Seed-VC timing detected; rebuilding alignment only")
         directory = store.chunk_dir(index)
         write_text_files(store, index)
@@ -612,15 +760,18 @@ async def main_async(args) -> None:
             fitted_voice: Path | None = None
             engine_used = "silence"
             if chunk.get("source_text"):
-                generated = directory / "generated.wav"
+                generated = directory / f"generated{variant}.wav"
                 if not generated.exists() or generated.stat().st_size < 1024:
-                    engine_used = await synthesize(args, chunk["translated_text"], generated, reference if reference.exists() else None)
+                    engine_used = await synthesize(
+                        args, profile, chunk["translated_text"], generated,
+                        profile_references.get(speaker),
+                    )
                 else:
-                    engine_used = chunk.get("engine_used") or args.tts_engine
-                trimmed = trim_generated(generated, directory / "generated.trim.wav")
+                    engine_used = chunk.get("engine_used") or profile.get("tts_engine") or args.tts_engine
+                trimmed = trim_generated(generated, directory / f"generated{variant}.trim.wav")
                 budget = max(0.12, float(chunk["end"]) - float(chunk["speech_start"]) - 0.03)
                 fitted_voice, original_tts_duration, fitted_tts_duration = fit_without_cutting(
-                    trimmed, directory / "generated.fitted.wav", budget,
+                    trimmed, directory / f"generated{variant}.fitted.wav", budget,
                 )
                 store.update_chunk(
                     index, status="voice_generated", engine_used=engine_used,
@@ -631,28 +782,30 @@ async def main_async(args) -> None:
             # Render and preserve the complete pre-Seed voice-only checkpoint.
             raw_voice_audio = build_chunk_audio(
                 store.chunk(index), fitted_voice, None,
-                directory / "voice-before-seedvc.wav", background_gain=0.0,
+                directory / f"voice-before-seedvc{variant}.wav", background_gain=0.0,
             )
             raw_dubbed = render_chunk(
                 loaded.video_path, store.chunk(index), raw_voice_audio,
-                directory / "dubbed-before-seedvc.mp4",
+                directory / f"dubbed-before-seedvc{variant}.mp4",
             )
+            source_chunk = directory / "source.mp4"
+            if not source_chunk.exists() or source_chunk.stat().st_size < 1024:
+                source_chunk = slice_source_chunk(loaded.video_path, store.chunk(index), source_chunk)
             final_voice = fitted_voice
             full_timeline = False
             seed_applied = False
-            if args.seed_vc and chunk.get("source_text"):
+            if seed_required:
                 store.update_chunk(index, status="seed_vc_processing")
                 # Keep the original media slice for audit, but use the stable
                 # global clean speaker reference and voice-only content for VC.
-                slice_source_chunk(loaded.video_path, store.chunk(index), directory / "source.mp4")
-                seed_voice = directory / "seedvc.voice-only.wav"
+                seed_voice = directory / f"seedvc.voice-only{variant}.wav"
                 if not seed_voice.exists() or seed_voice.stat().st_size < 1024:
                     seed_voice = apply_seed_vc_audio(
-                        reference, fitted_voice, seed_voice, args.seed_vc_space,
+                        profile_references.get(speaker) or reference, fitted_voice, seed_voice, args.seed_vc_space,
                     )
                 speech_target = max(0.12, float(chunk["speech_end"]) - float(chunk["speech_start"]))
                 final_voice, seed_original_duration, seed_fitted_duration = match_duration_without_cutting(
-                    seed_voice, directory / "seedvc.voice-only.synced.wav", speech_target,
+                    seed_voice, directory / f"seedvc.voice-only{variant}.synced.wav", speech_target,
                 )
                 # The converted voice is placed at speech_start and ends with
                 # the original ASR phrase window; trailing media silence remains silent.
@@ -665,6 +818,34 @@ async def main_async(args) -> None:
                     seed_fitted_duration=round(seed_fitted_duration, 3),
                     speech_target_duration=round(speech_target, 3),
                 )
+            content_result = None
+            timing_result = None
+            if args.validate_content and chunk.get("source_text") and final_voice:
+                checked_raw, _checked_language = transcribe(
+                    final_voice, model_name=args.model, device=device,
+                    language=args.target_lang, use_vad=False,
+                )
+                spoken_text, spoken_words = observed_transcript(checked_raw)
+                content_result = validate_spoken_content(
+                    chunk["translated_text"], spoken_text,
+                    min_recall=args.content_min_recall,
+                    min_sequence_ratio=args.content_min_sequence,
+                )
+                timing_result = word_timing_report(
+                    spoken_words, float(chunk["speech_start"]), float(chunk["speech_end"]),
+                )
+                atomic_write_json(directory / "content-validation.json", content_result)
+                atomic_write_json(directory / "word-alignment.json", timing_result)
+                store.update_chunk(
+                    index, status="content_validated" if content_result["ok"] else "content_failed",
+                    content_validation=content_result, word_alignment=timing_result,
+                )
+                if not content_result["ok"]:
+                    raise RuntimeError(
+                        f"spoken phrase incomplete: recall={content_result['recall']:.3f}, "
+                        f"sequence={content_result['sequence_ratio']:.3f}"
+                    )
+
             chunk_audio = build_chunk_audio(
                 store.chunk(index), final_voice,
                 background_audio if args.preserve_background and background_audio.exists() else None,
@@ -672,10 +853,25 @@ async def main_async(args) -> None:
                 voice_is_full_timeline=full_timeline,
             )
             dubbed = render_chunk(loaded.video_path, store.chunk(index), chunk_audio, directory / "dubbed.mp4")
+            preview_tracks = create_comparison_previews(
+                source_chunk, raw_dubbed,
+                final_voice if seed_required else None,
+                dubbed, directory,
+            )
+            comparison = {
+                "speaker": speaker,
+                "profile": profile,
+                "tracks": preview_tracks,
+                "content_validation": content_result,
+                "word_alignment": timing_result,
+            }
+            atomic_write_json(directory / "comparison.json", comparison)
             store.update_chunk(
                 index, status="completed", engine_used=engine_used,
-                seed_vc_required=args.seed_vc and bool(chunk.get("source_text")),
+                speaker=speaker, voice_profile_hash=profile_hash, voice_profile=profile,
+                seed_vc_required=seed_required,
                 seed_vc_applied=seed_applied,
+                content_validation=content_result, word_alignment=timing_result,
                 dubbed_sha256=sha256_file(dubbed), measured_duration=round(ffprobe_duration(dubbed), 3),
             )
             mirror.upload_chunk(store, index)
@@ -755,6 +951,7 @@ async def main_async(args) -> None:
     )
     atomic_write_json(args.output_dir / "progress-report.json", store.summary())
     shutil.copy2(store.manifest_path, args.output_dir / "checkpoint-manifest.json")
+    shutil.copy2(analysis / "speaker-analysis.json", args.output_dir / "speaker-analysis.json")
     mirror.upload_manifest(store)
     mirror.upload_final(final)
     print(json.dumps(store.summary(), ensure_ascii=False, indent=2))

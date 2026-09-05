@@ -143,6 +143,31 @@ on:
         required: false
         default: "10"
         type: string
+      speaker_voices_path:
+        description: "optional JSON file assigning every option independently per detected character"
+        required: false
+        default: ""
+        type: string
+      require_voice_approval:
+        description: "refuse to dub until every character profile is explicitly approved"
+        required: false
+        default: false
+        type: boolean
+      validate_content:
+        description: "re-transcribe each generated phrase and reject missing speech"
+        required: false
+        default: true
+        type: boolean
+      content_min_recall:
+        description: "minimum matched-word recall for each dubbed phrase"
+        required: false
+        default: "0.70"
+        type: string
+      content_min_sequence:
+        description: "minimum ordered-word similarity for each dubbed phrase"
+        required: false
+        default: "0.58"
+        type: string
       wav2lip_sha256:
         description: "sha256 for the approved Wav2Lip checkpoint downloaded from WAV2LIP_CHECKPOINT_URL"
         required: false
@@ -446,6 +471,13 @@ jobs:
           if [ "${{ inputs.diarize }}" = "true" ]; then extra+=(--diarize); fi
           if [ "${{ inputs.no_vad }}" = "true" ]; then extra+=(--no-vad); fi
           if [ "${{ inputs.seed_vc }}" = "true" ]; then extra+=(--seed-vc); fi
+          if [ "${{ inputs.require_voice_approval }}" = "true" ]; then extra+=(--require-voice-approval); fi
+          if [ "${{ inputs.validate_content }}" = "true" ]; then extra+=(--validate-content); fi
+          profile_args=()
+          if [ -n "${{ inputs.speaker_voices_path }}" ]; then
+            test -f "${{ inputs.speaker_voices_path }}" || { echo "speaker voice profile file is missing" >&2; exit 1; }
+            profile_args+=(--speaker-voices "${{ inputs.speaker_voices_path }}")
+          fi
           python scripts/resumable_smart_dub.py \
             --source "${{ steps.smart_project.outputs.source }}" \
             --project-id "${{ steps.smart_project.outputs.id }}" \
@@ -461,7 +493,9 @@ jobs:
             --max-seconds "$chunk_max" \
             --target-seconds "8" \
             --min-seconds "2.5" \
-            "${extra[@]}"
+            --content-min-recall "${{ inputs.content_min_recall }}" \
+            --content-min-sequence "${{ inputs.content_min_sequence }}" \
+            "${profile_args[@]}" "${extra[@]}"
 
       - name: Confirm complete resumable delivery
         run: |
@@ -593,5 +627,6 @@ jobs:
             output/preflight.json
             output/progress-report.json
             output/checkpoint-manifest.json
+            output/speaker-analysis.json
           if-no-files-found: error
           retention-days: 14
