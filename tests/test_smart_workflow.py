@@ -121,3 +121,14 @@ def test_seed_quota_exhaustion_fails_fast():
     text = (ROOT / "scripts/seed_vc_enhance.py").read_text(encoding="utf-8")
     assert '"quota" in message' in text
     assert "checkpoint and resume later" in text
+
+
+def test_explicit_quota_policy_uses_one_consistent_voxcpm_delivery():
+    script = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github/workflows/dub.yml").read_text(encoding="utf-8")
+    assert 'choices=["fail", "voxcpm"]' in script
+    assert 'args.seed_quota_policy == "voxcpm"' in script
+    assert 'seed_required = seed_requested and not seed_quota_fallback' in script
+    assert 'delivery_voice_mode="voxcpm_reference_clone"' in script
+    assert "seed_quota_voxcpm" in workflow
+    assert "--seed-quota-policy voxcpm" in workflow

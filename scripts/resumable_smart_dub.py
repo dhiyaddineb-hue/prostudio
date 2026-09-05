@@ -594,6 +594,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--seed-vc", action="store_true")
     ap.add_argument("--seed-vc-space", default="phuoc2005/seed-vc")
     ap.add_argument("--seed-batch-size", type=int, default=8)
+    ap.add_argument("--seed-quota-policy", choices=["fail", "voxcpm"], default="fail")
     ap.add_argument("--no-fallback-edge", dest="fallback_edge", action="store_false")
     ap.add_argument("--speaker-voices", type=Path)
     ap.add_argument("--require-voice-approval", action="store_true")
@@ -830,6 +831,7 @@ async def main_async(args) -> None:
     # inputs via internal overlapping windows; batching amortizes ZeroGPU startup
     # quota while 250 ms synthetic separators protect every phrase boundary.
     seed_failures: list[int] = []
+    seed_quota_fallback = False
     if args.seed_batch_size > 1 and any(profile.get("voice_conversion") == "seed-vc" for profile in profiles.values()):
         grouped: dict[tuple[str, str], list[tuple[int, Path, Path]]] = {}
         for chunk in store.data["chunks"]:
@@ -879,12 +881,28 @@ async def main_async(args) -> None:
                     mirror.upload_tree(f"seed-batch-{batch_id}.zip", project_root, batch_dir)
                 except Exception as exc:
                     message = str(exc)
-                    for index, _input, _output in batch:
-                        seed_failures.append(index)
-                        store.update_chunk(index, status="failed", error=message)
-                        store.add_error(index, message)
-                        mirror.upload_chunk(store, index)
-                    if "quota" in message.lower() or "zerogpu" in message.lower():
+                    quota_exhausted = "quota" in message.lower() or "zerogpu" in message.lower() or "runs limit" in message.lower()
+                    if quota_exhausted and args.seed_quota_policy == "voxcpm":
+                        seed_quota_fallback = True
+                        store.data["seed_quota_fallback"] = {
+                            "active": True,
+                            "mode": "voxcpm_reference_clone",
+                            "reason": "Seed-VC ZeroGPU quota exhausted",
+                        }
+                        for index, _input, _output in batch:
+                            store.update_chunk(
+                                index, status="voice_generated", error=None,
+                                seed_vc_skipped="quota_exhausted_explicit_voxcpm_policy",
+                            )
+                            mirror.upload_chunk(store, index)
+                        store.save()
+                    else:
+                        for index, _input, _output in batch:
+                            seed_failures.append(index)
+                            store.update_chunk(index, status="failed", error=message)
+                            store.add_error(index, message)
+                            mirror.upload_chunk(store, index)
+                    if quota_exhausted:
                         stop_for_quota = True
                         break
             if stop_for_quota:
@@ -901,7 +919,8 @@ async def main_async(args) -> None:
         profile = profiles[speaker]
         profile_hash = stable_hash(profile)
         variant = f".{profile_hash[:10]}" if args.speaker_voices else ""
-        seed_required = profile.get("voice_conversion") == "seed-vc" and bool(chunk.get("source_text"))
+        seed_requested = profile.get("voice_conversion") == "seed-vc" and bool(chunk.get("source_text"))
+        seed_required = seed_requested and not seed_quota_fallback
         profile_current = not args.speaker_voices or chunk.get("voice_profile_hash") == profile_hash
         content_current = not args.validate_content or bool((chunk.get("content_validation") or {}).get("ok"))
         complete = store.completed_file(index)
@@ -1030,8 +1049,10 @@ async def main_async(args) -> None:
             store.update_chunk(
                 index, status="completed", engine_used=engine_used,
                 speaker=speaker, voice_profile_hash=profile_hash, voice_profile=profile,
+                seed_vc_requested=seed_requested,
                 seed_vc_required=seed_required,
                 seed_vc_applied=seed_applied,
+                delivery_voice_mode="seed_vc" if seed_applied else ("voxcpm_reference_clone" if seed_quota_fallback else "base_tts"),
                 content_validation=content_result, word_alignment=timing_result,
                 dubbed_sha256=sha256_file(dubbed), measured_duration=round(ffprobe_duration(dubbed), 3),
             )
@@ -1109,6 +1130,8 @@ async def main_async(args) -> None:
         final_sha256=sha256_file(final),
         final_duration=round(final_duration, 3),
         final_path=str(final),
+        delivery_voice_mode="voxcpm_reference_clone" if seed_quota_fallback else "configured",
+        seed_quota_policy=args.seed_quota_policy,
     )
     atomic_write_json(args.output_dir / "progress-report.json", store.summary())
     shutil.copy2(store.manifest_path, args.output_dir / "checkpoint-manifest.json")

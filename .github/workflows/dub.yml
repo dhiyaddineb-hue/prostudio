@@ -131,7 +131,7 @@ on:
         required: false
         default: "safe"
         type: choice
-        options: [safe, high_quality_single, multi_speaker_cinematic, experiment]
+        options: [safe, high_quality_single, multi_speaker_cinematic, seed_quota_voxcpm, experiment]
       quality:
         description: "dub: quality policy"
         required: false
@@ -451,6 +451,7 @@ jobs:
           if [ "${{ inputs.no_vad }}" = "true" ]; then extra+=(--no-vad); fi
           if [ "${{ inputs.seed_vc }}" = "true" ]; then extra+=(--seed-vc); fi
           if [ "${{ inputs.validate_content }}" = "true" ]; then extra+=(--validate-content); fi
+          if [ "${{ inputs.profile }}" = "seed_quota_voxcpm" ]; then extra+=(--seed-quota-policy voxcpm); fi
           profile_args=()
           if [ -n "${{ inputs.speaker_voices_path }}" ]; then
             test -f "${{ inputs.speaker_voices_path }}" || { echo "speaker voice profile file is missing" >&2; exit 1; }
