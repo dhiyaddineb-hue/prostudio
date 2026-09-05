@@ -614,6 +614,28 @@ def concatenate_chunks(
     return destination
 
 
+def reusable_final(
+    manifest: dict, delivery_key: str, delivery_chunks: list[str], candidate: Path, *, chunks_changed: bool = False,
+) -> bool:
+    """Is the final video restored from the checkpoint still the right film?
+
+    It must be the exact file the manifest recorded (sha256) and must have been
+    built from the current completed chunks: either the delivery key matches,
+    or, for manifests written before delivery keys existed, the project had
+    already reached the completed state and no chunk was rebuilt in this run.
+    """
+    expected = manifest.get("final_sha256")
+    if not expected or not candidate.exists() or sha256_file(candidate) != expected:
+        return False
+    if manifest.get("delivery_key"):
+        return manifest.get("delivery_key") == delivery_key and manifest.get("delivery_chunks") == delivery_chunks
+    return (
+        not chunks_changed
+        and manifest.get("state") == "completed_waiting_for_cleanup_approval"
+        and all(delivery_chunks)
+    )
+
+
 def is_derived_asr_cache(path: Path) -> bool:
     """Whisper's 16 kHz working copies are rebuilt from their source on demand.
 
@@ -724,6 +746,13 @@ class ReleaseMirror:
         asset = self.tmp / "final-dub.mp4"
         shutil.copy2(path, asset)
         self._upload(asset)
+
+    def cached_asset(self, name: str) -> Path | None:
+        """A non-archive asset (e.g. final-dub.mp4) restored with the checkpoint."""
+        candidate = self.tmp / "download" / name
+        if self.enabled and candidate.exists() and candidate.stat().st_size > 1024:
+            return candidate
+        return None
 
 
 def write_text_files(store: CheckpointStore, index: int) -> None:
@@ -1197,6 +1226,7 @@ async def main_async(args) -> None:
         raise RuntimeError(f"Seed-VC batches preserved for resume: {seed_failures}")
 
     failures: list[int] = []
+    rendered_this_run = 0
     for chunk in store.data["chunks"]:
         index = int(chunk["index"])
         speaker = str(chunk.get("speaker") or "SPEAKER_00")
@@ -1222,6 +1252,7 @@ async def main_async(args) -> None:
                 store.update_chunk(index, status="completed", error=None)
             print(f"Chunk {index:04d}: restored and validated; skipping")
             continue
+        rendered_this_run += 1
         if complete and seed_required and not seed_mode_current:
             print(f"Chunk {index:04d}: outdated Seed-VC timing detected; rebuilding alignment only")
         directory = store.chunk_dir(index)
@@ -1524,10 +1555,31 @@ async def main_async(args) -> None:
     chunk_files = [path for path in ordered if path]
     frame_rate = probe_frame_rate(chunk_files[0]) if chunk_files else None
     held_frames = [probe_video_frames(path) for path in chunk_files]
-    final = concatenate_chunks(
-        chunk_files, args.output_dir / "final-dub.mp4",
-        chunks=store.data["chunks"], frame_rate=frame_rate, held_frames=held_frames,
-    )
+    delivery_chunks = [str(chunk.get("dubbed_sha256") or "") for chunk in store.data["chunks"]]
+    delivery_key = stable_hash({
+        "assembler": "frame_accurate_v1",
+        "chunks": delivery_chunks,
+        "frames": (
+            frame_aligned_frame_counts(store.data["chunks"], frame_rate[0], [int(v) for v in held_frames])
+            if frame_rate and all(held_frames) else None
+        ),
+        "fps": frame_rate[1] if frame_rate else None,
+        "budget": [PUBLISH_SIZE_BUDGET_BYTES, PUBLISH_SIZE_HARD_LIMIT_BYTES],
+    })
+    final = args.output_dir / "final-dub.mp4"
+    reused_final = False
+    cached_final = mirror.cached_asset("final-dub.mp4")
+    if cached_final and reusable_final(store.data, delivery_key, delivery_chunks, cached_final, chunks_changed=rendered_this_run > 0):
+        # The delivery stage is a checkpoint too: the same completed chunks,
+        # assembled the same way, are the same film.  Do not encode it again.
+        shutil.copy2(cached_final, final)
+        reused_final = True
+        print("Reusing the assembled final video from the checkpoint release (delivery unchanged)")
+    else:
+        final = concatenate_chunks(
+            chunk_files, final,
+            chunks=store.data["chunks"], frame_rate=frame_rate, held_frames=held_frames,
+        )
     final_duration = ffprobe_duration(final)
     if abs(final_duration - source_duration) > 1.0:
         raise RuntimeError(f"final duration mismatch: {final_duration:.3f}s vs {source_duration:.3f}s")
@@ -1579,6 +1631,10 @@ async def main_async(args) -> None:
         final_sha256=sha256_file(final),
         final_duration=round(final_duration, 3),
         final_path=str(final),
+        final_reused=reused_final,
+        delivery_key=delivery_key,
+        delivery_chunks=delivery_chunks,
+        checkpoint_release_tag=mirror.tag,
         delivery_voice_mode="voxcpm_reference_clone" if seed_quota_fallback else "configured",
         seed_quota_policy=args.seed_quota_policy,
     )
@@ -1586,7 +1642,8 @@ async def main_async(args) -> None:
     shutil.copy2(store.manifest_path, args.output_dir / "checkpoint-manifest.json")
     shutil.copy2(analysis / "speaker-analysis.json", args.output_dir / "speaker-analysis.json")
     mirror.upload_manifest(store)
-    mirror.upload_final(final)
+    if not reused_final:
+        mirror.upload_final(final)
     print(json.dumps(store.summary(), ensure_ascii=False, indent=2))
     print(f"FINAL={final.resolve()}")
 

@@ -491,12 +491,15 @@ jobs:
           PY
 
       - name: Validate final target language
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python scripts/validate_dub_language.py \
             --video output/final-dub.mp4 \
             --expected "${{ inputs.target_lang }}" \
             --model "${{ inputs.model }}" \
+            --manifest output/checkpoint-manifest.json \
             --report output/language-integrity.json
 
       - name: Enforce professional quality gate

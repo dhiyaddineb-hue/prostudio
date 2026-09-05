@@ -361,3 +361,121 @@ def test_final_encode_stays_below_github_file_limit():
     assert worst_case_bytes < 95 * 1000 * 1000
     # 25-second clip: the cap is far above what crf 20 produces, so nothing changes
     assert int(max(300, min(6000, 85 * 1000 * 1000 * 8 / 25.5 / 1000 - 192))) == 6000
+
+
+
+# ── Delivery stage is a checkpoint too: assembled film and language verdict ──
+
+LANGUAGE = ROOT / "scripts/validate_dub_language.py"
+
+
+def test_assembled_final_is_reused_when_delivery_is_unchanged(tmp_path):
+    import hashlib
+
+    namespace = _extract(SCRIPT, {"reusable_final"}, {"Path": Path, "sha256_file": lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest()})
+    reusable = namespace["reusable_final"]
+    final = tmp_path / "final-dub.mp4"
+    final.write_bytes(b"film" * 1000)
+    digest = hashlib.sha256(final.read_bytes()).hexdigest()
+    chunks = ["a" * 64, "b" * 64]
+
+    keyed = {"final_sha256": digest, "delivery_key": "k1", "delivery_chunks": chunks, "state": "completed_waiting_for_cleanup_approval"}
+    assert reusable(keyed, "k1", chunks, final) is True
+    assert reusable(keyed, "k2", chunks, final) is False, "different assembly parameters must re-encode"
+    assert reusable(keyed, "k1", ["a" * 64, "c" * 64], final) is False, "a rebuilt chunk must re-encode"
+    assert reusable({**keyed, "final_sha256": "0" * 64}, "k1", chunks, final) is False, "sha mismatch"
+
+    legacy = {"final_sha256": digest, "state": "completed_waiting_for_cleanup_approval"}
+    assert reusable(legacy, "k1", chunks, final) is True
+    assert reusable(legacy, "k1", chunks, final, chunks_changed=True) is False
+    assert reusable({**legacy, "state": "failed_resumable"}, "k1", chunks, final) is False
+    assert reusable(legacy, "k1", ["a" * 64, ""], final) is False, "a chunk without a recorded render hash"
+
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert 'cached_final = mirror.cached_asset("final-dub.mp4")' in text
+    assert "if not reused_final:\n        mirror.upload_final(final)" in text
+    assert "checkpoint_release_tag=mirror.tag" in text
+    assert "delivery_chunks=delivery_chunks" in text
+
+
+def _fake_gh(tmp_path: Path, stored: dict[str, str]) -> Path:
+    """A stand-in for the gh CLI that serves/records release assets from a folder."""
+    store = tmp_path / "release-assets"
+    store.mkdir(exist_ok=True)
+    for name, body in stored.items():
+        (store / name).write_text(body, encoding="utf-8")
+    bindir = tmp_path / "bin"
+    bindir.mkdir(exist_ok=True)
+    script = bindir / "gh"
+    script.write_text(
+        "#!/usr/bin/env python3\n"
+        "import shutil, sys\n"
+        "from pathlib import Path\n"
+        f"store = Path({str(store)!r})\n"
+        "args = sys.argv[1:]\n"
+        "if args[:2] == ['release', 'download']:\n"
+        "    pattern = args[args.index('--pattern') + 1]; target = Path(args[args.index('--dir') + 1])\n"
+        "    src = store / pattern\n"
+        "    if not src.exists(): sys.exit(1)\n"
+        "    target.mkdir(parents=True, exist_ok=True); shutil.copy2(src, target / pattern); sys.exit(0)\n"
+        "if args[:2] == ['release', 'upload']:\n"
+        "    shutil.copy2(args[3], store / Path(args[3]).name); sys.exit(0)\n"
+        "sys.exit(2)\n",
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    return bindir
+
+
+def test_language_verdict_is_reused_only_for_the_identical_file(tmp_path, monkeypatch):
+    import hashlib
+    import json
+    import os
+    import shutil
+    import subprocess
+    import tempfile
+
+    namespace = _extract(
+        LANGUAGE, {"sha256_file", "checkpoint_cache", "_gh_available", "fetch_cached_report", "store_cached_report"},
+        {"Path": Path, "hashlib": hashlib, "json": json, "os": os, "shutil": shutil, "subprocess": subprocess, "tempfile": tempfile},
+    )
+    video = tmp_path / "final-dub.mp4"
+    video.write_bytes(b"dub" * 5000)
+    digest = hashlib.sha256(video.read_bytes()).hexdigest()
+    manifest = tmp_path / "checkpoint-manifest.json"
+    manifest.write_text(json.dumps({"checkpoint_release_tag": "checkpoint-demo", "final_sha256": digest}), encoding="utf-8")
+
+    tag, asset, seen = namespace["checkpoint_cache"](manifest, video)
+    assert (tag, asset, seen) == ("checkpoint-demo", f"language-{digest[:16]}.json", digest)
+    assert namespace["checkpoint_cache"](None, video)[0] is None
+
+    good = {"expected": "en", "detected": "en", "valid": True, "video_sha256": digest}
+    stale = {**good, "video_sha256": "f" * 64}
+    bindir = _fake_gh(tmp_path, {asset: json.dumps(good), "language-stale.json": json.dumps(stale)})
+    monkeypatch.setenv("PATH", f"{bindir}{os.pathsep}{os.environ.get('PATH', '')}")
+    monkeypatch.setenv("GH_TOKEN", "test-token")
+    assert namespace["_gh_available"]() is True
+
+    assert namespace["fetch_cached_report"]("checkpoint-demo", asset, digest, "en") == good
+    assert namespace["fetch_cached_report"]("checkpoint-demo", asset, digest, "fr") is None, "different target language"
+    assert namespace["fetch_cached_report"]("checkpoint-demo", "language-stale.json", digest, "en") is None, "verdict for another file"
+    assert namespace["fetch_cached_report"]("checkpoint-demo", "language-missing.json", digest, "en") is None
+
+    fresh = {**good, "probability": 0.99}
+    namespace["store_cached_report"]("checkpoint-demo", "language-new.json", fresh)
+    assert json.loads((tmp_path / "release-assets" / "language-new.json").read_text(encoding="utf-8")) == fresh
+
+    monkeypatch.delenv("GH_TOKEN")
+    assert namespace["fetch_cached_report"]("checkpoint-demo", asset, digest, "en") is None, "no token, no cache"
+
+
+def test_language_step_is_wired_to_the_checkpoint_cache():
+    text = LANGUAGE.read_text(encoding="utf-8")
+    assert 'p.add_argument("--manifest"' in text
+    assert 'cached["reused_from_checkpoint"] = True' in text
+    assert '"video_sha256": video_digest' in text
+    assert "if valid and cache_tag:\n        store_cached_report(cache_tag, cache_asset, report)" in text
+    workflow = (ROOT / ".github/workflows/dub.yml").read_text(encoding="utf-8")
+    step = workflow.split("- name: Validate final target language", 1)[1].split("- name: Enforce professional quality gate", 1)[0]
+    assert "GH_TOKEN: ${{ github.token }}" in step
+    assert "--manifest output/checkpoint-manifest.json" in step
