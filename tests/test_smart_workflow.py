@@ -146,3 +146,31 @@ def test_final_delivery_fit_prevents_last_sample_overrun():
     assert 'directory / f"delivery{variant}.fitted.wav"' in text
     assert 'retry_text = f"{retry_parts[0].rstrip' in text
     assert 'content_retry_synthesis_text=retry_text' in text
+
+
+def test_impossibly_short_phrase_borrows_preceding_silence():
+    import ast
+    source = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "expand_short_phrase_window")
+    namespace = {}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "smart", "exec"), namespace)
+    chunk = {"start": 30.0, "end": 39.94, "speech_start": 39.6, "speech_end": 39.94}
+    fixed = namespace["expand_short_phrase_window"](chunk, 0.617)
+    assert round(fixed["speech_start"], 3) == 39.323
+    assert round(fixed["speech_end"] - fixed["speech_start"], 3) == 0.617
+    assert fixed["timing_shift_seconds"] == 0.277
+    assert chunk["speech_start"] == 39.6
+
+
+def test_normal_phrase_window_is_not_shifted():
+    import ast
+    source = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "expand_short_phrase_window")
+    namespace = {}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "smart", "exec"), namespace)
+    chunk = {"start": 0.0, "end": 8.0, "speech_start": 0.2, "speech_end": 7.8}
+    fixed = namespace["expand_short_phrase_window"](chunk, 6.0)
+    assert fixed["speech_start"] == 0.2
+    assert "timing_adjustment" not in fixed

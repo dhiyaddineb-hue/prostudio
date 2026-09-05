@@ -200,6 +200,23 @@ def slice_audio(source: Path, start: float, duration: float, destination: Path) 
     return destination
 
 
+def expand_short_phrase_window(chunk: dict, natural_duration: float | None) -> dict:
+    """Borrow preceding silence when ASR assigns an impossibly short phrase window."""
+    result = dict(chunk)
+    if not natural_duration or natural_duration <= 0:
+        return result
+    start = float(result["speech_start"])
+    end = float(result["speech_end"])
+    current = max(0.0, end - start)
+    natural = min(float(natural_duration), max(0.0, end - float(result["start"])))
+    if natural > 0 and current < natural * 0.80:
+        result["speech_start_original"] = float(result.get("speech_start_original", start))
+        result["speech_start"] = max(float(result["start"]), end - natural)
+        result["timing_adjustment"] = "expanded_into_preceding_silence_for_complete_phrase"
+        result["timing_shift_seconds"] = round(start - float(result["speech_start"]), 3)
+    return result
+
+
 def build_chunk_audio(
     chunk: dict,
     fitted_voice: Path | None,
@@ -937,6 +954,19 @@ async def main_async(args) -> None:
         if complete and seed_required and not seed_mode_current:
             print(f"Chunk {index:04d}: outdated Seed-VC timing detected; rebuilding alignment only")
         directory = store.chunk_dir(index)
+        adjusted_chunk = expand_short_phrase_window(
+            chunk, float(chunk.get("original_tts_duration") or 0.0),
+        )
+        if adjusted_chunk.get("speech_start") != chunk.get("speech_start"):
+            store.update_chunk(
+                index,
+                speech_start_original=adjusted_chunk.get("speech_start_original"),
+                speech_start=adjusted_chunk["speech_start"],
+                timing_adjustment=adjusted_chunk.get("timing_adjustment"),
+                timing_shift_seconds=adjusted_chunk.get("timing_shift_seconds"),
+                error=None,
+            )
+            chunk = store.chunk(index)
         write_text_files(store, index)
         attempts = int(chunk.get("attempts", 0)) + 1
         store.update_chunk(index, status="processing", attempts=attempts, error=None)
