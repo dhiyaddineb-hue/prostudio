@@ -251,7 +251,10 @@ def test_frame_accurate_assembly_produces_exact_frame_total(tmp_path):
 
     namespace = _extract(
         SCRIPT, {"frame_aligned_frame_counts", "concatenate_chunks_frame_accurate", "concatenate_chunks"},
-        {"Path": Path, "math": math, "subprocess": subprocess, "sys": sys, "run": run},
+        {
+            "Path": Path, "math": math, "subprocess": subprocess, "sys": sys, "run": run,
+            "PUBLISH_SIZE_BUDGET_BYTES": 85 * 1000 * 1000, "PUBLISH_SIZE_HARD_LIMIT_BYTES": 95 * 1000 * 1000,
+        },
     )
     fps = 24.0
     clips = []
@@ -290,3 +293,71 @@ def test_skipped_complete_chunks_are_counted_as_completed():
     skip = render.split("if complete and profile_current and content_current", 1)[1].split("continue", 1)[0]
     assert 'if chunk.get("status") != "completed":' in skip
     assert 'store.update_chunk(index, status="completed", error=None)' in skip
+
+
+
+# ── Quality gate: speech-aware silence checks, publish size budget ────────────
+
+QUALITY = ROOT / "scripts/validate_dub_quality.py"
+
+
+def _quality_namespace() -> dict:
+    import re
+
+    from youtube_auto_dub.content_validation import is_non_speech_text
+
+    namespace = {"re": re, "is_non_speech_text": is_non_speech_text}
+    return _extract(QUALITY, {"segment_text", "speech_segments", "merged_spans", "silence_over_speech", "timeline_metrics"}, namespace)
+
+
+def test_quality_gate_ignores_music_cues_and_judges_silence_against_speech():
+    """Run #153: the film opens with 38.9 s of music. The speech-only dub is
+    silent there by design, yet the gate failed silence_not_added (38.9 s vs a
+    1.1 s longest source silence) and segment_gaps (the music cue counted as a
+    speech span, leaving a 26.5 s 'internal' gap)."""
+    ns = _quality_namespace()
+    segments = [
+        {"start": 11.02, "end": 12.4, "source_text": "موسيقى"},
+        {"start": 38.92, "end": 47.9, "source_text": "ونبدأ"},
+        {"start": 48.3, "end": 55.9, "source_text": "كلام"},
+        {"start": 60.0, "end": 66.0, "source_text": "كلام آخر"},
+    ]
+    spoken = ns["speech_segments"](segments)
+    assert [s["start"] for s in spoken] == [38.92, 48.3, 60.0]
+    metrics = ns["timeline_metrics"](spoken, 70.0)
+    assert metrics["leading_gap"] == 38.92
+    assert round(metrics["internal_max_gap"], 2) == 4.1
+
+    spans = ns["merged_spans"](spoken, 70.0)
+    intro_only = [{"start": 0.0, "end": 38.92, "duration": 38.92}]
+    assert ns["silence_over_speech"](intro_only, spans) < 1e-6
+    missing_line = [{"start": 47.0, "end": 56.5, "duration": 9.5}]
+    assert round(ns["silence_over_speech"](missing_line, spans), 2) == 8.5  # 0.9 s + 7.6 s of planned speech
+
+
+def test_quality_gate_uses_speech_aware_silence_only_for_speech_only_dubs():
+    text = QUALITY.read_text(encoding="utf-8")
+    assert 'speech_only_dub=background_preserved is False' in text
+    assert '"silence_not_added": (final_over_speech if speech_only_dub else final_long) <= max(3.0,source_long+limits["extra_silence"])' in text
+    assert 'tm=timeline_metrics(spoken,source_dur)' in text
+    assert '"segments_present": len(spoken) > 0' in text
+    # the smart pipeline records how the dub was mixed so the gate can decide
+    script = SCRIPT.read_text(encoding="utf-8")
+    assert '"background_preserved": bool(args.preserve_background)' in script
+
+
+def test_final_encode_stays_below_github_file_limit():
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert "PUBLISH_SIZE_BUDGET_BYTES = 85 * 1000 * 1000" in text
+    assert "PUBLISH_SIZE_HARD_LIMIT_BYTES = 95 * 1000 * 1000" in text
+    body = text.split("def concatenate_chunks_frame_accurate(", 1)[1].split("def concatenate_chunks(", 1)[0]
+    assert '"-maxrate", f"{maxrate_kbps}k", "-bufsize", f"{2 * maxrate_kbps}k"' in body
+    assert "audio_kbps = 192 if duration <= 600 else 128" in body
+    # 20-minute film: the cap must leave the total under the hard limit
+    duration = 1208.8
+    budget_kbps = 85 * 1000 * 1000 * 8 / duration / 1000
+    maxrate_kbps = int(max(300, min(6000, budget_kbps - 128)))
+    worst_case_bytes = (maxrate_kbps + 128) * 1000 * duration / 8
+    assert worst_case_bytes < 95 * 1000 * 1000
+    # 25-second clip: the cap is far above what crf 20 produces, so nothing changes
+    assert int(max(300, min(6000, 85 * 1000 * 1000 * 8 / 25.5 / 1000 - 192))) == 6000

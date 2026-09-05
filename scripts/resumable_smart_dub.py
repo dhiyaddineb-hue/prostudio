@@ -50,6 +50,11 @@ from youtube_auto_dub.voxcpm_tts import speak_voxcpm
 from youtube_auto_dub.youtube import load_source
 
 
+# GitHub refuses files above 100 MB; the published dub must stay well below it.
+PUBLISH_SIZE_BUDGET_BYTES = 85 * 1000 * 1000
+PUBLISH_SIZE_HARD_LIMIT_BYTES = 95 * 1000 * 1000
+
+
 def run(cmd: list[str], *, check: bool = True, capture: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, check=check, capture_output=capture, text=True)
 
@@ -551,17 +556,33 @@ def concatenate_chunks_frame_accurate(
     inputs = "".join(f"[v{index}][a{index}]" for index in range(len(frame_counts)))
     lines.append(f"{inputs}concat=n={len(frame_counts)}:v=1:a=1[vout][aout]")
     script.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    command = ["ffmpeg", "-y"]
-    for path in paths:
-        command += ["-i", str(path)]
-    command += [
-        "-filter_complex_script", str(script), "-map", "[vout]", "-map", "[aout]",
-        "-r", fps_text, "-fps_mode", "cfr",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
-        "-movflags", "+faststart", str(destination),
-    ]
-    return run(command, check=False)
+    duration = max(1.0, sum(frame_counts) / fps)
+    audio_kbps = 192 if duration <= 600 else 128
+    # The verified video is committed to the repository twice (projects/ and
+    # docs/); GitHub rejects any file above 100 MB, so bound the encode to a
+    # PUBLISH_SIZE_BUDGET_BYTES total.  Short clips never reach the cap.
+    result = None
+    for attempt in range(2):
+        budget_kbps = PUBLISH_SIZE_BUDGET_BYTES * 8 / duration / 1000 * (1.0 - 0.25 * attempt)
+        maxrate_kbps = int(max(300, min(6000, budget_kbps - audio_kbps)))
+        command = ["ffmpeg", "-y"]
+        for path in paths:
+            command += ["-i", str(path)]
+        command += [
+            "-filter_complex_script", str(script), "-map", "[vout]", "-map", "[aout]",
+            "-r", fps_text, "-fps_mode", "cfr",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+            "-maxrate", f"{maxrate_kbps}k", "-bufsize", f"{2 * maxrate_kbps}k",
+            "-c:a", "aac", "-b:a", f"{audio_kbps}k", "-ar", "48000", "-ac", "2",
+            "-movflags", "+faststart", str(destination),
+        ]
+        result = run(command, check=False)
+        if result.returncode != 0 or not destination.exists():
+            return result
+        if destination.stat().st_size <= PUBLISH_SIZE_HARD_LIMIT_BYTES:
+            return result
+        print(f"final video is {destination.stat().st_size} bytes; re-encoding with a tighter rate cap", file=sys.stderr)
+    return result
 
 
 def concatenate_chunks(
@@ -1517,6 +1538,7 @@ async def main_async(args) -> None:
         "transcript_source": "asr",
         "source_language": detected_language or args.source_lang,
         "target_language": args.target_lang,
+        "background_preserved": bool(args.preserve_background),
         "asr_timeline": {"coverage": asr_coverage, "max_gap": asr_max_gap},
         "smart_chunking": {
             "max_seconds": args.max_seconds,
