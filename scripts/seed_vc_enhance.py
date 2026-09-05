@@ -149,6 +149,9 @@ def main() -> None:
             raise RuntimeError(f"incomplete Seed-VC response: {result!r}")
         except Exception as exc:
             last_error = exc
+            message = str(exc).lower()
+            if "quota" in message or "zerogpu" in message or "runs limit" in message:
+                raise RuntimeError("Seed-VC ZeroGPU quota exhausted; checkpoint and resume later") from exc
             if attempt == 8:
                 raise RuntimeError("Seed-VC Space failed after 8 attempts") from exc
             time.sleep(min(5 * attempt, 30))

@@ -108,3 +108,16 @@ def test_workflow_dispatch_stays_within_github_input_limit():
 def test_profile_file_forces_character_approval():
     text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
     assert "require_approval=bool(args.speaker_voices) or args.require_voice_approval" in text
+
+
+def test_seed_vc_is_batched_to_reduce_quota_usage():
+    text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    for marker in ("--seed-batch-size", "combine_voice_batch", "split_voice_batch", "seed-batches", "seed_vc_batch"):
+        assert marker in text
+    assert "np.pad(audio, (0, missing))" in text
+
+
+def test_seed_quota_exhaustion_fails_fast():
+    text = (ROOT / "scripts/seed_vc_enhance.py").read_text(encoding="utf-8")
+    assert '"quota" in message' in text
+    assert "checkpoint and resume later" in text

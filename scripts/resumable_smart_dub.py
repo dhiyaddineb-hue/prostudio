@@ -337,6 +337,56 @@ def create_comparison_previews(
     return result
 
 
+def combine_voice_batch(items: list[tuple[int, Path]], destination: Path, gap_seconds: float = 0.25) -> list[dict]:
+    gap = np.zeros(int(round(gap_seconds * SR_TTS)), dtype=np.float32)
+    pieces: list[np.ndarray] = []
+    mapping: list[dict] = []
+    cursor = 0
+    for position, (index, path) in enumerate(items):
+        voice, rate = sf.read(str(path), dtype="float32")
+        if getattr(voice, "ndim", 1) > 1:
+            voice = voice.mean(axis=1)
+        if int(rate) != SR_TTS:
+            normalized = destination.with_name(f"normalize-{index:04d}.wav")
+            run(["ffmpeg", "-y", "-i", str(path), "-ar", str(SR_TTS), "-ac", "1", str(normalized)])
+            voice, _ = sf.read(str(normalized), dtype="float32")
+        start = cursor
+        end = start + len(voice)
+        mapping.append({"chunk": index, "start_sample": start, "end_sample": end})
+        pieces.append(np.asarray(voice, dtype=np.float32))
+        cursor = end
+        if position + 1 < len(items):
+            pieces.append(gap)
+            cursor += len(gap)
+    combined = np.concatenate(pieces) if pieces else np.zeros(1, dtype=np.float32)
+    sf.write(str(destination), combined, SR_TTS, subtype="PCM_16")
+    return mapping
+
+
+def split_voice_batch(source: Path, mapping: list[dict], destinations: dict[int, Path]) -> None:
+    audio, rate = sf.read(str(source), dtype="float32")
+    if getattr(audio, "ndim", 1) > 1:
+        audio = audio.mean(axis=1)
+    if int(rate) != SR_TTS:
+        raise RuntimeError(f"unexpected Seed-VC batch sample rate: {rate}")
+    required = max((int(item["end_sample"]) for item in mapping), default=0)
+    if len(audio) < required:
+        missing = required - len(audio)
+        if missing > int(0.03 * SR_TTS):
+            raise RuntimeError(f"Seed-VC batch is too short by {missing} samples")
+        # Codec rounding may remove a few milliseconds at the final boundary.
+        # Add digital silence after all speech; never slice a spoken sample.
+        audio = np.pad(audio, (0, missing))
+    for item in mapping:
+        index = int(item["chunk"])
+        start = int(item["start_sample"])
+        end = int(item["end_sample"])
+        if end <= start:
+            raise RuntimeError(f"Seed-VC batch mapping is invalid for chunk {index}")
+        # Boundaries fall inside the synthetic 250 ms separators, never words.
+        sf.write(str(destinations[index]), audio[start:end], SR_TTS, subtype="PCM_16")
+
+
 def concatenate_chunks(paths: list[Path], destination: Path) -> Path:
     list_path = destination.with_suffix(".concat.txt")
     list_path.write_text("".join(f"file '{path.resolve()}'\n" for path in paths), encoding="utf-8")
@@ -543,6 +593,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--fallback-edge", action="store_true", default=False)
     ap.add_argument("--seed-vc", action="store_true")
     ap.add_argument("--seed-vc-space", default="phuoc2005/seed-vc")
+    ap.add_argument("--seed-batch-size", type=int, default=8)
     ap.add_argument("--no-fallback-edge", dest="fallback_edge", action="store_false")
     ap.add_argument("--speaker-voices", type=Path)
     ap.add_argument("--require-voice-approval", action="store_true")
@@ -735,6 +786,114 @@ async def main_async(args) -> None:
         finally:
             await translator.close()
 
+    # Pass 1: generate and checkpoint all TTS voices before consuming any
+    # Seed-VC quota. A later run resumes at the first missing voice file.
+    generation_failures: list[int] = []
+    for chunk in store.data["chunks"]:
+        if not chunk.get("source_text"):
+            continue
+        index = int(chunk["index"])
+        speaker = str(chunk.get("speaker") or "SPEAKER_00")
+        profile = profiles[speaker]
+        profile_hash = stable_hash(profile)
+        variant = f".{profile_hash[:10]}" if args.speaker_voices else ""
+        directory = store.chunk_dir(index)
+        generated = directory / f"generated{variant}.wav"
+        fitted = directory / f"generated{variant}.fitted.wav"
+        if fitted.exists() and fitted.stat().st_size > 1024:
+            continue
+        try:
+            engine_used = await synthesize(
+                args, profile, chunk["translated_text"], generated,
+                profile_references.get(speaker),
+            ) if not generated.exists() or generated.stat().st_size < 1024 else (chunk.get("engine_used") or profile.get("tts_engine") or args.tts_engine)
+            trimmed = trim_generated(generated, directory / f"generated{variant}.trim.wav")
+            budget = max(0.12, float(chunk["end"]) - float(chunk["speech_start"]) - 0.03)
+            fitted, original_tts_duration, fitted_tts_duration = fit_without_cutting(trimmed, fitted, budget)
+            store.update_chunk(
+                index, status="voice_generated", engine_used=engine_used,
+                original_tts_duration=round(original_tts_duration, 3),
+                fitted_tts_duration=round(fitted_tts_duration, 3),
+            )
+            mirror.upload_chunk(store, index)
+        except Exception as exc:
+            generation_failures.append(index)
+            store.update_chunk(index, status="failed", error=str(exc))
+            store.add_error(index, str(exc))
+            mirror.upload_chunk(store, index)
+    if generation_failures:
+        store.mark_state("failed_resumable", failed_chunks=generation_failures)
+        mirror.upload_manifest(store)
+        raise RuntimeError(f"TTS chunks preserved for resume: {generation_failures}")
+
+    # Pass 2: convert compact voice-only batches. Seed-VC itself supports long
+    # inputs via internal overlapping windows; batching amortizes ZeroGPU startup
+    # quota while 250 ms synthetic separators protect every phrase boundary.
+    seed_failures: list[int] = []
+    if args.seed_batch_size > 1 and any(profile.get("voice_conversion") == "seed-vc" for profile in profiles.values()):
+        grouped: dict[tuple[str, str], list[tuple[int, Path, Path]]] = {}
+        for chunk in store.data["chunks"]:
+            if not chunk.get("source_text"):
+                continue
+            index = int(chunk["index"])
+            speaker = str(chunk.get("speaker") or "SPEAKER_00")
+            profile = profiles[speaker]
+            if profile.get("voice_conversion") != "seed-vc":
+                continue
+            profile_hash = stable_hash(profile)
+            variant = f".{profile_hash[:10]}" if args.speaker_voices else ""
+            directory = store.chunk_dir(index)
+            fitted = directory / f"generated{variant}.fitted.wav"
+            seed_voice = directory / f"seedvc.voice-only{variant}.wav"
+            if seed_voice.exists() and seed_voice.stat().st_size > 1024:
+                continue
+            grouped.setdefault((speaker, profile_hash), []).append((index, fitted, seed_voice))
+        batch_root = analysis / "seed-batches"
+        batch_root.mkdir(parents=True, exist_ok=True)
+        stop_for_quota = False
+        for (speaker, profile_hash), items in grouped.items():
+            for offset in range(0, len(items), max(1, args.seed_batch_size)):
+                batch = items[offset:offset + max(1, args.seed_batch_size)]
+                batch_id = stable_hash({"speaker": speaker, "profile": profile_hash, "chunks": [item[0] for item in batch]})[:14]
+                batch_dir = batch_root / batch_id
+                batch_dir.mkdir(parents=True, exist_ok=True)
+                combined = batch_dir / "voice-input.wav"
+                mapping_path = batch_dir / "batch-map.json"
+                converted = batch_dir / "voice-seed.wav"
+                synced = batch_dir / "voice-seed.synced.wav"
+                try:
+                    mapping = combine_voice_batch([(item[0], item[1]) for item in batch], combined)
+                    atomic_write_json(mapping_path, mapping)
+                    if not converted.exists() or converted.stat().st_size < 1024:
+                        converted = apply_seed_vc_audio(
+                            profile_references.get(speaker) or reference,
+                            combined, converted, args.seed_vc_space,
+                        )
+                    target_duration = sf.info(str(combined)).frames / SR_TTS
+                    synced, _actual, _fitted = match_duration_without_cutting(converted, synced, target_duration)
+                    destinations = {item[0]: item[2] for item in batch}
+                    split_voice_batch(synced, mapping, destinations)
+                    for index, _input, output in batch:
+                        store.update_chunk(index, status="seed_vc_generated", seed_vc_batch=batch_id)
+                        mirror.upload_chunk(store, index)
+                    mirror.upload_tree(f"seed-batch-{batch_id}.zip", project_root, batch_dir)
+                except Exception as exc:
+                    message = str(exc)
+                    for index, _input, _output in batch:
+                        seed_failures.append(index)
+                        store.update_chunk(index, status="failed", error=message)
+                        store.add_error(index, message)
+                        mirror.upload_chunk(store, index)
+                    if "quota" in message.lower() or "zerogpu" in message.lower():
+                        stop_for_quota = True
+                        break
+            if stop_for_quota:
+                break
+    if seed_failures:
+        store.mark_state("failed_resumable", failed_chunks=seed_failures)
+        mirror.upload_manifest(store)
+        raise RuntimeError(f"Seed-VC batches preserved for resume: {seed_failures}")
+
     failures: list[int] = []
     for chunk in store.data["chunks"]:
         index = int(chunk["index"])
@@ -800,6 +959,8 @@ async def main_async(args) -> None:
                 # global clean speaker reference and voice-only content for VC.
                 seed_voice = directory / f"seedvc.voice-only{variant}.wav"
                 if not seed_voice.exists() or seed_voice.stat().st_size < 1024:
+                    if args.seed_batch_size > 1:
+                        raise RuntimeError(f"missing completed Seed-VC batch output for chunk {index}")
                     seed_voice = apply_seed_vc_audio(
                         profile_references.get(speaker) or reference, fitted_voice, seed_voice, args.seed_vc_space,
                     )
