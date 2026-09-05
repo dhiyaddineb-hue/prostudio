@@ -1195,6 +1195,10 @@ async def main_async(args) -> None:
         complete = store.completed_file(index)
         seed_mode_current = chunk.get("seed_vc_mode") == "voice_only_sync_v3"
         if complete and profile_current and content_current and (not seed_required or seed_mode_current):
+            if chunk.get("status") != "completed":
+                # Pass 1 re-labels finished non-speech chunks as "non_speech" on
+                # every run; a validated render is still a completed chunk.
+                store.update_chunk(index, status="completed", error=None)
             print(f"Chunk {index:04d}: restored and validated; skipping")
             continue
         if complete and seed_required and not seed_mode_current:

@@ -279,3 +279,14 @@ def test_frame_accurate_assembly_produces_exact_frame_total(tmp_path):
     assert namespace["frame_aligned_frame_counts"](plan, fps, [48, 47]) == [48, 46]
     assert _decode_frame_count(ffmpeg, destination) == 94  # == ceil(3.9 * 24)
     assert (tmp_path / "final-dub.concat.filter").exists()
+
+
+def test_skipped_complete_chunks_are_counted_as_completed():
+    """Run #152 assembled all 158 chunks but the workflow's completion check
+    failed with by_status={'completed': 157, 'non_speech': 1}: pass 1 relabels a
+    finished music chunk every run, and skipping it left that label in place."""
+    text = SCRIPT.read_text(encoding="utf-8")
+    render = text.split("failures: list[int] = []", 1)[1]
+    skip = render.split("if complete and profile_current and content_current", 1)[1].split("continue", 1)[0]
+    assert 'if chunk.get("status") != "completed":' in skip
+    assert 'store.update_chunk(index, status="completed", error=None)' in skip
