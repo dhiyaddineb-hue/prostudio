@@ -208,3 +208,12 @@ def test_speech_start_before_chunk_is_clamped_before_fit():
     fixed = namespace["expand_short_phrase_window"](chunk, 7.0)
     assert fixed["speech_start"] == 226.11
     assert fixed["timing_adjustment"] == "clamped_to_chunk_start"
+
+
+def test_missing_leading_word_uses_verified_same_voice_donor():
+    text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    assert "find_verified_word_clip" in text
+    assert "concatenate_voice_parts" in text
+    assert 'content_retry_mode="borrowed_verified_word"' in text
+    retry = text.split("borrowed = None", 1)[1].split("retry_trimmed =", 1)[0]
+    assert retry.index("if borrowed:") < retry.index("await synthesize(")

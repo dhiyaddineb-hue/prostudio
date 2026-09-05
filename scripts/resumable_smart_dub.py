@@ -339,6 +339,65 @@ def apply_seed_vc_audio(reference_audio: Path, voice_audio: Path, destination: P
     return destination
 
 
+def find_verified_word_clip(
+    store: CheckpointStore, target_word: str, destination: Path, *, exclude_index: int,
+) -> tuple[Path, int] | None:
+    target = normalize_tokens(target_word)
+    if not target:
+        return None
+    token = target[0]
+    candidates: list[tuple[float, float, int, dict, Path]] = []
+    for donor in store.data.get("chunks", []):
+        index = int(donor.get("index", -1))
+        if index == exclude_index or donor.get("status") != "completed":
+            continue
+        if not bool((donor.get("content_validation") or {}).get("ok")):
+            continue
+        speech_start = float(donor.get("speech_start", donor.get("start", 0.0)))
+        for word in (donor.get("word_alignment") or {}).get("words", []):
+            normalized = normalize_tokens(str(word.get("word", "")))
+            if not normalized or normalized[0] != token:
+                continue
+            local_start = max(0.0, float(word["actual_start"]) - speech_start)
+            local_end = max(local_start + 0.04, float(word["actual_end"]) - speech_start)
+            directory = store.chunk_dir(index)
+            retry_attempt = int(donor.get("content_retry_attempt") or 0)
+            voice_paths = []
+            if retry_attempt:
+                voice_paths.append(directory / f"content-retry-{retry_attempt}.delivery.wav")
+            voice_paths.extend(sorted(directory.glob("delivery*.fitted.wav")))
+            voice_paths.extend(sorted(directory.glob("pre-render*.fitted.wav")))
+            voice_paths.extend(sorted(directory.glob("generated*.fitted.wav")))
+            voice = next((path for path in voice_paths if path.exists() and path.stat().st_size > 1024), None)
+            if voice:
+                # Prefer a donor word already at the beginning of its phrase.
+                candidates.append((0.0 if local_start <= 0.08 else 1.0, abs(float(word.get("end_drift", 0.0))), index, {"start": local_start, "end": local_end}, voice))
+            break
+    if not candidates:
+        return None
+    _edge, _drift, index, timing, voice = min(candidates, key=lambda item: (item[0], item[1], item[2]))
+    start = max(0.0, float(timing["start"]) - 0.015)
+    duration = max(0.08, float(timing["end"]) - start + 0.025)
+    slice_audio(voice, start, duration, destination)
+    return destination, index
+
+
+def concatenate_voice_parts(parts: list[Path], destination: Path, gap_seconds: float = 0.06) -> Path:
+    gap = np.zeros(int(round(gap_seconds * SR_TTS)), dtype=np.float32)
+    waves: list[np.ndarray] = []
+    for position, path in enumerate(parts):
+        audio, rate = sf.read(str(path), dtype="float32")
+        if getattr(audio, "ndim", 1) > 1:
+            audio = audio.mean(axis=1)
+        if int(rate) != SR_TTS:
+            raise RuntimeError(f"unexpected sample rate in borrowed word: {rate}")
+        waves.append(np.asarray(audio, dtype=np.float32))
+        if position + 1 < len(parts):
+            waves.append(gap)
+    sf.write(str(destination), np.concatenate(waves), SR_TTS, subtype="PCM_16")
+    return destination
+
+
 def create_comparison_previews(
     source_chunk: Path, before_seed: Path, after_seed_voice: Path | None,
     final_chunk: Path, directory: Path,
@@ -1146,11 +1205,29 @@ async def main_async(args) -> None:
                     if len(retry_parts) == 2 and retry_parts[0].lower().rstrip(".,!?") in {"and", "but", "or"}:
                         retry_text = f"{retry_parts[0].rstrip('.,!?')}. {retry_parts[1]}"
                     retry_raw = directory / f"content-retry-{content_attempt + 1}.wav"
-                    await synthesize(
-                        args, retry_profile, retry_text, retry_raw,
-                        profile_references.get(speaker),
-                    )
-                    store.update_chunk(index, content_retry_synthesis_text=retry_text)
+                    borrowed = None
+                    expected_tokens = normalize_tokens(chunk["translated_text"])
+                    missing_tokens = set(content_result.get("missing_words") or [])
+                    if expected_tokens and expected_tokens[0] in missing_tokens and final_voice:
+                        borrowed_path = directory / f"content-retry-{content_attempt + 1}.borrowed-word.wav"
+                        borrowed = find_verified_word_clip(
+                            store, expected_tokens[0], borrowed_path, exclude_index=index,
+                        )
+                    if borrowed:
+                        retry_raw = concatenate_voice_parts(
+                            [borrowed[0], final_voice], retry_raw, gap_seconds=0.06,
+                        )
+                        store.update_chunk(
+                            index, content_retry_mode="borrowed_verified_word",
+                            content_retry_donor_chunk=borrowed[1],
+                            content_retry_synthesis_text=chunk["translated_text"],
+                        )
+                    else:
+                        await synthesize(
+                            args, retry_profile, retry_text, retry_raw,
+                            profile_references.get(speaker),
+                        )
+                        store.update_chunk(index, content_retry_synthesis_text=retry_text)
                     retry_trimmed = trim_generated(
                         retry_raw, directory / f"content-retry-{content_attempt + 1}.trim.wav",
                     )
