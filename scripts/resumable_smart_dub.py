@@ -1208,7 +1208,7 @@ async def main_async(args) -> None:
                     borrowed = None
                     expected_tokens = normalize_tokens(chunk["translated_text"])
                     missing_tokens = set(content_result.get("missing_words") or [])
-                    if expected_tokens and expected_tokens[0] in missing_tokens and final_voice:
+                    if content_attempt == 0 and expected_tokens and expected_tokens[0] in missing_tokens and final_voice:
                         borrowed_path = directory / f"content-retry-{content_attempt + 1}.borrowed-word.wav"
                         borrowed = find_verified_word_clip(
                             store, expected_tokens[0], borrowed_path, exclude_index=index,
@@ -1223,11 +1223,23 @@ async def main_async(args) -> None:
                             content_retry_synthesis_text=chunk["translated_text"],
                         )
                     else:
-                        await synthesize(
-                            args, retry_profile, retry_text, retry_raw,
-                            profile_references.get(speaker),
-                        )
-                        store.update_chunk(index, content_retry_synthesis_text=retry_text)
+                        if content_attempt >= 1 and len(expected_tokens) <= 5:
+                            retry_voice_name = profile.get("voice") or args.voice or pick_voice(args.target_lang, profile.get("gender") or args.gender)
+                            await speak_edge(
+                                retry_text, retry_voice_name, retry_raw,
+                                lang=args.target_lang, gender=profile.get("gender") or args.gender,
+                            )
+                            store.update_chunk(
+                                index, content_retry_mode="edge_exact_short_phrase",
+                                content_retry_voice=retry_voice_name,
+                                content_retry_synthesis_text=retry_text,
+                            )
+                        else:
+                            await synthesize(
+                                args, retry_profile, retry_text, retry_raw,
+                                profile_references.get(speaker),
+                            )
+                            store.update_chunk(index, content_retry_synthesis_text=retry_text)
                     if borrowed:
                         # The borrowed word is intentionally at sample zero; silence
                         # trimming would remove this short, lower-energy consonant.

@@ -224,3 +224,11 @@ def test_borrowed_word_is_never_removed_by_silence_trimming():
     section = text.split("if borrowed:", 2)[2].split("speech_target =", 1)[0]
     assert "retry_trimmed = retry_raw" in section
     assert section.index("retry_trimmed = retry_raw") < section.index("trim_generated(")
+
+
+def test_final_short_phrase_retry_uses_exact_edge_pronunciation():
+    text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    assert "content_attempt == 0 and expected_tokens" in text
+    assert "content_attempt >= 1 and len(expected_tokens) <= 5" in text
+    assert 'content_retry_mode="edge_exact_short_phrase"' in text
+    assert "await speak_edge(" in text
