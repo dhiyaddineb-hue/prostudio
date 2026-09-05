@@ -217,3 +217,10 @@ def test_missing_leading_word_uses_verified_same_voice_donor():
     assert 'content_retry_mode="borrowed_verified_word"' in text
     retry = text.split("borrowed = None", 1)[1].split("retry_trimmed =", 1)[0]
     assert retry.index("if borrowed:") < retry.index("await synthesize(")
+
+
+def test_borrowed_word_is_never_removed_by_silence_trimming():
+    text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    section = text.split("if borrowed:", 2)[2].split("speech_target =", 1)[0]
+    assert "retry_trimmed = retry_raw" in section
+    assert section.index("retry_trimmed = retry_raw") < section.index("trim_generated(")

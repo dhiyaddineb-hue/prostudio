@@ -1228,9 +1228,14 @@ async def main_async(args) -> None:
                             profile_references.get(speaker),
                         )
                         store.update_chunk(index, content_retry_synthesis_text=retry_text)
-                    retry_trimmed = trim_generated(
-                        retry_raw, directory / f"content-retry-{content_attempt + 1}.trim.wav",
-                    )
+                    if borrowed:
+                        # The borrowed word is intentionally at sample zero; silence
+                        # trimming would remove this short, lower-energy consonant.
+                        retry_trimmed = retry_raw
+                    else:
+                        retry_trimmed = trim_generated(
+                            retry_raw, directory / f"content-retry-{content_attempt + 1}.trim.wav",
+                        )
                     speech_target = max(0.12, float(chunk["speech_end"]) - float(chunk["speech_start"]))
                     retry_voice, _retry_actual, _retry_fitted = match_duration_without_cutting(
                         retry_trimmed,
