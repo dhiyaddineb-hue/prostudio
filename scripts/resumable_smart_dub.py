@@ -28,7 +28,7 @@ import numpy as np
 import soundfile as sf
 
 from youtube_auto_dub.emotion import infer_emotion
-from youtube_auto_dub.content_validation import is_non_speech_text, validate_spoken_content, word_timing_report
+from youtube_auto_dub.content_validation import is_non_speech_text, normalize_tokens, validate_spoken_content, word_timing_report
 from youtube_auto_dub.voice_profiles import load_voice_profiles, template_for_speakers
 from youtube_auto_dub.googlev4 import GoogleTranslator
 from youtube_auto_dub.models import SR_TTS
@@ -205,15 +205,22 @@ def expand_short_phrase_window(chunk: dict, natural_duration: float | None) -> d
     result = dict(chunk)
     if not natural_duration or natural_duration <= 0:
         return result
-    start = float(result["speech_start"])
+    raw_start = float(result["speech_start"])
+    original_start = float(result.get("speech_start_original", raw_start))
+    start = max(float(result["start"]), raw_start)
     end = float(result["speech_end"])
+    if start != raw_start:
+        result["speech_start_original"] = original_start
+        result["speech_start"] = start
+        result["timing_adjustment"] = "clamped_to_chunk_start"
     current = max(0.0, end - start)
     natural = min(float(natural_duration), max(0.0, end - float(result["start"])))
     if natural > 0 and current < natural * 0.80:
-        result["speech_start_original"] = float(result.get("speech_start_original", start))
+        result["speech_start_original"] = original_start
         result["speech_start"] = max(float(result["start"]), end - natural)
         result["timing_adjustment"] = "expanded_into_preceding_silence_for_complete_phrase"
-        result["timing_shift_seconds"] = round(start - float(result["speech_start"]), 3)
+    if result.get("speech_start") != raw_start or result.get("speech_start_original") is not None:
+        result["timing_shift_seconds"] = round(original_start - float(result["speech_start"]), 3)
     return result
 
 
@@ -874,8 +881,11 @@ async def main_async(args) -> None:
     # inputs via internal overlapping windows; batching amortizes ZeroGPU startup
     # quota while 250 ms synthetic separators protect every phrase boundary.
     seed_failures: list[int] = []
-    seed_quota_fallback = False
-    if args.seed_batch_size > 1 and any(profile.get("voice_conversion") == "seed-vc" for profile in profiles.values()):
+    seed_quota_fallback = bool(
+        args.seed_quota_policy == "voxcpm"
+        and (store.data.get("seed_quota_fallback") or {}).get("active")
+    )
+    if not seed_quota_fallback and args.seed_batch_size > 1 and any(profile.get("voice_conversion") == "seed-vc" for profile in profiles.values()):
         grouped: dict[tuple[str, str], list[tuple[int, Path, Path]]] = {}
         for chunk in store.data["chunks"]:
             if not chunk.get("source_text") or is_non_speech_text(chunk.get("source_text", "")):
@@ -985,9 +995,12 @@ async def main_async(args) -> None:
             print(f"Chunk {index:04d}: outdated Seed-VC timing detected; rebuilding alignment only")
         directory = store.chunk_dir(index)
         current_stage = "timing_fit"
-        adjusted_chunk = expand_short_phrase_window(
-            chunk, float(chunk.get("original_tts_duration") or 0.0),
+        expected_word_count = len(normalize_tokens(chunk.get("translated_text", "")))
+        natural_window = max(
+            float(chunk.get("original_tts_duration") or 0.0),
+            min(3.0, expected_word_count * 0.34),
         )
+        adjusted_chunk = expand_short_phrase_window(chunk, natural_window)
         if adjusted_chunk.get("speech_start") != chunk.get("speech_start"):
             store.update_chunk(
                 index,
@@ -1023,6 +1036,22 @@ async def main_async(args) -> None:
                     original_tts_duration=round(original_tts_duration, 3),
                     fitted_tts_duration=round(fitted_tts_duration, 3),
                     tempo_factor=round(max(original_tts_duration / max(fitted_tts_duration, 0.001), 1.0), 4),
+                )
+            if fitted_voice:
+                pre_render_budget = max(
+                    0.12,
+                    float(store.chunk(index)["end"]) - max(
+                        float(store.chunk(index)["start"]), float(store.chunk(index)["speech_start"])
+                    ) - 0.015,
+                )
+                fitted_voice, _pre_original, pre_fitted_duration = fit_without_cutting(
+                    fitted_voice,
+                    directory / f"pre-render{variant}.fitted.wav",
+                    pre_render_budget,
+                )
+                store.mark_stage(
+                    index, "timing_fit", "success", output=fitted_voice,
+                    details={"duration": round(pre_fitted_duration, 3), "budget": round(pre_render_budget, 3)},
                 )
             # Render and preserve the complete pre-Seed voice-only checkpoint.
             raw_voice_audio = build_chunk_audio(

@@ -174,3 +174,37 @@ def test_normal_phrase_window_is_not_shifted():
     fixed = namespace["expand_short_phrase_window"](chunk, 6.0)
     assert fixed["speech_start"] == 0.2
     assert "timing_adjustment" not in fixed
+
+
+def test_resume_reuses_persisted_seed_quota_decision():
+    text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    assert '(store.data.get("seed_quota_fallback") or {}).get("active")' in text
+    assert "if not seed_quota_fallback and args.seed_batch_size > 1" in text
+    assert 'directory / f"pre-render{variant}.fitted.wav"' in text
+
+
+def test_short_three_word_phrase_receives_intelligible_window():
+    import ast
+    source = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "expand_short_phrase_window")
+    namespace = {}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "smart", "exec"), namespace)
+    chunk = {"start": 30.0, "end": 39.94, "speech_start": 39.323, "speech_start_original": 39.6, "speech_end": 39.94}
+    fixed = namespace["expand_short_phrase_window"](chunk, 1.02)
+    assert round(fixed["speech_start"], 2) == 38.92
+    assert round(fixed["speech_end"] - fixed["speech_start"], 2) == 1.02
+    assert fixed["timing_shift_seconds"] == 0.68
+
+
+def test_speech_start_before_chunk_is_clamped_before_fit():
+    import ast
+    source = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "expand_short_phrase_window")
+    namespace = {}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "smart", "exec"), namespace)
+    chunk = {"start": 226.11, "end": 234.0, "speech_start": 225.82, "speech_end": 234.0}
+    fixed = namespace["expand_short_phrase_window"](chunk, 7.0)
+    assert fixed["speech_start"] == 226.11
+    assert fixed["timing_adjustment"] == "clamped_to_chunk_start"
