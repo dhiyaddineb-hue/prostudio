@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from youtube_auto_dub.content_validation import normalize_tokens, validate_spoken_content, word_timing_report
+from youtube_auto_dub.content_validation import is_non_speech_text, normalize_tokens, validate_spoken_content, word_timing_report
 from youtube_auto_dub.voice_profiles import ENGINES, REFERENCE_MODES, VOICE_CONVERSIONS, load_voice_profiles, template_for_speakers
 
 
@@ -64,3 +64,10 @@ def test_word_timing_report_records_each_observed_word():
     assert result["word_count"] == 2
     assert result["words"][0]["actual_start"] == 4.0
     assert result["words"][-1]["ideal_end"] == 5.0
+
+
+def test_non_speech_labels_are_not_synthesized():
+    assert is_non_speech_text("Music") is True
+    assert is_non_speech_text("[MUSIC]") is True
+    assert is_non_speech_text("موسيقى") is True
+    assert is_non_speech_text("music begins now") is False

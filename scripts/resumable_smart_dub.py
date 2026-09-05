@@ -28,7 +28,7 @@ import numpy as np
 import soundfile as sf
 
 from youtube_auto_dub.emotion import infer_emotion
-from youtube_auto_dub.content_validation import validate_spoken_content, word_timing_report
+from youtube_auto_dub.content_validation import is_non_speech_text, validate_spoken_content, word_timing_report
 from youtube_auto_dub.voice_profiles import load_voice_profiles, template_for_speakers
 from youtube_auto_dub.googlev4 import GoogleTranslator
 from youtube_auto_dub.models import SR_TTS
@@ -794,7 +794,12 @@ async def main_async(args) -> None:
         if not chunk.get("source_text"):
             continue
         index = int(chunk["index"])
+        if is_non_speech_text(chunk.get("source_text", "")):
+            store.update_chunk(index, status="non_speech", engine_used="silence", non_speech_label=True, error=None)
+            mirror.upload_chunk(store, index)
+            continue
         speaker = str(chunk.get("speaker") or "SPEAKER_00")
+        non_speech = is_non_speech_text(chunk.get("source_text", ""))
         profile = profiles[speaker]
         profile_hash = stable_hash(profile)
         variant = f".{profile_hash[:10]}" if args.speaker_voices else ""
@@ -835,7 +840,7 @@ async def main_async(args) -> None:
     if args.seed_batch_size > 1 and any(profile.get("voice_conversion") == "seed-vc" for profile in profiles.values()):
         grouped: dict[tuple[str, str], list[tuple[int, Path, Path]]] = {}
         for chunk in store.data["chunks"]:
-            if not chunk.get("source_text"):
+            if not chunk.get("source_text") or is_non_speech_text(chunk.get("source_text", "")):
                 continue
             index = int(chunk["index"])
             speaker = str(chunk.get("speaker") or "SPEAKER_00")
@@ -916,10 +921,11 @@ async def main_async(args) -> None:
     for chunk in store.data["chunks"]:
         index = int(chunk["index"])
         speaker = str(chunk.get("speaker") or "SPEAKER_00")
+        non_speech = is_non_speech_text(chunk.get("source_text", ""))
         profile = profiles[speaker]
         profile_hash = stable_hash(profile)
         variant = f".{profile_hash[:10]}" if args.speaker_voices else ""
-        seed_requested = profile.get("voice_conversion") == "seed-vc" and bool(chunk.get("source_text"))
+        seed_requested = profile.get("voice_conversion") == "seed-vc" and bool(chunk.get("source_text")) and not non_speech
         seed_required = seed_requested and not seed_quota_fallback
         profile_current = not args.speaker_voices or chunk.get("voice_profile_hash") == profile_hash
         content_current = not args.validate_content or bool((chunk.get("content_validation") or {}).get("ok"))
@@ -937,7 +943,7 @@ async def main_async(args) -> None:
         try:
             fitted_voice: Path | None = None
             engine_used = "silence"
-            if chunk.get("source_text"):
+            if chunk.get("source_text") and not non_speech:
                 generated = directory / f"generated{variant}.wav"
                 if not generated.exists() or generated.stat().st_size < 1024:
                     engine_used = await synthesize(
@@ -1000,31 +1006,70 @@ async def main_async(args) -> None:
                 )
             content_result = None
             timing_result = None
-            if args.validate_content and chunk.get("source_text") and final_voice:
-                checked_raw, _checked_language = transcribe(
-                    final_voice, model_name=args.model, device=device,
-                    language=args.target_lang, use_vad=False,
-                )
-                spoken_text, spoken_words = observed_transcript(checked_raw)
-                content_result = validate_spoken_content(
-                    chunk["translated_text"], spoken_text,
-                    min_recall=args.content_min_recall,
-                    min_sequence_ratio=args.content_min_sequence,
-                )
-                timing_result = word_timing_report(
-                    spoken_words, float(chunk["speech_start"]), float(chunk["speech_end"]),
-                )
+            if args.validate_content and chunk.get("source_text") and not non_speech and final_voice:
+                for content_attempt in range(3):
+                    checked_raw, _checked_language = transcribe(
+                        final_voice, model_name=args.model, device=device,
+                        language=args.target_lang, use_vad=False,
+                    )
+                    spoken_text, spoken_words = observed_transcript(checked_raw)
+                    content_result = validate_spoken_content(
+                        chunk["translated_text"], spoken_text,
+                        min_recall=args.content_min_recall,
+                        min_sequence_ratio=args.content_min_sequence,
+                    )
+                    timing_result = word_timing_report(
+                        spoken_words, float(chunk["speech_start"]), float(chunk["speech_end"]),
+                    )
+                    atomic_write_json(directory / f"content-validation-{content_attempt}.json", content_result)
+                    atomic_write_json(directory / f"word-alignment-{content_attempt}.json", timing_result)
+                    if content_result["ok"]:
+                        break
+                    if content_attempt >= 2:
+                        raise RuntimeError(
+                            f"spoken phrase incomplete after 3 retained takes: recall={content_result['recall']:.3f}, "
+                            f"sequence={content_result['sequence_ratio']:.3f}"
+                        )
+                    retry_profile = dict(profile)
+                    retry_profile["style"] = (
+                        str(profile.get("style") or "natural")
+                        + "; pronounce every written word distinctly; do not omit conjunctions or short words"
+                    )
+                    retry_raw = directory / f"content-retry-{content_attempt + 1}.wav"
+                    await synthesize(
+                        args, retry_profile, chunk["translated_text"], retry_raw,
+                        profile_references.get(speaker),
+                    )
+                    retry_trimmed = trim_generated(
+                        retry_raw, directory / f"content-retry-{content_attempt + 1}.trim.wav",
+                    )
+                    speech_target = max(0.12, float(chunk["speech_end"]) - float(chunk["speech_start"]))
+                    retry_voice, _retry_actual, _retry_fitted = match_duration_without_cutting(
+                        retry_trimmed,
+                        directory / f"content-retry-{content_attempt + 1}.synced.wav",
+                        speech_target,
+                    )
+                    if seed_required:
+                        retry_seed = apply_seed_vc_audio(
+                            profile_references.get(speaker) or reference,
+                            retry_voice,
+                            directory / f"content-retry-{content_attempt + 1}.seed.wav",
+                            args.seed_vc_space,
+                        )
+                        retry_voice, _seed_actual, _seed_fitted = match_duration_without_cutting(
+                            retry_seed,
+                            directory / f"content-retry-{content_attempt + 1}.seed.synced.wav",
+                            speech_target,
+                        )
+                    final_voice = retry_voice
+                    store.update_chunk(index, status="content_retry", content_retry_attempt=content_attempt + 1)
                 atomic_write_json(directory / "content-validation.json", content_result)
                 atomic_write_json(directory / "word-alignment.json", timing_result)
                 store.update_chunk(
-                    index, status="content_validated" if content_result["ok"] else "content_failed",
-                    content_validation=content_result, word_alignment=timing_result,
+                    index, status="content_validated", content_validation=content_result,
+                    word_alignment=timing_result,
+                    content_retry_attempt=content_attempt,
                 )
-                if not content_result["ok"]:
-                    raise RuntimeError(
-                        f"spoken phrase incomplete: recall={content_result['recall']:.3f}, "
-                        f"sequence={content_result['sequence_ratio']:.3f}"
-                    )
 
             chunk_audio = build_chunk_audio(
                 store.chunk(index), final_voice,

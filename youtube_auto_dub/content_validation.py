@@ -6,11 +6,20 @@ from difflib import SequenceMatcher
 from typing import Any
 
 _TOKEN = re.compile(r"[^\W_]+(?:['’-][^\W_]+)?", re.UNICODE)
+_NON_SPEECH = {
+    "music", "silence", "noise", "applause", "laughter", "intro", "outro",
+    "موسيقى", "صمت", "ضوضاء", "تصفيق", "ضحك",
+}
 
 
 def normalize_tokens(text: str) -> list[str]:
     return [token.lower().replace("’", "'") for token in _TOKEN.findall(text or "")]
 
+
+
+def is_non_speech_text(text: str) -> bool:
+    tokens = normalize_tokens(text)
+    return bool(tokens) and len(tokens) <= 2 and all(token in _NON_SPEECH for token in tokens)
 
 def validate_spoken_content(
     expected: str,

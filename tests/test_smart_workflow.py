@@ -132,3 +132,9 @@ def test_explicit_quota_policy_uses_one_consistent_voxcpm_delivery():
     assert 'delivery_voice_mode="voxcpm_reference_clone"' in script
     assert "seed_quota_voxcpm" in workflow
     assert "--seed-quota-policy voxcpm" in workflow
+
+
+def test_render_loop_recomputes_non_speech_per_chunk():
+    text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    render = text.split("failures: list[int] = []", 1)[1]
+    assert 'non_speech = is_non_speech_text(chunk.get("source_text", ""))' in render
