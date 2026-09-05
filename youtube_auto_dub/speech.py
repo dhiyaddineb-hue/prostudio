@@ -1,6 +1,7 @@
 """Speech-to-text with Whisper — VAD, prompt conditioning, resegmentation."""
 
 import math
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -59,6 +60,39 @@ def _scrub(text: str) -> str:
 _MODEL_CACHE = {}
 
 
+def asr_cache_path(audio: Path) -> Path:
+    """Derived 16 kHz mono copy that Whisper actually listens to."""
+    audio = Path(audio)
+    return audio.with_name(audio.stem + "_16k.wav")
+
+
+def prepare_asr_audio(audio: Path) -> Path:
+    """Return a 16 kHz mono PCM file that reflects the *current* content of ``audio``.
+
+    ``<stem>_16k.wav`` is a derived cache, not a result.  It used to be reused
+    whenever it already existed, which silently fed Whisper a stale copy after a
+    checkpoint restore (the 24 kHz take was regenerated, the 16 kHz copy was
+    not).  The copy is therefore rebuilt on every call, written atomically so a
+    concurrent reader never sees a half-written file, and never deleted.
+    """
+    audio = Path(audio)
+    if audio.suffix == ".wav" and _is_16k_mono(audio):
+        return audio
+    wav = asr_cache_path(audio)
+    tmp = wav.with_name(f"{wav.stem}.tmp-{os.getpid()}{wav.suffix}")
+    try:
+        subprocess.run(
+            [ffmpeg_exe(), "-y", "-i", str(audio), "-ac", "1", "-ar", str(SR_WHISPER),
+             "-sample_fmt", "s16", "-c:a", "pcm_s16le", str(tmp)],
+            check=True, capture_output=True,
+        )
+        os.replace(tmp, wav)
+    finally:
+        if tmp.exists():
+            tmp.unlink(missing_ok=True)
+    return wav
+
+
 def transcribe(
     audio: Path,
     model_name: str = WHISPER_DEFAULT_MODEL,
@@ -89,16 +123,9 @@ def transcribe(
                 _MODEL_CACHE[key] = WhisperModel(model_name, device=device, compute_type=ct)
     model = _MODEL_CACHE[key]
 
-    # Normalise to 16kHz mono WAV
-    wav = audio
-    if not (audio.suffix == ".wav" and _is_16k_mono(audio)):
-        wav = audio.with_name(audio.stem + "_16k.wav")
-        if not wav.exists():
-            subprocess.run(
-                [ffmpeg_exe(), "-y", "-i", str(audio), "-ac", "1", "-ar", str(SR_WHISPER),
-                 "-sample_fmt", "s16", "-c:a", "pcm_s16le", str(wav)],
-                check=True, capture_output=True,
-            )
+    # Normalise to 16kHz mono WAV. The derived copy is rebuilt on every call so
+    # that Whisper always hears the *current* audio (see prepare_asr_audio).
+    wav = prepare_asr_audio(audio)
 
     # VAD
     from faster_whisper.audio import decode_audio

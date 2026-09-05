@@ -486,6 +486,41 @@ def concatenate_chunks(paths: list[Path], destination: Path) -> Path:
     return destination
 
 
+def is_derived_asr_cache(path: Path) -> bool:
+    """Whisper's 16 kHz working copies are rebuilt from their source on demand.
+
+    They must never travel inside a checkpoint archive: a restored copy could be
+    older than the regenerated 24 kHz take it claims to mirror, and content
+    validation would then judge audio that is no longer delivered.
+    """
+    name = Path(path).name
+    return name.endswith("_16k.wav") or ".tmp-" in name
+
+
+def ensure_pcm_wav(path: Path) -> Path:
+    """Guarantee a RIFF/PCM WAV at ``path`` (Edge-TTS writes MP3 regardless of suffix).
+
+    The original bytes are kept next to it as ``<stem>.edge.mp3`` so nothing is
+    discarded; only the working copy is transcoded to the project sample rate.
+    """
+    path = Path(path)
+    if not path.exists() or path.stat().st_size < 12:
+        return path
+    with path.open("rb") as handle:
+        header = handle.read(4)
+    if header == b"RIFF":
+        return path
+    original = path.with_name(f"{path.stem}.edge.mp3")
+    shutil.move(str(path), str(original))
+    run([
+        "ffmpeg", "-y", "-i", str(original), "-ar", str(SR_TTS), "-ac", "1",
+        "-c:a", "pcm_s16le", str(path),
+    ])
+    if not path.exists() or path.stat().st_size < 1024:
+        raise RuntimeError("Edge-TTS output could not be converted to PCM WAV")
+    return path
+
+
 class ReleaseMirror:
     """Incremental durable checkpoint mirror using a draft GitHub Release."""
 
@@ -541,7 +576,7 @@ class ReleaseMirror:
         asset = self.tmp / asset_name
         with zipfile.ZipFile(asset, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=3) as handle:
             for path in sorted(tree.rglob("*")):
-                if path.is_file():
+                if path.is_file() and not is_derived_asr_cache(path):
                     handle.write(path, path.relative_to(project_root))
         self._upload(asset)
 
@@ -1044,7 +1079,12 @@ async def main_async(args) -> None:
         seed_requested = profile.get("voice_conversion") == "seed-vc" and bool(chunk.get("source_text")) and not non_speech
         seed_required = seed_requested and not seed_quota_fallback
         profile_current = not args.speaker_voices or chunk.get("voice_profile_hash") == profile_hash
-        content_current = not args.validate_content or bool((chunk.get("content_validation") or {}).get("ok"))
+        content_current = (
+            not args.validate_content
+            or non_speech
+            or not chunk.get("source_text")
+            or bool((chunk.get("content_validation") or {}).get("ok"))
+        )
         complete = store.completed_file(index)
         seed_mode_current = chunk.get("seed_vc_mode") == "voice_only_sync_v3"
         if complete and profile_current and content_current and (not seed_required or seed_mode_current):
@@ -1229,6 +1269,7 @@ async def main_async(args) -> None:
                                 retry_text, retry_voice_name, retry_raw,
                                 lang=args.target_lang, gender=profile.get("gender") or args.gender,
                             )
+                            retry_raw = ensure_pcm_wav(retry_raw)
                             store.update_chunk(
                                 index, content_retry_mode="edge_exact_short_phrase",
                                 content_retry_voice=retry_voice_name,
