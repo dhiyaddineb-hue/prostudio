@@ -470,7 +470,114 @@ def split_voice_batch(source: Path, mapping: list[dict], destinations: dict[int,
         sf.write(str(destinations[index]), audio[start:end], SR_TTS, subtype="PCM_16")
 
 
-def concatenate_chunks(paths: list[Path], destination: Path) -> Path:
+def probe_frame_rate(path: Path) -> tuple[float, str] | None:
+    """Average video frame rate of ``path`` as (float, ffmpeg fraction) or None."""
+    result = run([
+        "ffprobe", "-v", "error", "-select_streams", "v:0",
+        "-show_entries", "stream=avg_frame_rate",
+        "-of", "default=noprint_wrappers=1:nokey=1", str(path),
+    ], check=False)
+    text = (result.stdout or "").strip().splitlines()
+    if result.returncode != 0 or not text:
+        return None
+    raw = text[0].strip()
+    numerator, _sep, denominator = raw.partition("/")
+    try:
+        fps = float(numerator) / float(denominator or 1)
+    except (ValueError, ZeroDivisionError):
+        return None
+    return (fps, raw) if fps > 0 else None
+
+
+def probe_video_frames(path: Path) -> int | None:
+    """Exact number of video frames stored in ``path`` (one packet per frame)."""
+    result = run([
+        "ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets",
+        "-show_entries", "stream=nb_read_packets",
+        "-of", "default=noprint_wrappers=1:nokey=1", str(path),
+    ], check=False)
+    text = (result.stdout or "").strip().splitlines()
+    if result.returncode != 0 or not text:
+        return None
+    try:
+        frames = int(text[0].strip())
+    except ValueError:
+        return None
+    return frames if frames > 0 else None
+
+
+def frame_aligned_frame_counts(chunks: list[dict], fps: float, held: list[int]) -> list[int]:
+    """How many frames of every rendered chunk belong in the final timeline.
+
+    Stream-copy concatenation of the 158 Napoleon chunks ran 3.08 s past the
+    source: every chunk file carries codec padding (and can carry the frame
+    that straddles its planned end), and the concat demuxer simply adds those
+    up.  Here each chunk keeps all of its frames unless that would push the
+    assembled timeline a whole frame or more past the chunk's planned end; only
+    then is the trailing frame left out.  The result stays within one frame of
+    the plan at every boundary, no frame is ever duplicated, and no chunk file
+    is modified or re-rendered.
+    """
+    if not chunks:
+        return []
+    counts: list[int] = []
+    cursor = float(math.ceil(float(chunks[0]["start"]) * fps - 1e-6))
+    for chunk, frames_in_file in zip(chunks, held):
+        frames = max(1, int(frames_in_file))
+        ideal_end = float(chunk["end"]) * fps
+        while frames > 1 and cursor + frames - ideal_end >= 1.0 - 1e-6:
+            frames -= 1
+        counts.append(frames)
+        cursor += frames
+    return counts
+
+
+def concatenate_chunks_frame_accurate(
+    paths: list[Path], frame_counts: list[int], fps: float, fps_text: str, destination: Path,
+) -> subprocess.CompletedProcess:
+    """Join chunks through the concat *filter* with exact per-chunk frame counts.
+
+    Each video segment is cut to ``frame_counts[i]`` whole frames, its audio is
+    bounded to the same span (dropping per-file AAC padding), and the timeline
+    is encoded once at the source frame rate.  The stream-copy path cannot do
+    this: it can only cut on packet boundaries and inherits every file's padding.
+    """
+    script = destination.with_suffix(".concat.filter")
+    lines = []
+    for index, frames in enumerate(frame_counts):
+        seconds = frames / fps
+        lines.append(f"[{index}:v:0]trim=end_frame={frames},setpts=PTS-STARTPTS[v{index}];")
+        lines.append(f"[{index}:a:0]atrim=end={seconds:.6f},asetpts=PTS-STARTPTS[a{index}];")
+    inputs = "".join(f"[v{index}][a{index}]" for index in range(len(frame_counts)))
+    lines.append(f"{inputs}concat=n={len(frame_counts)}:v=1:a=1[vout][aout]")
+    script.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    command = ["ffmpeg", "-y"]
+    for path in paths:
+        command += ["-i", str(path)]
+    command += [
+        "-filter_complex_script", str(script), "-map", "[vout]", "-map", "[aout]",
+        "-r", fps_text, "-fps_mode", "cfr",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+        "-movflags", "+faststart", str(destination),
+    ]
+    return run(command, check=False)
+
+
+def concatenate_chunks(
+    paths: list[Path], destination: Path, *, chunks: list[dict] | None = None,
+    frame_rate: tuple[float, str] | None = None, held_frames: list[int | None] | None = None,
+) -> Path:
+    if chunks is not None and frame_rate and held_frames and len(chunks) == len(paths) == len(held_frames) and all(held_frames):
+        fps, fps_text = frame_rate
+        counts = frame_aligned_frame_counts(chunks, fps, [int(value) for value in held_frames])
+        exact = concatenate_chunks_frame_accurate(paths, counts, fps, fps_text, destination)
+        if exact.returncode == 0 and destination.exists() and destination.stat().st_size > 1024:
+            trimmed = sum(int(value) for value in held_frames) - sum(counts)
+            print(f"Assembled {len(paths)} chunks frame-accurately: {sum(counts)} frames at {fps_text} fps ({trimmed} straddling frames left out)")
+            return destination
+        print("Frame-accurate assembly failed; falling back to stream-copy concatenation", file=sys.stderr)
+        print((exact.stderr or "")[-1200:], file=sys.stderr)
     list_path = destination.with_suffix(".concat.txt")
     list_path.write_text("".join(f"file '{path.resolve()}'\n" for path in paths), encoding="utf-8")
     first = run([
@@ -1389,7 +1496,13 @@ async def main_async(args) -> None:
         raise RuntimeError("not all completed chunk files are present")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     (args.output_dir / "source-path.txt").write_text(str(source_path.resolve()), encoding="utf-8")
-    final = concatenate_chunks([path for path in ordered if path], args.output_dir / "final-dub.mp4")
+    chunk_files = [path for path in ordered if path]
+    frame_rate = probe_frame_rate(chunk_files[0]) if chunk_files else None
+    held_frames = [probe_video_frames(path) for path in chunk_files]
+    final = concatenate_chunks(
+        chunk_files, args.output_dir / "final-dub.mp4",
+        chunks=store.data["chunks"], frame_rate=frame_rate, held_frames=held_frames,
+    )
     final_duration = ffprobe_duration(final)
     if abs(final_duration - source_duration) > 1.0:
         raise RuntimeError(f"final duration mismatch: {final_duration:.3f}s vs {source_duration:.3f}s")
