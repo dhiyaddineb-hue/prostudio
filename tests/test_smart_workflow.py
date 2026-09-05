@@ -138,3 +138,11 @@ def test_render_loop_recomputes_non_speech_per_chunk():
     text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
     render = text.split("failures: list[int] = []", 1)[1]
     assert 'non_speech = is_non_speech_text(chunk.get("source_text", ""))' in render
+
+
+def test_final_delivery_fit_prevents_last_sample_overrun():
+    text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    assert 'delivery_budget = max(0.12' in text
+    assert 'directory / f"delivery{variant}.fitted.wav"' in text
+    assert 'retry_text = f"{retry_parts[0].rstrip' in text
+    assert 'content_retry_synthesis_text=retry_text' in text

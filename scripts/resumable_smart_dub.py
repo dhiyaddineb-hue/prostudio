@@ -1004,6 +1004,17 @@ async def main_async(args) -> None:
                     seed_fitted_duration=round(seed_fitted_duration, 3),
                     speech_target_duration=round(speech_target, 3),
                 )
+            delivery_budget = max(0.12, float(chunk["end"]) - float(chunk["speech_start"]) - 0.015)
+            if final_voice:
+                final_voice, _delivery_original, delivery_fitted_duration = fit_without_cutting(
+                    final_voice, directory / f"delivery{variant}.fitted.wav", delivery_budget,
+                )
+                store.update_chunk(
+                    index, status="delivery_fitted",
+                    delivery_fitted_duration=round(delivery_fitted_duration, 3),
+                    delivery_budget=round(delivery_budget, 3),
+                )
+
             content_result = None
             timing_result = None
             if args.validate_content and chunk.get("source_text") and not non_speech and final_voice:
@@ -1035,11 +1046,16 @@ async def main_async(args) -> None:
                         str(profile.get("style") or "natural")
                         + "; pronounce every written word distinctly; do not omit conjunctions or short words"
                     )
+                    retry_text = str(chunk["translated_text"]).strip()
+                    retry_parts = retry_text.split(maxsplit=1)
+                    if len(retry_parts) == 2 and retry_parts[0].lower().rstrip(".,!?") in {"and", "but", "or"}:
+                        retry_text = f"{retry_parts[0].rstrip('.,!?')}. {retry_parts[1]}"
                     retry_raw = directory / f"content-retry-{content_attempt + 1}.wav"
                     await synthesize(
-                        args, retry_profile, chunk["translated_text"], retry_raw,
+                        args, retry_profile, retry_text, retry_raw,
                         profile_references.get(speaker),
                     )
+                    store.update_chunk(index, content_retry_synthesis_text=retry_text)
                     retry_trimmed = trim_generated(
                         retry_raw, directory / f"content-retry-{content_attempt + 1}.trim.wav",
                     )
@@ -1061,8 +1077,15 @@ async def main_async(args) -> None:
                             directory / f"content-retry-{content_attempt + 1}.seed.synced.wav",
                             speech_target,
                         )
-                    final_voice = retry_voice
-                    store.update_chunk(index, status="content_retry", content_retry_attempt=content_attempt + 1)
+                    final_voice, _retry_delivery_original, retry_delivery_fitted = fit_without_cutting(
+                        retry_voice,
+                        directory / f"content-retry-{content_attempt + 1}.delivery.wav",
+                        delivery_budget,
+                    )
+                    store.update_chunk(
+                        index, status="content_retry", content_retry_attempt=content_attempt + 1,
+                        delivery_fitted_duration=round(retry_delivery_fitted, 3),
+                    )
                 atomic_write_json(directory / "content-validation.json", content_result)
                 atomic_write_json(directory / "word-alignment.json", timing_result)
                 store.update_chunk(
