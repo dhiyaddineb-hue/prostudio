@@ -93,3 +93,18 @@ def test_selected_character_quality_features_are_wired():
         assert marker in text
     assert "duck_floor = 0.28" in text
     assert "profile.get(\"tts_engine\")" in text
+
+
+def test_workflow_dispatch_stays_within_github_input_limit():
+    import re
+    text = (ROOT / ".github/workflows/dub.yml").read_text(encoding="utf-8")
+    section = text.split("    inputs:", 1)[1].split("\njobs:", 1)[0]
+    names = re.findall(r"^      ([A-Za-z_][A-Za-z0-9_]*):\s*$", section, re.M)
+    assert len(names) <= 25
+    assert "speaker_voices_path" in names
+    assert "validate_content" in names
+
+
+def test_profile_file_forces_character_approval():
+    text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    assert "require_approval=bool(args.speaker_voices) or args.require_voice_approval" in text

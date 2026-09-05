@@ -681,7 +681,7 @@ async def main_async(args) -> None:
     }
     profiles = load_voice_profiles(
         args.speaker_voices, speakers, defaults=profile_defaults,
-        require_approval=args.require_voice_approval,
+        require_approval=bool(args.speaker_voices) or args.require_voice_approval,
     )
     atomic_write_json(analysis / "voice-profiles-template.json", template_for_speakers(speakers, profile_defaults))
     atomic_write_json(analysis / "voice-profiles-active.json", {"version": 1, "speakers": profiles})
