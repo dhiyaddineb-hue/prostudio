@@ -804,6 +804,17 @@ async def main_async(args) -> None:
         finally:
             await translator.close()
 
+    for chunk in store.data["chunks"]:
+        index = int(chunk["index"])
+        if not chunk.get("source_text") or is_non_speech_text(chunk.get("source_text", "")):
+            store.mark_stage(index, "translation", "skipped", details={"reason": "non_speech_or_empty"})
+        elif chunk.get("translated_text"):
+            store.mark_stage(
+                index, "translation", "success",
+                input_hash=stable_hash({"source": chunk.get("source_text"), "target": args.target_lang}),
+                details={"translated_text": chunk.get("translated_text")},
+            )
+
     # Pass 1: generate and checkpoint all TTS voices before consuming any
     # Seed-VC quota. A later run resumes at the first missing voice file.
     generation_failures: list[int] = []
@@ -813,6 +824,8 @@ async def main_async(args) -> None:
         index = int(chunk["index"])
         if is_non_speech_text(chunk.get("source_text", "")):
             store.update_chunk(index, status="non_speech", engine_used="silence", non_speech_label=True, error=None)
+            for stage_name in ("tts", "seed_vc", "timing_fit", "content_validation"):
+                store.mark_stage(index, stage_name, "skipped", details={"reason": "non_speech"})
             mirror.upload_chunk(store, index)
             continue
         speaker = str(chunk.get("speaker") or "SPEAKER_00")
@@ -823,8 +836,11 @@ async def main_async(args) -> None:
         directory = store.chunk_dir(index)
         generated = directory / f"generated{variant}.wav"
         fitted = directory / f"generated{variant}.fitted.wav"
-        if fitted.exists() and fitted.stat().st_size > 1024:
+        tts_input_hash = stable_hash({"text": chunk.get("translated_text"), "profile": profile_hash})
+        if store.stage_valid(index, "tts", fitted, input_hash=tts_input_hash):
             continue
+        if store.stage(index, "tts").get("state") == "success":
+            store.invalidate_from(index, "tts", "TTS input or output checksum changed")
         try:
             engine_used = await synthesize(
                 args, profile, chunk["translated_text"], generated,
@@ -838,9 +854,14 @@ async def main_async(args) -> None:
                 original_tts_duration=round(original_tts_duration, 3),
                 fitted_tts_duration=round(fitted_tts_duration, 3),
             )
+            store.mark_stage(
+                index, "tts", "success", output=fitted, input_hash=tts_input_hash,
+                details={"engine": engine_used, "duration": round(fitted_tts_duration, 3)},
+            )
             mirror.upload_chunk(store, index)
         except Exception as exc:
             generation_failures.append(index)
+            store.mark_stage(index, "tts", "failed", input_hash=tts_input_hash, error=str(exc))
             store.update_chunk(index, status="failed", error=str(exc))
             store.add_error(index, str(exc))
             mirror.upload_chunk(store, index)
@@ -899,6 +920,10 @@ async def main_async(args) -> None:
                     split_voice_batch(synced, mapping, destinations)
                     for index, _input, output in batch:
                         store.update_chunk(index, status="seed_vc_generated", seed_vc_batch=batch_id)
+                        store.mark_stage(
+                            index, "seed_vc", "success", output=output,
+                            details={"batch": batch_id, "mode": "voice_only"},
+                        )
                         mirror.upload_chunk(store, index)
                     mirror.upload_tree(f"seed-batch-{batch_id}.zip", project_root, batch_dir)
                 except Exception as exc:
@@ -916,11 +941,16 @@ async def main_async(args) -> None:
                                 index, status="voice_generated", error=None,
                                 seed_vc_skipped="quota_exhausted_explicit_voxcpm_policy",
                             )
+                            store.mark_stage(
+                                index, "seed_vc", "skipped",
+                                details={"reason": "quota_exhausted", "fallback": "voxcpm_reference_clone"},
+                            )
                             mirror.upload_chunk(store, index)
                         store.save()
                     else:
                         for index, _input, _output in batch:
                             seed_failures.append(index)
+                            store.mark_stage(index, "seed_vc", "failed", error=message)
                             store.update_chunk(index, status="failed", error=message)
                             store.add_error(index, message)
                             mirror.upload_chunk(store, index)
@@ -954,6 +984,7 @@ async def main_async(args) -> None:
         if complete and seed_required and not seed_mode_current:
             print(f"Chunk {index:04d}: outdated Seed-VC timing detected; rebuilding alignment only")
         directory = store.chunk_dir(index)
+        current_stage = "timing_fit"
         adjusted_chunk = expand_short_phrase_window(
             chunk, float(chunk.get("original_tts_duration") or 0.0),
         )
@@ -1044,10 +1075,15 @@ async def main_async(args) -> None:
                     delivery_fitted_duration=round(delivery_fitted_duration, 3),
                     delivery_budget=round(delivery_budget, 3),
                 )
+                store.mark_stage(
+                    index, "timing_fit", "success", output=final_voice,
+                    details={"duration": round(delivery_fitted_duration, 3), "budget": round(delivery_budget, 3)},
+                )
 
             content_result = None
             timing_result = None
             if args.validate_content and chunk.get("source_text") and not non_speech and final_voice:
+                current_stage = "content_validation"
                 for content_attempt in range(3):
                     checked_raw, _checked_language = transcribe(
                         final_voice, model_name=args.model, device=device,
@@ -1123,14 +1159,23 @@ async def main_async(args) -> None:
                     word_alignment=timing_result,
                     content_retry_attempt=content_attempt,
                 )
+                store.mark_stage(
+                    index, "content_validation", "success",
+                    output=directory / "content-validation.json",
+                    details={"recall": content_result.get("recall"), "sequence_ratio": content_result.get("sequence_ratio")},
+                )
 
+            current_stage = "audio_mix"
             chunk_audio = build_chunk_audio(
                 store.chunk(index), final_voice,
                 background_audio if args.preserve_background and background_audio.exists() else None,
                 directory / "mixed.wav", background_gain=args.background_gain,
                 voice_is_full_timeline=full_timeline,
             )
+            store.mark_stage(index, "audio_mix", "success", output=chunk_audio)
+            current_stage = "video_render"
             dubbed = render_chunk(loaded.video_path, store.chunk(index), chunk_audio, directory / "dubbed.mp4")
+            store.mark_stage(index, "video_render", "success", output=dubbed)
             preview_tracks = create_comparison_previews(
                 source_chunk, raw_dubbed,
                 final_voice if seed_required else None,
@@ -1154,10 +1199,13 @@ async def main_async(args) -> None:
                 content_validation=content_result, word_alignment=timing_result,
                 dubbed_sha256=sha256_file(dubbed), measured_duration=round(ffprobe_duration(dubbed), 3),
             )
+            current_stage = "checkpoint_upload"
             mirror.upload_chunk(store, index)
+            store.mark_stage(index, "checkpoint_upload", "success", details={"asset": f"chunk-{index:04d}.zip"})
             print(f"Chunk {index:04d}: completed and checkpointed")
         except Exception as exc:
             failures.append(index)
+            store.mark_stage(index, current_stage, "failed", error=str(exc))
             store.update_chunk(index, status="failed", error=str(exc))
             store.add_error(index, str(exc))
             mirror.upload_chunk(store, index)

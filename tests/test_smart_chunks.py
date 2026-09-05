@@ -113,3 +113,43 @@ def test_speaker_change_forces_a_safe_chunk_boundary():
     assert chunks[1]["speaker"] == "SPEAKER_01"
     for chunk in chunks:
         assert len({word["speaker"] for word in chunk["source_words"] if word.get("speaker")}) <= 1
+
+
+def test_every_tiny_chunk_has_an_independent_stage_checklist(tmp_path):
+    from youtube_auto_dub.smart_chunks import CheckpointStore, STAGE_ORDER
+    store = CheckpointStore(tmp_path / "project")
+    chunk = {
+        "index": 0, "start": 0.0, "end": 0.35, "speech_start": 0.02, "speech_end": 0.34,
+        "source_text": "hello", "translated_text": "hello", "word_ids": [0], "word_count": 1, "status": "pending",
+    }
+    store.initialize(source={"sha256": "abc"}, config={"engine": "test"}, chunks=[chunk])
+    assert tuple(store.chunk(0)["checklist"]) == STAGE_ORDER
+    assert all(store.stage(0, name)["state"] in {"pending", "success", "skipped", "failed"} for name in STAGE_ORDER)
+
+
+def test_stage_success_reuses_valid_output_and_rejects_corruption(tmp_path):
+    from youtube_auto_dub.smart_chunks import CheckpointStore
+    store = CheckpointStore(tmp_path / "project")
+    chunk = {"index": 0, "start": 0.0, "end": 1.0, "source_text": "a", "word_ids": [0], "word_count": 1}
+    store.initialize(source={"sha256": "abc"}, config={}, chunks=[chunk])
+    output = store.chunk_dir(0) / "voice.wav"
+    output.write_bytes(b"a" * 2048)
+    store.mark_stage(0, "tts", "success", output=output, input_hash="input-a")
+    assert store.stage_valid(0, "tts", output, input_hash="input-a") is True
+    output.write_bytes(b"b" * 2048)
+    assert store.stage_valid(0, "tts", output, input_hash="input-a") is False
+
+
+def test_invalidation_starts_at_failed_stage_only(tmp_path):
+    from youtube_auto_dub.smart_chunks import CheckpointStore, STAGE_ORDER
+    store = CheckpointStore(tmp_path / "project")
+    chunk = {"index": 0, "start": 0.0, "end": 1.0, "source_text": "a", "word_ids": [0], "word_count": 1}
+    store.initialize(source={"sha256": "abc"}, config={}, chunks=[chunk])
+    for name in STAGE_ORDER:
+        store.mark_stage(0, name, "success")
+    store.invalidate_from(0, "timing_fit", "timing policy changed")
+    assert store.stage(0, "analysis")["state"] == "success"
+    assert store.stage(0, "translation")["state"] == "success"
+    assert store.stage(0, "tts")["state"] == "success"
+    assert store.stage(0, "seed_vc")["state"] == "success"
+    assert all(store.stage(0, name)["state"] == "pending" for name in STAGE_ORDER[4:])

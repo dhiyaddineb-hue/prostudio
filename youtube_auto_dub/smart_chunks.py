@@ -9,7 +9,12 @@ import tempfile
 from pathlib import Path
 from typing import Any, Iterable
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+STAGE_ORDER = (
+    "analysis", "translation", "tts", "seed_vc", "timing_fit",
+    "content_validation", "audio_mix", "video_render", "checkpoint_upload",
+)
+STAGE_STATES = {"pending", "success", "failed", "skipped"}
 _SENTENCE_END = re.compile(r"[.!?؟。！？]+[\"'»”)]*$")
 _CLAUSE_END = re.compile(r"[,،;؛:]+[\"'»”)]*$")
 _SAFE_ID = re.compile(r"[^A-Za-z0-9._-]+")
@@ -341,9 +346,115 @@ class CheckpointStore:
                 "chunks": chunks,
                 "errors": [],
             }
+        self.data["schema_version"] = SCHEMA_VERSION
         self.save()
+        self.ensure_checklists()
         for chunk in self.data["chunks"]:
             self._write_chunk_status(int(chunk["index"]))
+
+    def _legacy_checklist(self, index: int, chunk: dict) -> dict[str, dict]:
+        directory = self.chunk_dir(index)
+        spoken = bool(chunk.get("source_text")) and not bool(chunk.get("non_speech_label"))
+        completed = chunk.get("status") == "completed"
+        content_ok = bool((chunk.get("content_validation") or {}).get("ok"))
+        generated = next(iter(sorted(directory.glob("generated*.fitted.wav"))), None)
+        seed_voice = next(iter(sorted(directory.glob("seedvc.voice-only*.wav"))), None)
+        mixed = directory / "mixed.wav"
+        dubbed = directory / "dubbed.mp4"
+        stages = {name: {"state": "pending", "attempts": 0, "error": None} for name in STAGE_ORDER}
+        stages["analysis"]["state"] = "success"
+        stages["translation"]["state"] = "success" if chunk.get("translated_text") else ("skipped" if not spoken else "pending")
+        stages["tts"]["state"] = "success" if generated else ("skipped" if not spoken else "pending")
+        if not spoken or not chunk.get("seed_vc_required"):
+            stages["seed_vc"]["state"] = "skipped"
+        elif seed_voice:
+            stages["seed_vc"]["state"] = "success"
+        stages["timing_fit"]["state"] = "success" if chunk.get("delivery_fitted_duration") else ("skipped" if not spoken else "pending")
+        stages["content_validation"]["state"] = "success" if content_ok else ("skipped" if not spoken else "pending")
+        stages["audio_mix"]["state"] = "success" if mixed.exists() and mixed.stat().st_size > 1024 and completed else "pending"
+        stages["video_render"]["state"] = "success" if dubbed.exists() and dubbed.stat().st_size > 1024 and completed else "pending"
+        stages["checkpoint_upload"]["state"] = "success" if completed else "pending"
+        error = chunk.get("error")
+        if error and not completed:
+            lowered = str(error).lower()
+            failed_stage = "content_validation" if "spoken phrase" in lowered else ("timing_fit" if "truncated" in lowered or "fit" in lowered else "video_render")
+            stages[failed_stage]["state"] = "failed"
+            stages[failed_stage]["error"] = str(error)
+        return stages
+
+    def ensure_checklists(self) -> None:
+        changed = False
+        for index, chunk in enumerate(self.data.get("chunks", [])):
+            checklist = chunk.get("checklist")
+            if not isinstance(checklist, dict):
+                checklist = self._legacy_checklist(index, chunk)
+                chunk["checklist"] = checklist
+                changed = True
+            for name in STAGE_ORDER:
+                if name not in checklist:
+                    checklist[name] = {"state": "pending", "attempts": 0, "error": None}
+                    changed = True
+        if changed:
+            self.data["schema_version"] = SCHEMA_VERSION
+            self.save()
+
+    def stage(self, index: int, name: str) -> dict:
+        if name not in STAGE_ORDER:
+            raise KeyError(name)
+        self.ensure_checklists()
+        return self.chunk(index)["checklist"][name]
+
+    def stage_valid(self, index: int, name: str, output: Path | None = None, input_hash: str | None = None) -> bool:
+        stage = self.stage(index, name)
+        if stage.get("state") not in {"success", "skipped"}:
+            return False
+        if input_hash is not None and stage.get("input_hash") not in {None, input_hash}:
+            return False
+        if output is not None:
+            output = Path(output)
+            if not output.exists() or output.stat().st_size < 1:
+                return False
+            expected = stage.get("output_sha256")
+            if expected and sha256_file(output) != expected:
+                return False
+        return True
+
+    def mark_stage(
+        self, index: int, name: str, state: str, *, output: Path | None = None,
+        input_hash: str | None = None, error: str | None = None, details: dict | None = None,
+    ) -> dict:
+        if name not in STAGE_ORDER or state not in STAGE_STATES:
+            raise ValueError(f"invalid stage transition: {name}={state}")
+        stage = self.stage(index, name)
+        if state == "failed" or (state == "pending" and stage.get("state") != "pending"):
+            stage["attempts"] = int(stage.get("attempts", 0)) + 1
+        stage.update({"state": state, "error": error})
+        if input_hash is not None:
+            stage["input_hash"] = input_hash
+        if output is not None:
+            output = Path(output)
+            stage["output"] = str(output.relative_to(self.root)) if output.is_relative_to(self.root) else str(output)
+            if output.exists() and output.is_file():
+                stage["output_sha256"] = sha256_file(output)
+                stage["bytes"] = output.stat().st_size
+        if details:
+            stage.setdefault("details", {}).update(details)
+        self.save()
+        self._write_chunk_status(index)
+        return stage
+
+    def invalidate_from(self, index: int, name: str, reason: str) -> None:
+        start = STAGE_ORDER.index(name)
+        self.ensure_checklists()
+        checklist = self.chunk(index)["checklist"]
+        for stage_name in STAGE_ORDER[start:]:
+            previous = checklist[stage_name].get("state")
+            checklist[stage_name]["state"] = "pending"
+            checklist[stage_name]["error"] = None
+            checklist[stage_name]["invalidated_from"] = previous
+            checklist[stage_name]["invalidation_reason"] = reason
+        self.save()
+        self._write_chunk_status(index)
 
     def save(self) -> None:
         atomic_write_json(self.manifest_path, self.data)
@@ -359,6 +470,18 @@ class CheckpointStore:
     def update_chunk(self, index: int, **changes: Any) -> dict:
         chunk = self.chunk(index)
         chunk.update(changes)
+        if changes.get("status") == "completed" and isinstance(chunk.get("checklist"), dict):
+            rendered = self.chunk_dir(index) / "dubbed.mp4"
+            if rendered.exists() and rendered.stat().st_size > 1024:
+                stage = chunk["checklist"].setdefault(
+                    "video_render", {"state": "pending", "attempts": 0, "error": None},
+                )
+                stage.update({
+                    "state": "success", "error": None,
+                    "output": str(rendered.relative_to(self.root)),
+                    "output_sha256": sha256_file(rendered),
+                    "bytes": rendered.stat().st_size,
+                })
         self.save()
         self._write_chunk_status(index)
         return chunk
@@ -368,7 +491,8 @@ class CheckpointStore:
 
     def completed_file(self, index: int) -> Path | None:
         chunk = self.chunk(index)
-        if chunk.get("status") != "completed":
+        self.ensure_checklists()
+        if not self.stage_valid(index, "video_render"):
             return None
         path = self.chunk_dir(index) / "dubbed.mp4"
         if not path.exists() or path.stat().st_size < 1024:
