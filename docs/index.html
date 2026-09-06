@@ -26,6 +26,7 @@
   <button class="tab active" data-tab="library">المكتبة <span id="countLibrary" class="count">0</span></button>
   <button class="tab" data-tab="dubs">المدبلجة <span id="countDubs" class="count">0</span></button>
   <button class="tab" data-tab="runs">التشغيلات <span id="countRuns" class="count">0</span></button>
+  <button class="tab" data-tab="voices">بنك الأصوات <span id="countVoices" class="count">0</span></button>
   <button class="tab" data-tab="settings">الإعدادات</button>
   <a class="tab link" href="dashboard.html">لوحة المشاريع الذكية ↗</a>
   <a class="tab link" href="voices.html">الأصوات ↗</a>
@@ -86,6 +87,17 @@
       <span id="runsStatus" class="status"></span>
     </div>
     <div id="runsList" class="runs"></div>
+  </section>
+
+  <!-- ============================== بنك الأصوات ============================== -->
+  <section id="tab-voices" class="panel">
+    <div class="card wide">
+      <h2>إضافة عيّنة صوتية</h2>
+      <p class="hint">عيّنة نقية لمتحدث واحد (6–20 ثانية، بلا موسيقى) تُحفَظ في <code>voices/</code> ويمكن اختيارها لأي شخصية من نافذة «الأصوات» في بطاقة الفيديو. لكل فيديو أيضاً عيّناته الخاصة في <code>library/&lt;الاسم&gt;/voices/</code>.</p>
+      <div class="row"><input id="voiceName" placeholder="اسم العيّنة (لاتيني)، مثل narrator-male" dir="ltr"><input id="voiceFile" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg"><button id="voiceUpload" class="btn primary">رفع إلى بنك الأصوات</button></div>
+      <div id="voiceStatus" class="status"></div>
+    </div>
+    <div id="voicesGrid" class="grid"></div>
   </section>
 
   <!-- ============================== الإعدادات ============================== -->

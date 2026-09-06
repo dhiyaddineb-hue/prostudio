@@ -150,3 +150,51 @@ def test_studio_page_controls_the_repository_with_explicit_confirmations():
         assert f"function {fn}" in js
     # the legacy per-project pages are still reachable from the studio
     assert 'href="dashboard.html"' in html and (ROOT / "docs/dashboard.html").exists()
+
+
+def test_studio_voice_map_matches_the_pipeline_profile_contract():
+    """The voices dialog writes library/<slug>/voices.json; the pipeline must read it unchanged."""
+    html = (ROOT / "docs/index.html").read_text(encoding="utf-8")
+    js = (ROOT / "docs/studio.js").read_text(encoding="utf-8")
+    assert 'id="tab-voices"' in html and "function renderVoiceBank" in js and "function uploadVoiceSample" in js
+    # per-video map next to the source; samples live under library/<slug>/voices/ and bank voices under voices/
+    assert "library/${item.slug}/voices.json" in js and "voices/${card.dataset.speaker}${ext}" in js
+    assert "../../voices/${esc(b.name)}" in js and "SPEAKER_00" in js
+    # dubbing passes the map to the official workflow input only when the user opts in
+    assert "speaker_voices_path: item.voicesJson && $('xVoices')?.checked ? `library/${item.slug}/voices.json` : ''" in js
+    # every field the page writes is a field voice_profiles.py understands
+    spec = importlib.util.spec_from_file_location("voice_profiles_under_test", ROOT / "youtube_auto_dub/voice_profiles.py")
+    vp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(vp)
+    known = set(vp.default_profile("SPEAKER_00"))
+    for key in ("reference_mode", "reference_path", "tts_engine", "voice", "voice_conversion", "style", "gender", "approved"):
+        assert f'data-key="{key}"' in js and key in known
+    for mode in vp.REFERENCE_MODES:
+        assert f'value="{mode}"' in js
+    # the page refuses to save an unapproved speaker because load_voice_profiles(require_approval=True) would reject it
+    assert "يجب اعتماد كل متحدث قبل الحفظ" in js
+    # relative reference paths resolve against the voices.json folder, so both layouts the page writes are valid
+    with __import__("tempfile").TemporaryDirectory() as tmp:
+        base = Path(tmp)
+        (base / "library/ep-01/voices").mkdir(parents=True)
+        (base / "voices").mkdir()
+        (base / "library/ep-01/voices/SPEAKER_00.wav").write_bytes(b"RIFF")
+        (base / "voices/narrator.wav").write_bytes(b"RIFF")
+        doc = {"version": 1, "speakers": {
+            "SPEAKER_00": {"speaker": "SPEAKER_00", "reference_mode": "custom", "reference_path": "voices/SPEAKER_00.wav", "approved": True},
+            "SPEAKER_01": {"speaker": "SPEAKER_01", "reference_mode": "custom", "reference_path": "../../voices/narrator.wav", "approved": True},
+        }}
+        (base / "library/ep-01/voices.json").write_text(json.dumps(doc), encoding="utf-8")
+        profiles = vp.load_voice_profiles(base / "library/ep-01/voices.json", ["SPEAKER_00", "SPEAKER_01"], require_approval=True)
+        assert profiles["SPEAKER_00"]["reference_path"].endswith("library/ep-01/voices/SPEAKER_00.wav")
+        assert profiles["SPEAKER_01"]["reference_path"].endswith("voices/narrator.wav")
+
+
+def test_studio_checkpoint_dialog_reads_the_release_manifest_and_deletes_only_with_confirmation():
+    js = (ROOT / "docs/studio.js").read_text(encoding="utf-8")
+    assert "function openCheckpointDialog" in js and "checkpoint-manifest.json" in js
+    assert "tag_name.startsWith('checkpoint-')" in js
+    # per-chunk listening happens from release assets, never by re-running anything
+    assert "function renderAudioCompare" in js
+    # deleting a checkpoint release goes through the typed confirmation like every other deletion
+    assert "confirmTyped" in js.split("function openCheckpointDialog", 1)[1]

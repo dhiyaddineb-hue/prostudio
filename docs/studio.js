@@ -24,6 +24,8 @@ const RAW = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${encodeURICompo
 const WORKFLOW = 'dub.yml';
 const PART_BYTES = 18 * 1024 * 1024;           // measured blob ceiling minus base64 overhead
 const VIDEO_RE = /\.(mp4|mkv|webm|mov)$/i;
+const AUDIO_RE = /\.(wav|mp3|m4a|flac|ogg|aac)$/i;
+const SPEAKER_RE = /^[A-Za-z0-9_.-]+$/;
 const DEFAULTS_KEY = 'prostudio.studio.defaults';
 
 const $ = (id) => document.getElementById(id);
@@ -37,7 +39,7 @@ const state = {
   token: '',
   tree: [], treeEtag: null, treeSha: null,
   blobCache: new Map(),         // blob sha -> parsed json
-  library: [], dubs: [], runs: [],
+  library: [], dubs: [], runs: [], voiceBank: [],
   releases: [], releasesAt: 0,
   manifests: new Map(),         // run id -> {counts,total,state,at}
   filterLibrary: 'all', searchLibrary: '', searchDubs: '',
@@ -157,6 +159,8 @@ async function buildCollections() {
       slug, meta, files, whole, parts, sourcePath,
       size: whole ? whole.size : parts.reduce((a, p) => a + p.size, 0),
       title: meta.title || slug,
+      voicesJson: files.find((f) => f.name === 'voices.json') || null,
+      voiceSamples: files.filter((f) => f.name.startsWith('voices/') && AUDIO_RE.test(f.name)),
     });
   }
   lib.sort((a, b) => String(b.meta.uploaded_at || '').localeCompare(String(a.meta.uploaded_at || '')) || a.slug.localeCompare(b.slug));
@@ -173,6 +177,7 @@ async function buildCollections() {
   }
   dubs.sort((a, b) => String(b.meta.updated_at || '').localeCompare(String(a.meta.updated_at || '')) || a.slug.localeCompare(b.slug));
   state.dubs = dubs;
+  state.voiceBank = state.tree.filter((f) => /^voices\/[^/]+$/.test(f.path) && AUDIO_RE.test(f.path)).map((f) => ({ ...f, name: f.path.slice(7) }));
 }
 
 // ───────────────────────────────────────────── runs (live)
@@ -314,6 +319,8 @@ function renderLibrary() {
         <button class="btn small primary act-dub" ${st.key === 'running' ? 'disabled' : ''}>${st.key === 'dubbed' ? 'دبلجة نسخة جديدة' : 'دبلجة'}</button>
         ${st.key === 'dubbed' ? `<button class="btn small act-godubs">النسخ المدبلجة</button>` : ''}
         ${st.key === 'running' ? `<button class="btn small act-goruns">متابعة</button>` : ''}
+        <button class="btn small act-voices">الأصوات${it.voicesJson ? ' ✓' : ''}</button>
+        <button class="btn small act-checkpoints">نقاط الاستئناف</button>
         <a class="btn small" href="${REPO_URL}/tree/${encodeURIComponent(BRANCH)}/library/${encodeURIComponent(it.slug)}" target="_blank" rel="noreferrer">GitHub</a>
         <button class="btn small danger act-delete">حذف</button>
       </div></div>`;
@@ -321,6 +328,8 @@ function renderLibrary() {
     card.querySelector('.act-dub').addEventListener('click', () => openDubDialog(it));
     card.querySelector('.act-godubs')?.addEventListener('click', () => { $('searchDubs').value = it.slug; state.searchDubs = it.slug; showTab('dubs'); renderDubs(); });
     card.querySelector('.act-goruns')?.addEventListener('click', () => showTab('runs'));
+    card.querySelector('.act-voices').addEventListener('click', () => openVoicesDialog(it));
+    card.querySelector('.act-checkpoints').addEventListener('click', () => openCheckpointDialog(it));
     card.querySelector('.act-delete').addEventListener('click', () => confirmDeleteFolder(`library/${it.slug}/`, it.slug, 'الفيديو الأصلي وكل ملفاته'));
     grid.appendChild(card);
   }
@@ -386,7 +395,7 @@ function statusLabel(run) {
   return { success: 'نجح', failure: 'فشل', cancelled: 'أُلغي', timed_out: 'انتهت المهلة', skipped: 'تُخطّي' }[run.conclusion] || run.conclusion || 'انتهى';
 }
 
-function renderAll() { renderLibrary(); renderDubs(); renderRuns(); $('clockChip').textContent = `آخر تحديث ${new Date().toLocaleTimeString('ar-EG', { hour12: false })}`; }
+function renderAll() { renderLibrary(); renderDubs(); renderRuns(); renderVoiceBank(); $('clockChip').textContent = `آخر تحديث ${new Date().toLocaleTimeString('ar-EG', { hour12: false })}`; }
 
 // ───────────────────────────────────────────── modal helpers
 function openModal(title, bodyHtml) { $('modalTitle').textContent = title; $('modalBody').innerHTML = bodyHtml; $('modal').classList.remove('hidden'); }
@@ -468,7 +477,7 @@ async function dispatchDub(item, overrides = {}) {
     voice: d.voice, tts_engine: d.tts_engine, target_lang: d.target_lang, mode: 'both', gender: d.gender, model: d.model,
     bg_music: String(!!d.bg_music), diarize: String(!!d.diarize), separate_sources: String(!!d.separate_sources), no_vad: 'false',
     seed_vc: String(!!d.seed_vc), lip_sync: 'false', lip_sync_backend: 'wav2lip', profile: d.profile, quality: d.quality,
-    chunk_seconds: String(d.chunk_seconds), speaker_voices_path: '', validate_content: String(!!d.validate_content),
+    chunk_seconds: String(d.chunk_seconds), speaker_voices_path: d.speaker_voices_path || '', validate_content: String(!!d.validate_content),
   };
   await api(`/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW}/dispatches`, { method: 'POST', body: JSON.stringify({ ref: BRANCH, inputs }) });
 }
@@ -482,6 +491,7 @@ function openDubDialog(item) {
       <label>الجنس <select id="xGender"><option value="male" ${d.gender === 'male' ? 'selected' : ''}>ذكر</option><option value="female" ${d.gender === 'female' ? 'selected' : ''}>أنثى</option></select></label>
       <label class="toggle"><input type="checkbox" id="xSeed" ${d.seed_vc ? 'checked' : ''}> Seed-VC</label>
       <label class="toggle"><input type="checkbox" id="xBg" ${d.bg_music ? 'checked' : ''}> موسيقى الخلفية</label>
+      ${item.voicesJson ? `<label class="toggle"><input type="checkbox" id="xVoices" checked> استخدام خريطة الأصوات (voices.json)</label>` : ''}
     </div>
     <p class="hint">باقي الإعدادات من صفحة الإعدادات (المحرك ${esc(d.tts_engine)}، النموذج ${esc(d.model)}، الملف ${esc(d.profile)}). التشغيل يظهر في تبويب التشغيلات خلال ثوانٍ، والنسخة تظهر في «المدبلجة» تلقائياً عند الانتهاء.</p>
     <div class="row"><button id="xGo" class="btn primary">ابدأ الدبلجة</button><button id="xNo" class="btn">إلغاء</button></div><div id="xStatus" class="status"></div></div>`);
@@ -489,11 +499,175 @@ function openDubDialog(item) {
   $('xGo').onclick = async () => {
     $('xGo').disabled = true; setStatus($('xStatus'), 'جارٍ تشغيل الدبلجة في GitHub Actions…', 'info');
     try {
-      await dispatchDub(item, { target_lang: $('xTarget').value.trim() || 'en', quality: $('xQuality').value, gender: $('xGender').value, seed_vc: $('xSeed').checked, bg_music: $('xBg').checked });
+      await dispatchDub(item, { target_lang: $('xTarget').value.trim() || 'en', quality: $('xQuality').value, gender: $('xGender').value, seed_vc: $('xSeed').checked, bg_music: $('xBg').checked,
+        speaker_voices_path: item.voicesJson && $('xVoices')?.checked ? `library/${item.slug}/voices.json` : '' });
       setStatus($('xStatus'), 'انطلق التشغيل. انتقل إلى «التشغيلات» للمتابعة.', 'ok');
       setTimeout(async () => { closeModal(); await refreshRuns(); renderAll(); showTab('runs'); }, 1500);
     } catch (e) { setStatus($('xStatus'), e.message, 'err'); $('xGo').disabled = false; }
   };
+}
+
+// ───────────────────────────────────────────── voices & characters
+const defaultProfile = (speaker) => ({ speaker, label: speaker, reference_mode: 'source', reference_path: '', tts_engine: defaults().tts_engine, voice: '', voice_conversion: defaults().seed_vc ? 'seed-vc' : 'none', style: 'natural', gender: defaults().gender, approved: false });
+
+async function releaseFor(slug) {
+  if (!state.token) return null;
+  if (Date.now() - state.releasesAt > 20000) {
+    state.releases = (await api(`/repos/${OWNER}/${REPO}/releases?per_page=100`)).filter((r) => r.draft && r.tag_name.startsWith('checkpoint-'));
+    state.releasesAt = Date.now();
+  }
+  return state.releases.filter((r) => r.tag_name.startsWith(`checkpoint-${slug}-`)).sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0] || null;
+}
+async function manifestOf(release) {
+  const asset = release?.assets.find((a) => a.name === 'checkpoint-manifest.json');
+  if (!asset) return null;
+  const res = await api(`/repos/${OWNER}/${REPO}/releases/assets/${asset.id}`, { headers: { Accept: 'application/octet-stream' }, raw: true });
+  return res.json();
+}
+function speakerCard(speaker, p, item) {
+  const sel = (v, cur) => (v === cur ? ' selected' : '');
+  const sample = item.voiceSamples.find((f) => f.name.replace(/^voices\//, '').replace(/\.[^.]+$/, '') === speaker);
+  const bank = state.voiceBank.map((b) => `<option value="../../voices/${esc(b.name)}"${sel(`../../voices/${b.name}`, p.reference_path)}>${esc(b.name)}</option>`).join('');
+  return `<article class="character" data-speaker="${esc(speaker)}">
+    <div class="charhead"><h4>${esc(speaker)}</h4><button class="btn small danger act-rmspeaker" title="إزالة من الخريطة">إزالة</button></div>
+    <div class="fields">
+      <label>الاسم الظاهر <input data-key="label" value="${esc(p.label || speaker)}"></label>
+      <label>مصدر الصوت <select data-key="reference_mode"><option value="source"${sel('source', p.reference_mode || 'source')}>من الفيديو نفسه</option><option value="custom"${sel('custom', p.reference_mode)}>عيّنة صوتية مخصّصة</option><option value="synthetic"${sel('synthetic', p.reference_mode)}>صوت اصطناعي جاهز</option></select></label>
+      <label>محرك الصوت <select data-key="tts_engine"><option value="voxcpm"${sel('voxcpm', p.tts_engine || 'voxcpm')}>VoxCPM</option><option value="xtts"${sel('xtts', p.tts_engine)}>XTTS</option><option value="qwen"${sel('qwen', p.tts_engine)}>Qwen</option><option value="edge"${sel('edge', p.tts_engine)}>Edge-TTS</option></select></label>
+      <label>تحويل الهوية <select data-key="voice_conversion"><option value="seed-vc"${sel('seed-vc', p.voice_conversion || 'seed-vc')}>Seed-VC</option><option value="none"${sel('none', p.voice_conversion)}>بدون</option></select></label>
+      <label>الجنس <select data-key="gender"><option value="male"${sel('male', p.gender || 'male')}>ذكر</option><option value="female"${sel('female', p.gender)}>أنثى</option></select></label>
+      <label>الأسلوب <input data-key="style" value="${esc(p.style || 'natural')}"></label>
+      <label>صوت Edge الجاهز (للوضع الاصطناعي) <input data-key="voice" value="${esc(p.voice || '')}" dir="ltr"></label>
+      <label class="wide">مسار العيّنة (نسبةً إلى voices.json) <input data-key="reference_path" value="${esc(p.reference_path || '')}" dir="ltr"></label>
+      <label class="wide">اختيار من بنك الأصوات <select class="bankpick"><option value="">—</option>${bank}</select></label>
+      <label class="wide">رفع عيّنة صوتية لهذا المتحدث (wav/mp3/m4a، 6–20 ثانية كلام نقي) <input type="file" class="samplefile" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg"></label>
+      ${sample ? `<div class="wide"><audio controls preload="none" src="${rawUrl(sample.path)}"></audio><span class="hint mono">${esc(sample.name)}</span></div>` : ''}
+    </div>
+    <label class="toggle"><input type="checkbox" data-key="approved" ${p.approved ? 'checked' : ''}> اعتماد إعداد هذا المتحدث</label>
+  </article>`;
+}
+async function openVoicesDialog(item) {
+  openModal(`الأصوات والشخصيات · ${item.title}`, '<p class="hint">جارٍ القراءة…</p>');
+  const doc = item.voicesJson ? (await blobJson(item.voicesJson.sha)) || {} : {};
+  const profiles = { ...(doc.speakers || {}) };
+  let detected = [];
+  try {
+    const manifest = await manifestOf(await releaseFor(item.slug));
+    detected = Object.keys(manifest?.voice_profiles || {});
+    if (!detected.length && manifest?.chunks) detected = [...new Set(manifest.chunks.map((c) => c.speaker).filter(Boolean))];
+  } catch { /* no checkpoint yet */ }
+  for (const s of detected) if (!profiles[s]) profiles[s] = defaultProfile(s);
+  if (!Object.keys(profiles).length) profiles.SPEAKER_00 = defaultProfile('SPEAKER_00');
+  const render = () => {
+    $('modalBody').innerHTML = `<div class="confirm">
+      <p class="hint">خريطة الأصوات تُحفَظ في <code>library/${esc(item.slug)}/voices.json</code> وتُستخدم عند الدبلجة (خيار في نافذة الدبلجة). المتحدثون المكتشفون من آخر تحليل: ${detected.length ? detected.map(esc).join(', ') : 'لا يوجد تحليل بعد — الافتراضي متحدث واحد SPEAKER_00'}. لا تُضِف متحدثين غير مكتشفين إلا مع تفعيل تمييز المتحدثين، وإلا يرفضهم التشغيل.</p>
+      <div class="character-grid">${Object.entries(profiles).map(([s, p]) => speakerCard(s, p, item)).join('')}</div>
+      <div class="row"><input id="newSpeaker" placeholder="SPEAKER_01" dir="ltr"><button id="addSpeaker" class="btn small">إضافة متحدث</button></div>
+      <div class="row"><button id="saveVoices" class="btn primary">حفظ الخريطة (والعيّنات المرفوعة)</button>${item.voicesJson ? '<button id="deleteVoices" class="btn danger">حذف الخريطة</button>' : ''}<span id="voicesStatus" class="status"></span></div></div>`;
+    $('modalBody').querySelectorAll('.bankpick').forEach((sel) => sel.addEventListener('change', () => { const card = sel.closest('.character'); if (sel.value) { card.querySelector('[data-key=reference_path]').value = sel.value; card.querySelector('[data-key=reference_mode]').value = 'custom'; } }));
+    $('modalBody').querySelectorAll('.samplefile').forEach((inp) => inp.addEventListener('change', () => { const card = inp.closest('.character'); if (inp.files[0]) { const ext = (inp.files[0].name.match(/\.[^.]+$/) || ['.wav'])[0].toLowerCase(); card.querySelector('[data-key=reference_path]').value = `voices/${card.dataset.speaker}${ext}`; card.querySelector('[data-key=reference_mode]').value = 'custom'; } }));
+    $('modalBody').querySelectorAll('.act-rmspeaker').forEach((b) => b.addEventListener('click', () => { delete profiles[b.closest('.character').dataset.speaker]; render(); }));
+    $('addSpeaker').onclick = () => { const s = $('newSpeaker').value.trim(); if (!SPEAKER_RE.test(s)) return setStatus($('voicesStatus'), 'معرّف المتحدث: أحرف لاتينية وأرقام و _ . - فقط', 'err'); profiles[s] = defaultProfile(s); render(); };
+    $('deleteVoices')?.addEventListener('click', () => confirmTyped({ title: 'حذف خريطة الأصوات', message: `سيُحذف voices.json وكل العيّنات في library/${esc(item.slug)}/voices/.`, expect: item.slug, onConfirm: () => commitChanges({ message: `Remove voice map of ${item.slug} (confirmed in the studio)`, deletions: [item.voicesJson.path, ...item.voiceSamples.map((f) => f.path)] }) }));
+    $('saveVoices').onclick = async () => {
+      const status = $('voicesStatus'); $('saveVoices').disabled = true;
+      try {
+        needToken();
+        const speakers = {}; const additions = [];
+        for (const card of $('modalBody').querySelectorAll('.character')) {
+          const s = card.dataset.speaker; const data = { speaker: s };
+          for (const el of card.querySelectorAll('[data-key]')) data[el.dataset.key] = el.type === 'checkbox' ? el.checked : el.value.trim();
+          const file = card.querySelector('.samplefile').files[0];
+          if (file) {
+            if (file.size > PART_BYTES) throw new Error(`عيّنة ${s} أكبر من 18 MB — قصّها أولاً`);
+            setStatus(status, `رفع عيّنة ${s}…`, 'info');
+            additions.push({ path: `library/${item.slug}/${data.reference_path}`, sha: await createBlob(await toBase64(file), 'base64') });
+          }
+          if (data.reference_mode === 'custom' && !data.reference_path) throw new Error(`${s}: العيّنة المخصّصة تحتاج مساراً أو ملفاً`);
+          if (data.reference_mode === 'synthetic' && data.tts_engine === 'edge' && !data.voice) throw new Error(`${s}: الصوت الاصطناعي عبر Edge يحتاج اسم صوت`);
+          if (!data.approved) throw new Error(`${s}: يجب اعتماد كل متحدث قبل الحفظ — التشغيل يرفض خريطة غير معتمدة`);
+          speakers[s] = data;
+        }
+        additions.push({ path: `library/${item.slug}/voices.json`, sha: await createBlob(JSON.stringify({ version: 1, updated_at: new Date().toISOString(), speakers }, null, 2) + '\n', 'utf-8') });
+        setStatus(status, 'حفظ في المستودع…', 'info');
+        await commitChanges({ message: `Voice map for ${item.slug}: ${Object.keys(speakers).join(', ')}`, additions });
+        setStatus(status, 'تم الحفظ. عند الدبلجة فعّل «استخدام خريطة الأصوات».', 'ok');
+        await fullRefresh(true);
+      } catch (e) { setStatus(status, e.message, 'err'); } finally { $('saveVoices').disabled = false; }
+    };
+  };
+  render();
+}
+
+// ───────────────────────────────────────────── checkpoints (stages + audio comparisons)
+const STAGE_ORDER = ['analysis', 'translation', 'tts', 'seed_vc', 'timing_fit', 'content_validation', 'audio_mix', 'video_render', 'checkpoint_upload'];
+const STAGE_LABEL = { analysis: 'التحليل', translation: 'الترجمة', tts: 'الصوت', seed_vc: 'Seed-VC', timing_fit: 'التوقيت', content_validation: 'الكلمات', audio_mix: 'المزج', video_render: 'الرندر', checkpoint_upload: 'الرفع' };
+async function openCheckpointDialog(item) {
+  openModal(`نقاط الاستئناف · ${item.title}`, '<p class="hint">جارٍ القراءة من الإصدار المسودّ…</p>');
+  try {
+    needToken();
+    const release = await releaseFor(item.slug);
+    if (!release) { $('modalBody').innerHTML = '<p class="hint">لا توجد نقاط استئناف لهذا الفيديو (لم يبدأ تشغيل بعد أو حُذفت).</p>'; return; }
+    const manifest = (await manifestOf(release)) || { chunks: [] };
+    const chunks = manifest.chunks || [];
+    const counts = {}; for (const c of chunks) counts[c.status || 'pending'] = (counts[c.status || 'pending'] || 0) + 1;
+    const size = release.assets.reduce((a, x) => a + x.size, 0);
+    const sym = { success: '✓', failed: '✗', pending: '…', skipped: '—' };
+    const rows = chunks.map((c) => `<tr><td class="mono">${String(c.index).padStart(4, '0')}</td><td class="mono">${fmtDur(+c.start)}–${fmtDur(+c.end)}</td><td class="mono">${esc(c.status || 'pending')}</td>${STAGE_ORDER.map((s) => { const st = c.checklist?.[s]?.state || 'pending'; return `<td class="stage-${st}" title="${esc(c.checklist?.[s]?.error || '')}">${sym[st] || st}</td>`; }).join('')}<td><button class="btn small act-audio" data-index="${c.index}">صوت</button></td></tr>`).join('');
+    $('modalBody').innerHTML = `<div class="kv"><b>الإصدار</b><span class="mono">${esc(release.tag_name)}</span><b>الحالة</b><span class="mono">${esc(manifest.state || '')}</span><b>المقاطع</b><span>${counts.completed || 0}/${chunks.length} مكتمل${counts.failed ? ` · ${counts.failed} فاشل` : ''}</span><b>الحجم</b><span>${formatMB(size)} MB · ${release.assets.length} ملف</span><b>Seed-VC</b><span>${manifest.seed_quota_fallback?.active ? 'تراجع إلى VoxCPM (الحصة نفدت)' : 'مفعّل'}</span><b>الترجمة</b><span class="mono">${esc(manifest.translation?.engine || 'google')}${manifest.translation?.model ? ' · ' + esc(manifest.translation.model) : ''}</span></div>
+      <div class="tablewrap" style="margin-top:10px"><table class="segs stage-table"><thead><tr><th>#</th><th>الزمن</th><th>الحالة</th>${STAGE_ORDER.map((s) => `<th>${STAGE_LABEL[s]}</th>`).join('')}<th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div id="audioCompare" class="compare-audio"></div>
+      <div class="row" style="margin-top:10px"><button id="delCheckpoints" class="btn danger">حذف نقاط الاستئناف (الإصدار)</button><span class="hint">الحذف لا يمسّ الفيديو ولا النسخ المدبلجة المنشورة؛ يعيد الدبلجة القادمة من الصفر.</span></div>`;
+    $('modalBody').querySelectorAll('.act-audio').forEach((b) => b.addEventListener('click', () => renderAudioCompare(release, +b.dataset.index)));
+    $('delCheckpoints').onclick = () => confirmTyped({
+      title: 'حذف نقاط الاستئناف', message: `سيُحذف الإصدار المسودّ ${esc(release.tag_name)} (${formatMB(size)} MB).`, expect: item.slug,
+      onConfirm: async () => { await api(`/repos/${OWNER}/${REPO}/releases/${release.id}`, { method: 'DELETE' }); state.releasesAt = 0; },
+    });
+  } catch (e) { $('modalBody').innerHTML = `<p class="status err">${esc(e.message)}</p>`; }
+}
+async function renderAudioCompare(release, index) {
+  const box = $('audioCompare'); if (!box) return;
+  const labels = { original: 'الأصل', before_seed_vc: 'قبل Seed-VC', after_seed_vc: 'بعد Seed-VC', final: 'النهائي' };
+  const prefix = `chunk-${String(index).padStart(4, '0')}-preview-`;
+  const assets = release.assets.filter((a) => a.name.startsWith(prefix) && a.name.endsWith('.mp3'));
+  if (!assets.length) { box.innerHTML = `<p class="hint">لا معاينات صوتية للمقطع ${index}.</p>`; return; }
+  box.innerHTML = `<h4>المقطع ${index}</h4><div class="row" id="audioSlots">${assets.map((a) => `<div class="audio-slot" data-id="${a.id}"><span class="hint">${esc(labels[a.name.slice(prefix.length, -4)] || a.name)}</span><br><button class="btn small">تشغيل</button></div>`).join('')}</div>`;
+  box.querySelectorAll('.audio-slot button').forEach((b) => b.addEventListener('click', async () => {
+    const slot = b.parentElement; b.disabled = true;
+    try { const res = await api(`/repos/${OWNER}/${REPO}/releases/assets/${slot.dataset.id}`, { headers: { Accept: 'application/octet-stream' }, raw: true }); const blob = await res.blob(); const audio = document.createElement('audio'); audio.controls = true; audio.autoplay = true; audio.src = URL.createObjectURL(blob); b.replaceWith(audio); }
+    catch (e) { b.disabled = false; b.textContent = e.message; }
+  }));
+}
+
+// ───────────────────────────────────────────── voice bank
+function renderVoiceBank() {
+  const grid = $('voicesGrid'); if (!grid) return;
+  $('countVoices').textContent = state.voiceBank.length;
+  if (!state.voiceBank.length) { grid.innerHTML = `<div class="empty">${state.loaded ? 'بنك الأصوات فارغ — ارفع عيّنة صوتية (6–20 ثانية كلام نقي لمتحدث واحد).' : 'جارٍ التحميل…'}</div>`; return; }
+  grid.innerHTML = '';
+  for (const v of state.voiceBank) {
+    const card = document.createElement('article'); card.className = 'card';
+    card.innerHTML = `<div class="body"><h3 class="mono">${esc(v.name)}</h3><audio controls preload="none" src="${rawUrl(v.path)}"></audio><div class="meta"><span>${formatMB(v.size)} MB</span><span class="mono">voices/${esc(v.name)}</span></div>
+      <div class="buttons"><a class="btn small" href="${rawUrl(v.path)}" download>تحميل</a><button class="btn small danger act-del">حذف</button></div></div>`;
+    card.querySelector('.act-del').addEventListener('click', () => confirmTyped({ title: `حذف العيّنة ${v.name}`, message: 'ستُحذف من بنك الأصوات؛ خرائط الأصوات التي تشير إليها ستفشل حتى تُعدَّل.', expect: v.name, onConfirm: () => commitChanges({ message: `Remove voice sample ${v.name} (confirmed in the studio)`, deletions: [v.path] }) }));
+    grid.appendChild(card);
+  }
+}
+async function uploadVoiceSample() {
+  const status = $('voiceStatus'); const file = $('voiceFile').files[0];
+  if (!file) return setStatus(status, 'اختر ملفاً صوتياً أولاً', 'err');
+  try { needToken(); } catch (e) { return setStatus(status, e.message, 'err'); }
+  if (file.size > PART_BYTES) return setStatus(status, 'العيّنة أكبر من 18 MB — قصّها إلى 20 ثانية تقريباً', 'err');
+  const ext = (file.name.match(/\.[^.]+$/) || ['.wav'])[0].toLowerCase();
+  const name = (slugify($('voiceName').value || file.name) || 'voice') + ext;
+  $('voiceUpload').disabled = true;
+  try {
+    setStatus(status, 'رفع العيّنة…', 'info');
+    const sha = await createBlob(await toBase64(file), 'base64');
+    await commitChanges({ message: `Add voice sample ${name} to the voice bank`, additions: [{ path: `voices/${name}`, sha }] });
+    setStatus(status, `تمت الإضافة: voices/${name}`, 'ok'); $('voiceFile').value = ''; $('voiceName').value = '';
+    await fullRefresh(true);
+  } catch (e) { setStatus(status, e.message, 'err'); } finally { $('voiceUpload').disabled = false; }
 }
 
 // ───────────────────────────────────────────── upload
@@ -609,7 +783,8 @@ function init() {
   fillDefaultsForm(defaults());
 
   document.querySelectorAll('.tab[data-tab]').forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
-  const initial = location.hash.replace('#', ''); if (['library', 'dubs', 'runs', 'settings'].includes(initial)) showTab(initial);
+  const initial = location.hash.replace('#', ''); if (['library', 'dubs', 'runs', 'voices', 'settings'].includes(initial)) showTab(initial);
+  $('voiceUpload').onclick = uploadVoiceSample;
   $('modalClose').onclick = closeModal; $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });
   $('refreshNow').onclick = () => fullRefresh(true);
   $('autoRefresh').onchange = schedule;

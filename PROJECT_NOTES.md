@@ -410,3 +410,13 @@ projects/<اسم>/
   الأصل/الترجمة، تصدير SRT للهدف والمصدر)؛ شبكة حالة المقاطع لكل تشغيل نشط؛ رسائل تحميل/قراءة فقط أوضح. اختُبرت الصفحة في jsdom
   بمحاكاة GitHub API (بطاقات، تشغيل، حذف بتأكيد، تفاصيل، يوتيوب) بلا أخطاء. القيمة الافتراضية لـ source_path صارت
   `library/prostudio-arabic-demo/source.mp4`.
+- جولة 3 (عيّنات صوتية + كل الإضافات): نافذة «الأصوات والشخصيات» لكل فيديو تكتب `library/<slug>/voices.json` بنفس عقد
+  `youtube_auto_dub/voice_profiles.py` (reference_mode/reference_path/tts_engine/voice/voice_conversion/style/gender/approved) وترفع عيّنة كل
+  متحدث إلى `library/<slug>/voices/<SPEAKER>.<ext>` (مسار نسبي يُحل من مجلد voices.json) أو تختار صوتاً من البنك العام `voices/` عبر
+  `../../voices/<اسم>`؛ الحفظ يرفض متحدثاً غير معتمَد لأن التشغيل يستعمل `require_approval=True` مع `--speaker-voices`. المتحدثون
+  المكتشفون تُقرأ من manifest آخر نقطة استئناف (`voice_profiles` أو `chunks[].speaker`)، والافتراضي بدون تمييز هو `SPEAKER_00` فقط
+  (إضافة متحدث غير مكتشف تُرفض من `load_voice_profiles`). نافذة الدبلجة فيها خيار «استخدام خريطة الأصوات» يمرّر
+  `speaker_voices_path=library/<slug>/voices.json`. تبويب «بنك الأصوات» (رفع/حذف في `voices/`). نافذة «نقاط الاستئناف» لكل فيديو:
+  جدول مراحل كل مقطع من manifest إصدار المسودة، استماع لكل مقطع (الأصل/قبل التحويل/بعد التحويل/النهائي من أصول الإصدار)، وحذف
+  الإصدار بكتابة اسمه. الاختبارات: `tests/test_studio_library.py` (8) بما فيها اختبار يحمّل `voices.json` مكتوباً بصيغة الصفحة عبر
+  `load_voice_profiles` فعلاً.

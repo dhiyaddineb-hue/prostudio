@@ -87,3 +87,15 @@ table.segs th{position:sticky;top:0;background:#f8fafc}
 .chunkgrid .ck{width:10px;height:10px;border-radius:2px;background:#e2e8f0;display:inline-block}
 .ck.completed{background:var(--ok)}.ck.processing,.ck.voice_generated,.ck.seed_vc_processing,.ck.seed_vc_generated,.ck.translated,.ck.content_validated,.ck.delivery_fitted,.ck.seed_vc_completed,.ck.content_retry{background:var(--info)}.ck.failed{background:var(--danger)}.ck.non_speech{background:#94a3b8}
 @media (max-width:820px){.compare{grid-template-columns:1fr}}
+
+.character-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.character{border:1px solid var(--line);border-radius:12px;padding:12px;background:#fafbfc;display:flex;flex-direction:column;gap:8px}
+.charhead{display:flex;justify-content:space-between;align-items:center}.charhead h4{margin:0;font-family:ui-monospace,monospace}
+.character .fields{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.character .fields label{display:flex;flex-direction:column;gap:3px;font-size:.85rem;color:var(--muted)}
+.character .fields .wide{grid-column:1/-1}
+.character audio{width:100%}
+table.stage-table td.stage-success{color:var(--ok);text-align:center}table.stage-table td.stage-failed{color:var(--danger);text-align:center;font-weight:700}table.stage-table td.stage-pending{color:var(--muted);text-align:center}table.stage-table td.stage-skipped{color:#94a3b8;text-align:center}
+.compare-audio{margin-top:10px}.compare-audio h4{margin:6px 0}
+.audio-slot{border:1px solid var(--line);border-radius:10px;padding:8px;min-width:150px;text-align:center}
+.audio-slot audio{width:220px}
