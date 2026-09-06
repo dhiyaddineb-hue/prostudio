@@ -1,0 +1,64 @@
+name: Translation API preflight
+
+# Proves the configured translation API (secret TRANSLATE_API_KEY + the
+# TRANSLATE_* repository variables) from inside GitHub in about a minute,
+# without touching any dubbing project, checkpoint, or release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_lang:
+        description: "source language code of the sample sentence"
+        required: false
+        default: "ar"
+      target_lang:
+        description: "target language code"
+        required: false
+        default: "en"
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out this branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install the translator's dependency
+        run: python -m pip install --quiet httpx
+
+      - name: Translate one sentence with the configured API
+        env:
+          TRANSLATE_API_KEY: ${{ secrets.TRANSLATE_API_KEY }}
+          TRANSLATE_PROVIDER: ${{ vars.TRANSLATE_PROVIDER }}
+          TRANSLATE_API_BASE: ${{ vars.TRANSLATE_API_BASE }}
+          TRANSLATE_MODEL: ${{ vars.TRANSLATE_MODEL }}
+          TRANSLATE_STYLE: ${{ vars.TRANSLATE_STYLE }}
+          TRANSLATE_GLOSSARY: ${{ vars.TRANSLATE_GLOSSARY }}
+          TRANSLATE_FALLBACK: ${{ vars.TRANSLATE_FALLBACK }}
+          TRANSLATE_EXTRA_HEADERS: ${{ vars.TRANSLATE_EXTRA_HEADERS }}
+          TRANSLATE_MAX_TOKENS: ${{ vars.TRANSLATE_MAX_TOKENS }}
+          TRANSLATE_JSON_MODE: ${{ vars.TRANSLATE_JSON_MODE }}
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          python -m youtube_auto_dub.llm_translate --preflight \
+            --source-lang "${{ inputs.source_lang }}" --target-lang "${{ inputs.target_lang }}" \
+            --report output/translation-preflight.json
+
+      - name: Upload the preflight report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: translation-preflight-${{ github.run_id }}
+          path: output/translation-preflight.json
+          if-no-files-found: warn
+          retention-days: 14
