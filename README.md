@@ -194,7 +194,7 @@ lip_sync/ · config/ مزامنة الشفاه (اختياري) وملفات ا�
 docs/               موقع GitHub Pages: الاستوديو (index.html + studio.js)، الأدلة (guides/)، أبحاث (research/)
 library/            الفيديوهات المرفوعة: مجلد لكل فيديو (source.mp4 أو أجزاء .partNNofMM + meta.json)
 dubs/               الفيديوهات المدبلجة: مجلد لكل فيديو، نسخة لكل تشغيل + تقارير + meta.json
-samples/            عيّنتان صغيرتان فقط للتجربة (ProStudio_Arabic_Demo.mp4 و shorts-test.mp4) + أصوات الاستوديو
+samples/voices/     أصوات الاستوديو المعتمدة فقط (العيّنتان انتقلتا إلى library/)
 projects/           مشاريع الاستنساخ (clone) فقط، تُنشأ يدوياً
 inbox/              رفعات مؤقتة — لا تُحفَظ في git
 ```

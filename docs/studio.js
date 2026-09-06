@@ -41,7 +41,7 @@ const state = {
   releases: [], releasesAt: 0,
   manifests: new Map(),         // run id -> {counts,total,state,at}
   filterLibrary: 'all', searchLibrary: '', searchDubs: '',
-  polling: null, busy: false,
+  polling: null, busy: false, loaded: false,
 };
 
 // ───────────────────────────────────────────── API
@@ -221,10 +221,59 @@ async function enrichActiveRun(run) {
     const manifest = await res.json();
     const counts = {};
     for (const c of manifest.chunks || []) counts[c.status || 'pending'] = (counts[c.status || 'pending'] || 0) + 1;
-    const progress = { counts, total: (manifest.chunks || []).length, state: manifest.state, assetUpdated: asset.updated_at, tag: release.tag_name };
+    const progress = { counts, total: (manifest.chunks || []).length, state: manifest.state, assetUpdated: asset.updated_at, tag: release.tag_name,
+      chunks: (manifest.chunks || []).map((c) => ({ index: c.index, status: c.status || 'pending' })) };
     state.manifests.set(run.id, progress);
     run._progress = progress;
   } catch { /* progress is a bonus; the step name is still shown */ }
+}
+
+// ───────────────────────────────────────────── reports, subtitles, details
+const srtTime = (s) => { const ms = Math.round(s * 1000); const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000), sec = Math.floor((ms % 60000) / 1000), r = ms % 1000; return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')},${String(r).padStart(3, '0')}`; };
+function segmentsToSrt(segments, field) {
+  return segments.filter((s) => String(s[field] || '').trim()).map((s, i) => `${i + 1}\n${srtTime(+s.start)} --> ${srtTime(+s.end)}\n${String(s[field]).trim()}\n`).join('\n');
+}
+function downloadText(name, text) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+async function openDubDetails(dub, version) {
+  const base = version.file.replace(/\.mp4$/i, '');
+  const find = (suffix) => dub.files.find((f) => f.name === `${base}.${suffix}.json`);
+  openModal(`${dub.slug} · ${version.file}`, '<p class="hint">جارٍ قراءة التقارير…</p>');
+  const [quality, segments, language] = await Promise.all(['quality', 'segments', 'language'].map((s) => { const f = find(s); return f ? blobJson(f.sha) : Promise.resolve(null); }));
+  const lib = state.library.find((it) => it.slug === dub.slug);
+  const segs = segments?.segments || [];
+  const checks = quality?.checks ? Object.entries(quality.checks).map(([k, v]) => `<span class="chip ${v ? 'ok' : 'err'}">${esc(k)}</span>`).join('') : '<span class="chip muted">لا تقرير</span>';
+  const players = `<div class="compare"><div><h4>الأصل${lib?.whole ? '' : ' (غير متاح للمعاينة)'}</h4>${lib?.whole ? `<video controls preload="metadata" src="${rawUrl(lib.whole.path)}"></video>` : ''}</div><div><h4>المدبلج</h4><video controls preload="metadata" src="${rawUrl(`dubs/${dub.slug}/${version.file}`)}"></video></div></div>`;
+  const rows = segs.slice(0, 400).map((s) => `<tr><td class="mono">${fmtDur(+s.start)}</td><td dir="auto">${esc(s.source_text || '')}</td><td dir="auto">${esc(s.translated_text || '')}</td></tr>`).join('');
+  const lang = language ? `<span class="chip ${language.valid ? 'ok' : 'err'}">اللغة ${esc(language.detected || language.language || '')} ${language.confidence ? Math.round(language.confidence * 100) + '%' : ''}</span>` : '';
+  const cov = segments?.asr_timeline?.uncovered_speech;
+  const covChip = cov?.measured ? `<span class="chip ${cov.longest_after_seconds > 1 ? 'warn' : 'ok'}">كلام غير مفرَّغ: ${cov.after_seconds}s</span>` : '';
+  $('modalBody').innerHTML = `${players}
+    <div class="chips" style="margin:10px 0">${checks}${lang}${covChip}${segments?.translation?.engine ? `<span class="chip muted">${esc(segments.translation.engine)}</span>` : ''}</div>
+    <div class="kv"><b>التشغيل</b><a href="${REPO_URL}/actions/runs/${esc(version.run_id || '')}" target="_blank" rel="noreferrer">#${esc(version.run_id || '')}</a><b>المدة</b><span>${fmtDur(version.duration)}</span><b>الحجم</b><span>${version.size ? formatMB(version.size) + ' MB' : '—'}</span><b>الإعدادات</b><span class="mono">${esc(Object.entries(version.settings || {}).map(([k, v]) => `${k}=${v}`).join(' '))}</span></div>
+    <div class="row" style="margin:10px 0"><button class="btn small" id="srtTarget" ${segs.length ? '' : 'disabled'}>تحميل ترجمة SRT (الهدف)</button><button class="btn small" id="srtSource" ${segs.length ? '' : 'disabled'}>تحميل نص الأصل SRT</button><a class="btn small" href="${rawUrl(`dubs/${dub.slug}/${version.file}`)}" download>تحميل الفيديو</a></div>
+    ${segs.length ? `<div class="tablewrap"><table class="segs"><thead><tr><th>الوقت</th><th>الأصل</th><th>الترجمة</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="hint">لا يوجد تقرير مقاطع لهذه النسخة.</p>'}`;
+  $('srtTarget')?.addEventListener('click', () => downloadText(`${dub.slug}-${version.run_id || 'dub'}.${segments?.target_language || 'target'}.srt`, segmentsToSrt(segs, 'translated_text')));
+  $('srtSource')?.addEventListener('click', () => downloadText(`${dub.slug}-${version.run_id || 'dub'}.${segments?.source_language || 'source'}.srt`, segmentsToSrt(segs, 'source_text')));
+}
+async function dispatchYoutube(url) {
+  needToken();
+  if (!/^https?:\/\/(www\.|m\.)?(youtube\.com|youtu\.be)\//i.test(url)) throw new Error('أدخل رابط يوتيوب صالحاً');
+  const d = defaults();
+  const inputs = {
+    task: 'dub', source_path: '', youtube_url: url, source_lang: $('ytLang').value.trim() || 'ar',
+    voice: d.voice, tts_engine: d.tts_engine, target_lang: d.target_lang, mode: 'both', gender: d.gender, model: d.model,
+    bg_music: String(!!d.bg_music), diarize: String(!!d.diarize), separate_sources: String(!!d.separate_sources), no_vad: 'false',
+    seed_vc: String(!!d.seed_vc), lip_sync: 'false', lip_sync_backend: 'wav2lip', profile: d.profile, quality: d.quality,
+    chunk_seconds: String(d.chunk_seconds), speaker_voices_path: '', validate_content: String(!!d.validate_content),
+  };
+  await api(`/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW}/dispatches`, { method: 'POST', body: JSON.stringify({ ref: BRANCH, inputs }) });
+}
+function chunkGrid(progress) {
+  if (!progress?.chunks?.length) return '';
+  return `<div class="chunkgrid" title="حالة كل مقطع">${progress.chunks.map((c) => `<i class="ck ${esc(c.status || 'pending')}" title="#${c.index} ${esc(c.status || 'pending')}"></i>`).join('')}</div>`;
 }
 
 // ───────────────────────────────────────────── rendering
@@ -245,8 +294,9 @@ function renderLibrary() {
     return !q || it.slug.toLowerCase().includes(q) || String(it.title).toLowerCase().includes(q);
   });
   $('countLibrary').textContent = state.library.length;
-  if (!items.length) { grid.innerHTML = `<div class="empty">${state.library.length ? 'لا نتائج مطابقة.' : 'المكتبة فارغة — ارفع أول فيديو من الأعلى.'}</div>`; return; }
-  grid.innerHTML = '';
+  const banner = state.token ? '' : '<div class="empty warn">الصفحة في وضع القراءة فقط. أدخل رمز GitHub في «الإعدادات» لتفعيل الرفع والدبلجة والحذف والمتابعة التفصيلية.</div>';
+  if (!items.length) { grid.innerHTML = `${banner}<div class="empty">${state.library.length ? 'لا نتائج مطابقة.' : (state.loaded ? 'المكتبة فارغة — ارفع أول فيديو من الأعلى أو أدخل رابط يوتيوب.' : 'جارٍ تحميل المكتبة…')}</div>`; return; }
+  grid.innerHTML = banner;
   for (const it of items) {
     const st = libraryStatusFor(it);
     const card = document.createElement('article'); card.className = 'card';
@@ -281,7 +331,7 @@ function renderDubs() {
   const q = state.searchDubs.trim().toLowerCase();
   const items = state.dubs.filter((d) => !q || d.slug.toLowerCase().includes(q));
   $('countDubs').textContent = state.dubs.length;
-  if (!items.length) { grid.innerHTML = `<div class="empty">${state.dubs.length ? 'لا نتائج مطابقة.' : 'لا توجد دبلجة منشورة بعد. عند اكتمال أي تشغيل تظهر نسخته هنا تلقائياً.'}</div>`; return; }
+  if (!items.length) { grid.innerHTML = `<div class="empty">${state.dubs.length ? 'لا نتائج مطابقة.' : (state.loaded ? 'لا توجد دبلجة منشورة بعد. عند اكتمال أي تشغيل تظهر نسخته هنا تلقائياً.' : 'جارٍ التحميل…')}</div>`; return; }
   grid.innerHTML = '';
   for (const d of items) {
     const latest = d.latest;
@@ -293,6 +343,7 @@ function renderDubs() {
       <div class="chips">${latest?.quality_ok === true ? '<span class="chip ok">اجتاز بوابة الجودة</span>' : latest?.quality_ok === false ? '<span class="chip err">فشل بوابة الجودة</span>' : ''}${latest?.language?.valid ? `<span class="chip ok">اللغة ${esc(latest.language.detected || '')}</span>` : ''}${latest?.translation_engine ? `<span class="chip muted">${esc(latest.translation_engine)}</span>` : ''}</div>
       <ul class="versions">${d.versions.map((v) => `<li><span class="mono">${esc(v.file)}</span><span>${v.size ? formatMB(v.size) + ' MB' : ''}</span><span class="muted">${fmtDate(v.published_at)}</span>
         <button class="btn small act-play" data-file="${esc(v.file)}">معاينة</button>
+        <button class="btn small act-details" data-file="${esc(v.file)}">التفاصيل والترجمة</button>
         <a class="btn small" href="${rawUrl(`dubs/${d.slug}/${v.file}`)}" download>تحميل</a>
         ${v.run_id ? `<a class="btn small" href="${REPO_URL}/actions/runs/${esc(v.run_id)}" target="_blank" rel="noreferrer">السجل</a>` : ''}
         <button class="btn small danger act-delver" data-file="${esc(v.file)}">حذف النسخة</button></li>`).join('')}</ul>
@@ -302,6 +353,7 @@ function renderDubs() {
       </div></div>`;
     card.querySelectorAll('.act-play').forEach((b) => b.addEventListener('click', () => openPlayer(`${d.slug} · ${b.dataset.file}`, rawUrl(`dubs/${d.slug}/${b.dataset.file}`))));
     card.querySelectorAll('.act-delver').forEach((b) => b.addEventListener('click', () => confirmDeleteVersion(d, b.dataset.file)));
+    card.querySelectorAll('.act-details').forEach((b) => b.addEventListener('click', () => openDubDetails(d, d.versions.find((v) => v.file === b.dataset.file) || { file: b.dataset.file })));
     card.querySelector('.act-delete').addEventListener('click', () => confirmDeleteFolder(`dubs/${d.slug}/`, d.slug, 'كل النسخ المدبلجة لهذا الفيديو'));
     grid.appendChild(card);
   }
@@ -311,7 +363,7 @@ function renderRuns() {
   const list = $('runsList');
   const active = state.runs.filter(isActive).length;
   $('countRuns').textContent = active ? `${active} نشط` : state.runs.length;
-  if (!state.runs.length) { list.innerHTML = '<div class="empty">لا توجد تشغيلات بعد.</div>'; return; }
+  if (!state.runs.length) { list.innerHTML = `<div class="empty">${state.loaded ? 'لا توجد تشغيلات بعد.' : 'جارٍ التحميل…'}</div>`; return; }
   list.innerHTML = '';
   for (const run of state.runs) {
     const cls = run.status === 'completed' ? (run.conclusion || 'completed') : run.status;
@@ -319,7 +371,7 @@ function renderRuns() {
     const elapsed = Math.max(0, ((run.status === 'completed' ? new Date(run.updated_at) : new Date()) - new Date(started)) / 1000);
     const prog = run._progress;
     const bar = prog && prog.total ? `<div class="progress" title="${prog.counts.completed || 0}/${prog.total} مقطع مكتمل"><span style="width:${Math.round(((prog.counts.completed || 0) * 100) / prog.total)}%"></span></div>
-      <div class="sub">${prog.counts.completed || 0}/${prog.total} مقطع مكتمل${prog.counts.failed ? ` · ${prog.counts.failed} فاشل` : ''}${prog.counts.processing ? ` · ${prog.counts.processing} قيد المعالجة` : ''} · <span class="mono">${esc(prog.state || '')}</span></div>` : '';
+      <div class="sub">${prog.counts.completed || 0}/${prog.total} مقطع مكتمل${prog.counts.failed ? ` · ${prog.counts.failed} فاشل` : ''}${prog.counts.processing ? ` · ${prog.counts.processing} قيد المعالجة` : ''} · <span class="mono">${esc(prog.state || '')}</span></div>${chunkGrid(prog)}` : '';
     const row = document.createElement('div'); row.className = `run ${cls}`;
     row.innerHTML = `<div class="dot"></div><div>
       <div class="title">${esc(runSource(run) || run.display_title)} <span class="sub">· #${run.run_number}</span></div>
@@ -517,6 +569,7 @@ async function fullRefresh(force = false) {
   if (state.busy) return; state.busy = true;
   try {
     const [changed] = await Promise.all([refreshTree(force), refreshRuns()]);
+    state.loaded = true;
     if (changed || force) setStatus($('libraryStatus'), `${state.library.length} فيديو في المكتبة · ${state.dubs.length} مدبلج`, 'ok');
     renderAll();
     setStatus($('runsStatus'), `${state.runs.filter(isActive).length} تشغيل نشط من ${state.runs.length}`, 'ok');
@@ -571,6 +624,11 @@ function init() {
   drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) { chosen = e.dataTransfer.files[0]; showFile(); } };
   file.onchange = () => { chosen = file.files[0]; showFile(); };
   $('uploadBtn').onclick = uploadChosen;
+  $('ytGo').onclick = async () => {
+    const status = $('ytStatus'); $('ytGo').disabled = true; setStatus(status, 'جارٍ تشغيل الدبلجة من الرابط…', 'info');
+    try { await dispatchYoutube($('ytUrl').value.trim()); setStatus(status, 'انطلق التشغيل — تابعه في «التشغيلات»؛ الفيديو المدبلج سيظهر في «المدبلجة» باسم مأخوذ من الملف.', 'ok'); $('ytUrl').value = ''; setTimeout(async () => { await refreshRuns(); renderAll(); }, 4000); }
+    catch (e) { setStatus(status, e.message, 'err'); } finally { $('ytGo').disabled = false; }
+  };
 
   $('checkToken').onclick = async () => {
     const t = $('token').value.trim(); if (!t) return setStatus($('tokenStatus'), 'أدخل الرمز أولاً', 'err');

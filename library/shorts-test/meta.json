@@ -1,0 +1,17 @@
+{
+  "slug": "shorts-test",
+  "title": "مقطع الاختبار القصير (33 ث)",
+  "original_name": "_shorts.mp4",
+  "size": 974416,
+  "sha256": "4a99eab1c1b49dc0c5dd2798111a192bd791853fe639e18cf41c52029f4fcb61",
+  "duration": 33.2,
+  "width": 240,
+  "height": 426,
+  "parts": 1,
+  "source": "library/shorts-test/source.mp4",
+  "source_lang": "ar",
+  "uploaded_at": "2026-09-06T14:06:30+00:00",
+  "status": "uploaded",
+  "uploaded_with": "migration",
+  "note": "اختُبرت عليه إصلاحات التوقيت واستعادة الكلام غير المفرَّغ (التشغيلات #155–#157)"
+}

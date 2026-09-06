@@ -5,7 +5,7 @@ on:
       source_path:
         description: Source video/audio path in the repository
         required: true
-        default: samples/ProStudio_Arabic_Demo.mp4
+        default: library/prostudio-arabic-demo/source.mp4
 permissions:
   contents: read
 jobs:

@@ -1,0 +1,17 @@
+{
+  "slug": "prostudio-arabic-demo",
+  "title": "عرض ProStudio العربي (عيّنة)",
+  "original_name": "ProStudio_Arabic_Demo.mp4",
+  "size": 604435,
+  "sha256": "a467fa435bc18603c5b41e90f592b455ba564c2dc3c8b350763fbe187c6e28d6",
+  "duration": 19.83,
+  "width": 1280,
+  "height": 720,
+  "parts": 1,
+  "source": "library/prostudio-arabic-demo/source.mp4",
+  "source_lang": "ar",
+  "uploaded_at": "2026-09-06T14:06:30+00:00",
+  "status": "uploaded",
+  "uploaded_with": "migration",
+  "subtitles": "source.srt"
+}

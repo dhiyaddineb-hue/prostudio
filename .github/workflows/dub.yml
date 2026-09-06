@@ -53,7 +53,7 @@ on:
       source_path:
         description: "dub: path to a video already in this repository"
         required: false
-        default: "samples/ProStudio_Arabic_Demo.mp4"
+        default: "library/prostudio-arabic-demo/source.mp4"
         type: string
       source_lang:
         description: "dub: original audio language"

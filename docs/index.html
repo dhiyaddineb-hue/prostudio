@@ -42,6 +42,13 @@
         <span id="fileName" class="hint mono"></span>
       </div>
       <div class="uploadform">
+        <div class="ytrow">
+          <label>أو دبلجة من رابط يوتيوب <input id="ytUrl" placeholder="https://www.youtube.com/watch?v=…" dir="ltr"></label>
+          <label>لغة المصدر <input id="ytLang" value="ar" dir="ltr" size="4"></label>
+          <button id="ytGo" class="btn">دبلجة الرابط</button>
+          <div id="ytStatus" class="status"></div>
+        </div>
+        <hr>
         <label>اسم المجلد (لاتيني) <input id="slugInput" placeholder="my-video" dir="ltr"></label>
         <label>العنوان <input id="titleInput" placeholder="عنوان الفيديو"></label>
         <label>لغة المصدر <input id="srcLangInput" value="ar" dir="ltr" size="4"></label>
