@@ -11,7 +11,7 @@ on:
         required: true
         type: string
       final_path:
-        description: "Published final MP4 path under docs/"
+        description: "Published final MP4 path (dubs/<slug>/final-dub-<run>.mp4 or legacy docs/*.mp4)"
         required: true
         type: string
       confirmation:
@@ -40,8 +40,8 @@ jobs:
             exit 1
           }
           case "$FINAL_PATH" in
-            docs/*.mp4) ;;
-            *) echo "Deletion refused: final_path must be a published docs/*.mp4" >&2; exit 1 ;;
+            dubs/*/*.mp4|docs/*.mp4) ;;
+            *) echo "Deletion refused: final_path must be a published dubs/<slug>/*.mp4 (or legacy docs/*.mp4)" >&2; exit 1 ;;
           esac
           test -s "$FINAL_PATH" || { echo "Deletion refused: published final is missing" >&2; exit 1; }
           git ls-files --error-unmatch "$FINAL_PATH" >/dev/null || {

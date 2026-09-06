@@ -64,3 +64,10 @@ projects/*/source/
 # Smart-dub runtime state lives in the checkpoint release, never in git.
 checkpoints/
 voice-audit/
+
+# Studio library: one folder per video (sources, possibly split in parts) and
+# one folder per dubbed video. Both are deliverables, not scratch.
+!library/
+!library/**
+!dubs/
+!dubs/**

@@ -389,3 +389,18 @@ projects/<اسم>/
   خطوة تحقق من وجود المشروع؛ `voice-audit.yml` يشير إلى العينة الافتراضية والمسار الجديد للسكربت.
 - Releases المحذوفة (مسودّات checkpoint): 383579396 (shorts-test-v2-4a99eab1c1b4-en-d0e8defb), 383572470 (shorts-test-v2-4a99eab1c1b4-en-10682ce9), 383564807 (shorts-test-4a99eab1c1b4-en-10682ce9), 383216365 (napoleon-29aee5f74783-en-10682ce9), 383036926 (1156866-3fafd0dff2d0-en-10682ce9) — مجموعها ~988 MB.
 - لم يُمسّ: تاريخ git (591 MB)، الفروع الأخرى، الفرع `main`.
+
+
+## 🎛️ الاستوديو الكامل على GitHub Pages + مجلد لكل فيديو — 2026-09-06
+- `docs/index.html` + `docs/studio.js` + `docs/studio.css`: مكتبة (library/) ومدبلجة (dubs/) وتشغيلات حيّة وإعدادات. تقرأ شجرة الفرع
+  بطلب واحد (ETag) وتعرض كل مجلد كبطاقة مع معاينة من raw.githubusercontent.com؛ الرفع = blobs + commit واحد إلى `library/<slug>/`
+  (تقسيم ≤ 18 MB بأسماء `source.mp4.partNNofMM`) مع `meta.json` (العنوان، الحجم، SHA-256، المدة، لغة المصدر)؛ الدبلجة = dispatch
+  لـ dub.yml بـ `source_path=library/<slug>/source.mp4`؛ المتابعة = runs/jobs API + manifest نقاط الاستئناف (تقدّم المقاطع)؛ الحذف =
+  commit واحد يزيل المجلد بعد كتابة اسمه (`confirmTyped`)؛ إلغاء تشغيل بنفس التأكيد. الرمز في localStorage (كما في dashboard.html).
+- الخلفية: `scripts/publish_to_library.py` ينشر إلى `dubs/<slug>/final-dub-<run>.mp4` + `.quality/.segments/.language.json` + `meta.json`
+  (نسخ متعددة، الأحدث أولاً) ويحدّث `library/<slug>/meta.json` إلى `dubbed`. `dub.yml`: `run-name` يحمل مسار المصدر ليقرأه الاستوديو؛
+  إعادة تجميع أجزاء `.partNNofMM` (مع دعم `.part0/.part1` القديم)؛ معرّف المشروع يأخذ اسم مجلد المكتبة؛ خطوة النشر تستخدم السكربت
+  الجديد و`git add -f library dubs` (لم تُعد تنسخ الفيديوهات إلى docs/). `cleanup-dub-checkpoints.yml` يقبل `dubs/*/*.mp4`.
+- `.gitignore`: `!library/**` و`!dubs/**`. الصفحات القديمة (dashboard.html, voices.html) ما زالت متاحة من التبويبات.
+- Gemini: السرّ `TRANSLATE_API_KEY` حُدِّث بمفتاح AI Studio الذي أرسله المستخدم (في المحادثة — يُستحسن تدويره لاحقاً)، و`TRANSLATE_FALLBACK=fail`.
+- الاختبارات: `tests/test_studio_library.py` (7).

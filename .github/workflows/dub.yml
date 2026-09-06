@@ -1,5 +1,9 @@
 name: Run YouTube Auto Dub
 
+# The studio page maps a run to its video through this title (the runs API does
+# not expose dispatch inputs).
+run-name: "${{ inputs.task }} · ${{ inputs.source_path || inputs.youtube_url || inputs.project }} · run ${{ github.run_number }}"
+
 permissions:
   contents: write
 
@@ -412,21 +416,33 @@ jobs:
           retention-days: 14
 
       - name: Reassemble split source parts
-        if: endsWith(inputs.source_path, '.part0')
+        if: inputs.source_path != ''
         run: |
           set -euo pipefail
           sp="${{ inputs.source_path }}"
           if [[ "$sp" == *.part0 ]]; then
+            # legacy two-part layout: name.part0 + name.part1 -> name.mp4
             base="${sp%.part0}"
             full="${base}.mp4"
-            p0="${base}.part0"
-            p1="${base}.part1"
-            if [ -f "$p0" ] && [ -f "$p1" ]; then
-              cat "$p0" "$p1" > "$full"
-              echo "Reassembled $p0 + $p1 -> $full ($(wc -c < "$full") bytes)"
+            if [ -f "${base}.part0" ] && [ -f "${base}.part1" ]; then
+              cat "${base}.part0" "${base}.part1" > "$full"
+              echo "Reassembled ${base}.part0 + ${base}.part1 -> $full ($(wc -c < "$full") bytes)"
               echo "REASSEMBLED_SOURCE=${full}" >> "$GITHUB_ENV"
             else
               echo "parts missing; continuing with $sp" >&2
+            fi
+          elif [ ! -f "$sp" ]; then
+            # studio layout: name.mp4.part01of03 ... written by docs/studio.js
+            parts=$(ls "${sp}".part*of* 2>/dev/null | sort || true)
+            if [ -n "$parts" ]; then
+              expected=$(echo "$parts" | head -1 | sed -E 's/.*\.part[0-9]+of([0-9]+)$/\1/')
+              count=$(echo "$parts" | wc -l | tr -d ' ')
+              [ "$count" = "$expected" ] || { echo "expected $expected parts for $sp, found $count" >&2; exit 1; }
+              cat $parts > "$sp"
+              echo "Reassembled $count parts -> $sp ($(wc -c < "$sp") bytes)"
+            else
+              echo "source not found: $sp" >&2
+              exit 1
             fi
           fi
 
@@ -444,8 +460,13 @@ jobs:
           else
             test -f "$source"
             digest=$(sha256sum "$source" | cut -c1-12)
-            base=$(basename "$source")
-            base="${base%.*}"
+            if [[ "$source" == library/*/* ]]; then
+              # one folder per video: the folder name is the video's identity
+              base=$(printf '%s' "$source" | cut -d/ -f2)
+            else
+              base=$(basename "$source")
+              base="${base%.*}"
+            fi
             base=$(printf '%s' "$base" | tr -cs '[:alnum:]._-' '-' | sed 's/^-//;s/-$//' | cut -c1-40)
           fi
           config=$(printf '%s' "${{ inputs.source_lang }}|${{ inputs.target_lang }}|${{ inputs.tts_engine }}|${{ inputs.voice }}|${{ inputs.gender }}|${{ inputs.model }}|${{ inputs.separate_sources }}|${{ inputs.bg_music }}|${{ inputs.diarize }}|${{ inputs.no_vad }}|${{ inputs.seed_vc }}|${{ inputs.chunk_seconds }}" | sha256sum | cut -c1-8)
@@ -583,13 +604,17 @@ jobs:
             cp /tmp/quality-report.json output/quality-report.json
             cp /tmp/segments-report.json output/segments-report.json
             cp /tmp/language-integrity.json output/language-integrity.json
-            source_for_publish=$(cat /tmp/source-path.txt)
-            python scripts/publish_dub_run.py --video output/final-dub.mp4 --source "$source_for_publish" \
-              --source-lang "${{ inputs.source_lang }}" --target-lang "${{ inputs.target_lang }}" \
-              --engine "${{ inputs.tts_engine }}" --seed-vc "${{ inputs.seed_vc }}" \
-              --bg-music "${{ inputs.bg_music }}" --diarize "${{ inputs.diarize }}" --run-id "$RUN_ID"
-            python scripts/publish_docs.py
-            git add projects docs/projects.json docs/*.mp4 docs/*.srt docs/*.vtt
+            source_for_publish="${SOURCE_PATH:-$(cat /tmp/source-path.txt)}"
+            # One folder per video: dubs/<slug>/final-dub-<run>.mp4 (+ reports, meta.json);
+            # the studio page (docs/index.html) lists library/ and dubs/ straight from the branch.
+            python scripts/publish_to_library.py --video output/final-dub.mp4 --source "$source_for_publish" \
+              --run-id "$RUN_ID" --output-dir output \
+              --setting "source_lang=${{ inputs.source_lang }}" --setting "target_lang=${{ inputs.target_lang }}" \
+              --setting "tts_engine=${{ inputs.tts_engine }}" --setting "seed_vc=${{ inputs.seed_vc }}" \
+              --setting "profile=${{ inputs.profile }}" --setting "quality=${{ inputs.quality }}" \
+              --setting "model=${{ inputs.model }}" --setting "bg_music=${{ inputs.bg_music }}" \
+              --setting "chunk_seconds=${{ inputs.chunk_seconds }}" --setting "voice=${{ inputs.voice }}"
+            git add -f library dubs
             git diff --cached --quiet || git commit -m "Publish verified dub $RUN_ID"
             if git push origin HEAD:"${{ github.ref_name }}"; then exit 0; fi
             echo "Concurrent update detected; rebuilding publication from the latest branch ($attempt/3)"

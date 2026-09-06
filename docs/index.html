@@ -1,164 +1,138 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>ProStudio — الدبلجة العربية</title>
-<meta name="description" content="دبلجة عربية آلية: تفريغ، ترجمة، صوت عصبي، ومزامنة زمنية." />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet" />
-<style>
-  :root{
-    --bg:#07080c; --ink:#f4efe4; --muted:#b7b0a3;
-    --line:rgba(244,239,228,.12); --card:rgba(16,17,23,.78);
-    --gold:#e8b86d; --ok:#7dcea0;
-  }
-  *{box-sizing:border-box}
-  body{
-    margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
-    font-family:"IBM Plex Sans Arabic",system-ui,sans-serif;
-    background-image:radial-gradient(circle at 15% 8%,rgba(232,184,109,.16),transparent 38%),
-                     radial-gradient(circle at 88% 82%,rgba(90,140,255,.10),transparent 34%);
-  }
-  header{padding:26px 6vw 0;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-  .brand{display:flex;align-items:center;gap:12px}
-  .mark{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;
-        background:linear-gradient(160deg,var(--gold),#9a6a2c);color:#1a1208;font-weight:700}
-  .brand strong{display:block;letter-spacing:.03em}
-  .brand small{color:var(--muted)}
-  nav a{color:var(--muted);text-decoration:none;font-size:14.5px;margin-inline-start:16px}
-  nav a:hover,nav a.on{color:var(--gold)}
-  main{max-width:1080px;margin:0 auto;padding:26px 6vw 60px}
-  h1{font-size:clamp(26px,4.4vw,42px);line-height:1.2;margin:18px 0 8px}
-  .lede{color:var(--muted);font-size:17px;max-width:60ch;margin:0 0 30px}
-  h2.sec{font-size:19px;margin:38px 0 16px}
-
-  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;
-        overflow:hidden;display:flex;flex-direction:column;transition:.18s}
-  .card:hover{border-color:var(--gold);transform:translateY(-2px)}
-  .card video{width:100%;aspect-ratio:16/9;object-fit:cover;background:#000;display:block}
-  .card .body{padding:16px 18px 18px;display:flex;flex-direction:column;gap:10px;flex:1}
-  .card h3{margin:0;font-size:17px}
-  .facts{display:flex;flex-wrap:wrap;gap:6px}
-  .tag{font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
-  .tag.ok{color:var(--ok);border-color:rgba(125,206,160,.35)}
-  .row{display:flex;gap:8px;margin-top:auto;padding-top:6px;flex-wrap:wrap}
-  .btn{display:inline-block;padding:10px 16px;border-radius:10px;
-       text-decoration:none;font-weight:600;font-size:14px}
-  .primary{background:linear-gradient(160deg,var(--gold),#c98f3f);color:#1a1208}
-  .ghost{border:1px solid var(--line);color:var(--ink)}
-  .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px 24px}
-  .steps{margin:0;padding-inline-start:20px;color:var(--muted);line-height:1.95;font-size:14.5px}
-  .steps b{color:var(--ink)}
-  footer{color:var(--muted);font-size:13.5px;padding:0 6vw 40px;text-align:center}
-  a{color:var(--gold)}
-  code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:6px;font-size:13px}
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-  @media(max-width:760px){.two{grid-template-columns:1fr}}
-</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProStudio — الاستوديو</title>
+<meta name="description" content="استوديو الدبلجة الكامل: المكتبة، المعاينة، النسخ المدبلجة، متابعة التشغيل مباشرة، والتحكم في المستودع من المتصفح.">
+<link rel="stylesheet" href="studio.css">
 </head>
 <body>
-
-<header>
+<header class="top">
   <div class="brand">
-    <span class="mark">PS</span>
-    <div><strong>ProStudio</strong><small>دبلجة عربية آلية</small></div>
+    <h1>ProStudio</h1>
+    <p>الاستوديو الكامل — كل شيء يُقرأ ويُكتب مباشرة في المستودع <code id="repoName"></code></p>
   </div>
-  <nav>
-    <a href="index.html" class="on">الرئيسية</a>
-    <a href="dashboard.html">مركز التحكم</a>
-    <a href="preview.html">المعاينة</a>
-    <a href="voices.html" style="color:var(--muted);text-decoration:none;font-size:14.5px">الأصوات</a>
-    <a href="studio.html" style="color:var(--muted);text-decoration:none;font-size:14.5px">المصمّم</a>
-    <a href="send.html">إرسال فيديو</a>
-  </nav>
+  <div class="topstatus">
+    <span id="connChip" class="chip">غير متصل</span>
+    <span id="rateChip" class="chip muted" title="طلبات GitHub API المتبقية في الساعة">—</span>
+    <span id="clockChip" class="chip muted">—</span>
+    <button id="refreshNow" class="btn small">تحديث الآن</button>
+    <label class="toggle"><input type="checkbox" id="autoRefresh" checked> تحديث تلقائي</label>
+  </div>
 </header>
 
+<nav class="tabs" role="tablist">
+  <button class="tab active" data-tab="library">المكتبة <span id="countLibrary" class="count">0</span></button>
+  <button class="tab" data-tab="dubs">المدبلجة <span id="countDubs" class="count">0</span></button>
+  <button class="tab" data-tab="runs">التشغيلات <span id="countRuns" class="count">0</span></button>
+  <button class="tab" data-tab="settings">الإعدادات</button>
+  <a class="tab link" href="dashboard.html">لوحة المشاريع الذكية ↗</a>
+  <a class="tab link" href="voices.html">الأصوات ↗</a>
+</nav>
+
 <main>
-  <h1>الدبلجات الجاهزة</h1>
-  <p class="lede">
-    كل مقطع هنا مبني بالكامل: حوار عربي مُعاد، موسيقى الخلفية محفوظة،
-    وكل جملة مثبّتة على توقيتها. الأرقام تحت كل مقطع مقيسة من الملف نفسه.
-  </p>
+  <!-- ============================== المكتبة ============================== -->
+  <section id="tab-library" class="panel active">
+    <div class="uploader" id="uploader">
+      <div class="drop" id="drop">
+        <input type="file" id="file" accept="video/*,.mp4,.mkv,.webm,.mov" hidden>
+        <strong>اسحب فيديو هنا أو اضغط للاختيار</strong>
+        <span class="hint">كل فيديو يحصل على مجلده الخاص <code>library/&lt;الاسم&gt;/</code>؛ الملفات الكبيرة تُقسَّم تلقائياً إلى أجزاء ≤ 18 MB وتُجمَع عند الدبلجة.</span>
+        <span id="fileName" class="hint mono"></span>
+      </div>
+      <div class="uploadform">
+        <label>اسم المجلد (لاتيني) <input id="slugInput" placeholder="my-video" dir="ltr"></label>
+        <label>العنوان <input id="titleInput" placeholder="عنوان الفيديو"></label>
+        <label>لغة المصدر <input id="srcLangInput" value="ar" dir="ltr" size="4"></label>
+        <label class="toggle"><input type="checkbox" id="dubAfterUpload" checked> ابدأ الدبلجة بعد الرفع</label>
+        <button id="uploadBtn" class="btn primary">رفع إلى المكتبة</button>
+        <div id="uploadStatus" class="status"></div>
+      </div>
+    </div>
+    <div class="toolbar">
+      <input id="searchLibrary" placeholder="بحث في المكتبة…">
+      <select id="filterLibrary">
+        <option value="all">كل الفيديوهات</option>
+        <option value="undubbed">غير مدبلجة</option>
+        <option value="running">قيد الدبلجة</option>
+        <option value="dubbed">مدبلجة</option>
+      </select>
+      <span id="libraryStatus" class="status"></span>
+    </div>
+    <div id="libraryGrid" class="grid"></div>
+  </section>
 
-  <div class="cards" id="cards">
-    <p style="color:var(--muted)">جارٍ التحميل…</p>
-  </div>
+  <!-- ============================== المدبلجة ============================== -->
+  <section id="tab-dubs" class="panel">
+    <div class="toolbar">
+      <input id="searchDubs" placeholder="بحث في المدبلجة…">
+      <span id="dubsStatus" class="status"></span>
+    </div>
+    <div id="dubsGrid" class="grid"></div>
+  </section>
 
-  <h2 class="sec">أرسل مقطعك</h2>
-  <div class="two">
-    <section class="panel">
-      <p style="color:var(--muted);font-size:15px;line-height:1.9;margin:0 0 14px">
-        ارفع فيديو أو ملف صوت، ويرجع لك مدبلجاً بالعربية على هذه الصفحة.
-      </p>
-      <a class="btn primary" href="send.html">إرسال ملف ←</a>
-    </section>
+  <!-- ============================== التشغيلات ============================== -->
+  <section id="tab-runs" class="panel">
+    <div class="toolbar">
+      <span class="hint">تُحدَّث كل <span id="runsInterval">15</span> ثانية أثناء وجود تشغيل نشط. التقدم المفصّل يُقرأ من نقاط الاستئناف (checkpoint) لكل مقطع.</span>
+      <span id="runsStatus" class="status"></span>
+    </div>
+    <div id="runsList" class="runs"></div>
+  </section>
 
-    <section class="panel">
-      <h3 style="margin:0 0 12px;font-size:16px">كيف تُصنع</h3>
-      <ol class="steps">
-        <li><b>استخراج النص</b> من الترجمة أو من الصوت</li>
-        <li><b>عزل الموسيقى</b> عن الحوار بفصل القناة المركزية</li>
-        <li><b>إعادة الصياغة</b> إلى العربية بلهجة المشروع</li>
-        <li><b>توليد الصوت</b> بمقاطع متصلة تحفظ التنغيم</li>
-        <li><b>المزامنة</b> بتقطيع نسبي لطول النص</li>
-      </ol>
-    </section>
-  </div>
+  <!-- ============================== الإعدادات ============================== -->
+  <section id="tab-settings" class="panel">
+    <div class="card wide">
+      <h2>اتصال GitHub</h2>
+      <p class="hint">الصفحة ثابتة على GitHub Pages؛ كل عملية (رفع، حذف، تشغيل، متابعة) تتم مباشرة عبر GitHub API من متصفحك. الرمز يُحفَظ في هذا المتصفح فقط ولا يُرسَل إلى أي جهة سوى api.github.com.</p>
+      <p class="hint">أنشئ رمزاً <a id="tokenLink" target="_blank" rel="noreferrer">من هنا</a> (Fine-grained: هذا المستودع فقط، صلاحيات <b>Contents: Read and write</b> و<b>Actions: Read and write</b>؛ أو Classic بصلاحية <code>public_repo</code>).</p>
+      <div class="row">
+        <input id="token" type="password" placeholder="github_pat_… أو ghp_…" dir="ltr" autocomplete="off">
+        <button id="checkToken" class="btn">فحص وحفظ</button>
+        <button id="forgetToken" class="btn danger">حذف الرمز</button>
+      </div>
+      <div id="tokenStatus" class="status"></div>
+    </div>
+    <div class="card wide">
+      <h2>الإعدادات الافتراضية للدبلجة</h2>
+      <div class="settings-grid">
+        <label>لغة الهدف <input id="dTarget" value="en" dir="ltr"></label>
+        <label>الصوت الاحتياطي (Edge) <input id="dVoice" value="en-US-AndrewMultilingualNeural" dir="ltr"></label>
+        <label>محرك الصوت <select id="dEngine"><option value="voxcpm">VoxCPM (استنساخ)</option><option value="edge">Edge-TTS</option><option value="xtts">XTTS</option><option value="qwen">Qwen</option></select></label>
+        <label>الجنس <select id="dGender"><option value="male">ذكر</option><option value="female">أنثى</option></select></label>
+        <label>نموذج Whisper <select id="dModel"><option>medium</option><option>small</option><option>base</option><option>tiny</option></select></label>
+        <label>الملف الشخصي <select id="dProfile"><option value="seed_quota_voxcpm">seed_quota_voxcpm (Seed-VC ثم VoxCPM عند نفاد الحصة)</option><option value="safe">safe</option><option value="high_quality_single">high_quality_single</option><option value="multi_speaker_cinematic">multi_speaker_cinematic</option></select></label>
+        <label>مستوى الجودة <select id="dQuality"><option>balanced</option><option>strict</option><option>safe</option></select></label>
+        <label>طول المقطع (ث) <input id="dChunk" value="10" dir="ltr" size="4"></label>
+        <label class="toggle"><input type="checkbox" id="dSeed" checked> Seed-VC لكل مقطع</label>
+        <label class="toggle"><input type="checkbox" id="dSeparate" checked> فصل الحوار عن الموسيقى</label>
+        <label class="toggle"><input type="checkbox" id="dBg"> الاحتفاظ بموسيقى الخلفية</label>
+        <label class="toggle"><input type="checkbox" id="dDiarize"> تمييز المتحدثين (يحتاج HF_TOKEN)</label>
+        <label class="toggle"><input type="checkbox" id="dValidate" checked> التحقق من المحتوى المنطوق</label>
+      </div>
+      <div class="row"><button id="saveDefaults" class="btn primary">حفظ الإعدادات</button><span id="defaultsStatus" class="status"></span></div>
+    </div>
+    <div class="card wide">
+      <h2>الترجمة الذكية</h2>
+      <p class="hint">تُضبط من أسرار المستودع ومتغيّراته (<code>TRANSLATE_API_KEY</code>, <code>TRANSLATE_PROVIDER</code>, <code>TRANSLATE_MODEL</code>). للتحقق شغّل <a id="preflightLink" target="_blank" rel="noreferrer">Translation API preflight</a> من Actions أو من هنا:</p>
+      <div class="row"><button id="runPreflight" class="btn">تشغيل فحص الترجمة</button><span id="preflightStatus" class="status"></span></div>
+    </div>
+  </section>
 </main>
 
+<!-- ============================== نوافذ ============================== -->
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modalbox">
+    <div class="modalhead"><h3 id="modalTitle"></h3><button id="modalClose" class="btn small">إغلاق</button></div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
 <footer>
-  ProStudio · مبني على
-  <a href="https://github.com/mangodxd/youtube-auto-dub" target="_blank" rel="noreferrer">youtube-auto-dub</a>
-  · <a href="https://github.com/dhiyaddineb-hue/prostudio/tree/arena/01a03969-prostudio">المستودع</a>
-  · رخصة MIT
+  ProStudio · <a id="repoLink" target="_blank" rel="noreferrer">المستودع</a> · <a id="actionsLink" target="_blank" rel="noreferrer">Actions</a> · القاعدة: لا حذف إلا بتأكيد صريح داخل الصفحة.
 </footer>
 
-<script>
-// One source of truth: projects.json is regenerated from the rendered files, so
-// a new dub appears here the moment it is published — no HTML edit, and no
-// number that can drift away from the file it describes.
-fetch('projects.json')
-  .then(r => r.json())
-  .then(({ projects }) => {
-    const box = document.getElementById('cards');
-    if (!projects.length) { box.innerHTML = '<p style="color:var(--muted)">لا توجد دبلجة بعد.</p>'; return; }
-    box.innerHTML = '';
-    projects.forEach(p => {
-      const m = p.metrics;
-      const card = document.createElement('article');
-      card.className = 'card';
-      card.innerHTML = `
-        <video muted playsinline preload="metadata" src="${p.video}#t=0.5"></video>
-        <div class="body">
-          <h3></h3>
-          <div class="facts">
-            <span class="tag">${m.cues} جملة</span>
-            <span class="tag">${Math.round(m.duration)} ثانية</span>
-            ${m.rate ? `<span class="tag">${m.rate} حرف/ث</span>` : ''}
-            <span class="tag ${m.overlaps ? '' : 'ok'}">${m.overlaps ? m.overlaps + ' تداخل' : 'بلا تداخل'}</span>
-            <span class="tag ${m.clipped ? '' : 'ok'}">${m.peak_dbfs} dBFS</span>
-          </div>
-          <div class="row">
-            <a class="btn primary" href="preview.html?p=${encodeURIComponent(p.slug)}">معاينة</a>
-            <a class="btn ghost" href="${p.video}" download>تحميل</a>
-            ${p.srt ? `<a class="btn ghost" href="${p.srt}" download>SRT</a>` : ''}
-          </div>
-        </div>`;
-      card.querySelector('h3').textContent = p.title;
-      const v = card.querySelector('video');
-      card.onmouseenter = () => { v.play().catch(() => {}); };
-      card.onmouseleave = () => { v.pause(); v.currentTime = 0.5; };
-      box.appendChild(card);
-    });
-  })
-  .catch(() => {
-    document.getElementById('cards').innerHTML =
-      '<p style="color:var(--muted)">تعذّر تحميل قائمة المشاريع.</p>';
-  });
-</script>
-
+<script type="module" src="studio.js"></script>
 </body>
 </html>
