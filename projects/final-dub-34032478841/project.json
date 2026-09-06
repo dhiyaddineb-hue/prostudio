@@ -1,0 +1,85 @@
+{
+  "slug": "final-dub-34032478841",
+  "title": "ar → en · verified",
+  "source_name": "shorts-test-v2.mp4",
+  "lang": "ar",
+  "dialect": "",
+  "created_at": "2026-09-06T12:21:56+00:00",
+  "cues": [
+    {
+      "i": 0,
+      "start": 0.0,
+      "end": 7.92,
+      "speaker": "SPEAKER_00",
+      "text": "The three worst methods of execution in the world make you feel that execution is by hanging. This is the same as innocence, for example. I just want you to subscribe and like this video."
+    },
+    {
+      "i": 1,
+      "start": 7.92,
+      "end": 15.92,
+      "speaker": "SPEAKER_00",
+      "text": "Because there are many upcoming videos, number one is the electric execution, where the person is placed in an electric chair and connected to high electrical charges until his heart stops."
+    },
+    {
+      "i": 2,
+      "start": 15.92,
+      "end": 23.74,
+      "speaker": "SPEAKER_00",
+      "text": "Number two, which is the copper stage, which is a structure of copper or iron that inserts the weight into it and ignites the fire underneath it until it ignites it. Number three, which is"
+    },
+    {
+      "i": 3,
+      "start": 23.74,
+      "end": 33.2,
+      "speaker": "SPEAKER_00",
+      "text": "Impalement, and how do you know what impalement is, my friend? I am in the house of suffering, and what remains, from your point of view, is the worst method among these countries?"
+    }
+  ],
+  "voices": {
+    "engine": "voxcpm",
+    "seed_vc": true
+  },
+  "render": {
+    "settings": {
+      "target_lang": "en",
+      "bg_music": false,
+      "diarize": false
+    },
+    "measured": {
+      "source_duration": 33.205,
+      "transcript_source": "asr",
+      "source_active_ratio": 1.0,
+      "required_segment_coverage": 0.72,
+      "final_duration": 33.133,
+      "duration_delta": -0.071,
+      "peak_db": -3.4,
+      "audio_stream": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      },
+      "source_longest_silence": 0.0,
+      "final_longest_silence": 0.909,
+      "final_silence_over_speech": 0.909,
+      "speech_only_dub": true,
+      "uncovered_speech": {
+        "measured": true,
+        "longest_after_seconds": 0.0,
+        "after_seconds": 0.0,
+        "recovered_words": 0,
+        "limit_seconds": 2.0,
+        "spans": []
+      },
+      "segment_count": 4,
+      "non_speech_cues_ignored": 0,
+      "mean_asr_confidence": 0.8292,
+      "frac_high_conf": 1.0,
+      "coverage": 0.9999,
+      "max_gap": 0.0045,
+      "internal_max_gap": 0.0,
+      "leading_gap": 0.0,
+      "trailing_gap": 0.0045,
+      "placed": 4
+    }
+  }
+}
