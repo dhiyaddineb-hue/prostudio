@@ -42,7 +42,7 @@ const state = {
   library: [], dubs: [], runs: [], voiceBank: [],
   releases: [], releasesAt: 0,
   manifests: new Map(),         // run id -> {counts,total,state,at}
-  filterLibrary: 'all', searchLibrary: '', searchDubs: '',
+  filterLibrary: 'all', searchLibrary: '', searchDubs: '', currentProjectSlug: '',
   polling: null, busy: false, loaded: false,
 };
 
@@ -404,29 +404,38 @@ function renderOverview() {
   const activeSlugs = new Set(activeRuns.map(runSlug).filter(Boolean));
   const dubbedSlugs = new Set(state.dubs.map((d) => d.slug));
   const waiting = state.library.filter((v) => !dubbedSlugs.has(v.slug) && !activeSlugs.has(v.slug)).length;
-
   $('overviewLibrary').textContent = state.library.length;
   $('overviewUndubbed').textContent = waiting;
   $('overviewDubbed').textContent = state.dubs.length;
   $('overviewActive').textContent = activeRuns.length;
   $('overviewVoices').textContent = state.voiceBank.length;
   $('overviewHeroValue').textContent = state.library.length;
-  $('overviewHeroLabel').textContent = state.library.length === 1 ? 'فيديو في مساحة العمل' : 'فيديوهات في مساحة العمل';
+  $('overviewHeroLabel').textContent = state.library.length === 1 ? 'مشروع' : 'مشاريع';
+
+  const projects = $('overviewProjects');
+  projects.innerHTML = state.library.length ? state.library.map((item) => {
+    const status = libraryStatusFor(item); const run = status.run; const progress = run?._progress;
+    const percent = progress?.total ? Math.round(((progress.counts.completed || 0) * 100) / progress.total) : (status.key === 'dubbed' ? 100 : 0);
+    const next = status.key === 'running' ? 'متابعة العمل' : status.key === 'dubbed' ? 'فتح ومراجعة' : item.voicesJson ? 'بدء الدبلجة' : 'إعداد الشخصيات';
+    return `<article class="project-row ${status.key}" data-slug="${esc(item.slug)}">
+      <button class="project-main act-open-project" data-slug="${esc(item.slug)}"><span class="project-state-dot"></span><span><b>${esc(item.title)}</b><small class="mono">${esc(item.slug)}</small></span></button>
+      <div class="project-path"><span>${item.voicesJson ? 'الأصوات جاهزة' : 'الأصوات غير معتمدة'}</span><span>${state.dubs.find((d) => d.slug === item.slug)?.versions.length || 0} نسخة</span><span>${fmtDur(item.meta.duration)}</span></div>
+      <div class="project-progress"><span><i style="width:${percent}%"></i></span><small>${status.key === 'running' ? `${percent}%` : esc(status.label)}</small></div>
+      <button class="btn small primary act-open-project" data-slug="${esc(item.slug)}">${next}</button>
+    </article>`;
+  }).join('') : `<div class="empty">${state.loaded ? 'لا توجد مشاريع. أنشئ أول مشروع من فيديو أو رابط يوتيوب.' : 'جارٍ تحميل المشاريع…'}</div>`;
+  projects.querySelectorAll('.act-open-project').forEach((button) => button.addEventListener('click', () => {
+    const item = state.library.find((value) => value.slug === button.dataset.slug); if (item) openProjectWorkspace(item);
+  }));
 
   const shownRuns = state.runs.slice(0, 4);
   $('overviewRunsList').innerHTML = shownRuns.length ? shownRuns.map((run) => {
-    const prog = run._progress;
-    const percent = prog?.total ? Math.round(((prog.counts.completed || 0) * 100) / prog.total) : (run.conclusion === 'success' ? 100 : 0);
-    const active = isActive(run);
+    const prog = run._progress; const percent = prog?.total ? Math.round(((prog.counts.completed || 0) * 100) / prog.total) : (run.conclusion === 'success' ? 100 : 0); const active = isActive(run);
     return `<div class="overview-item"><div><b>${esc(runSource(run) || run.display_title || `تشغيل #${run.run_number}`)}</b><small>${esc(statusLabel(run))} · ${fmtDate(run.run_started_at || run.created_at)}</small>${active || percent ? `<div class="mini-progress"><span style="width:${percent}%"></span></div>` : ''}</div><a class="overview-item-status ${active ? 'active' : ''}" href="${run.html_url}" target="_blank" rel="noreferrer">${active ? `${percent}% · مباشر` : `#${run.run_number}`}</a></div>`;
-  }).join('') : `<div class="empty compact-empty">${state.loaded ? 'لا توجد تشغيلات حتى الآن.' : 'جارٍ تحميل التشغيلات…'}</div>`;
-
-  const recent = state.dubs.map((d) => ({ ...d, stamp: d.latest?.published_at || d.meta?.updated_at || '' }))
-    .sort((a, b) => String(b.stamp).localeCompare(String(a.stamp))).slice(0, 4);
-  $('overviewRecentList').innerHTML = recent.length ? recent.map((d) => `<div class="overview-item"><div><b>${esc(d.meta?.title || d.slug)}</b><small>${d.versions.length} نسخة · ${fmtDate(d.stamp)}</small></div><button class="btn small overview-open-dub" data-slug="${esc(d.slug)}">فتح</button></div>`).join('') : `<div class="empty compact-empty">${state.loaded ? 'لا توجد نسخ مدبلجة بعد.' : 'جارٍ تحميل المدبلجات…'}</div>`;
-  $('overviewRecentList').querySelectorAll('.overview-open-dub').forEach((button) => button.addEventListener('click', () => {
-    state.searchDubs = button.dataset.slug; $('searchDubs').value = button.dataset.slug; showTab('dubs'); renderDubs();
-  }));
+  }).join('') : `<div class="empty compact-empty">${state.loaded ? 'لا توجد تشغيلات.' : 'جارٍ التحميل…'}</div>`;
+  const recent = state.dubs.map((d) => ({ ...d, stamp: d.latest?.published_at || d.meta?.updated_at || '' })).sort((a, b) => String(b.stamp).localeCompare(String(a.stamp))).slice(0, 4);
+  $('overviewRecentList').innerHTML = recent.length ? recent.map((d) => `<div class="overview-item"><div><b>${esc(d.meta?.title || d.slug)}</b><small>${d.versions.length} نسخة · ${fmtDate(d.stamp)}</small></div><button class="btn small overview-open-dub" data-slug="${esc(d.slug)}">فتح</button></div>`).join('') : `<div class="empty compact-empty">${state.loaded ? 'لا توجد نتائج بعد.' : 'جارٍ التحميل…'}</div>`;
+  $('overviewRecentList').querySelectorAll('.overview-open-dub').forEach((button) => button.addEventListener('click', () => { state.searchDubs = button.dataset.slug; $('searchDubs').value = button.dataset.slug; showTab('dubs'); renderDubs(); }));
 }
 
 function renderAll() { renderLibrary(); renderDubs(); renderRuns(); renderVoiceBank(); renderOverview(); $('clockChip').textContent = `آخر تحديث ${new Date().toLocaleTimeString('ar-EG', { hour12: false })}`; }
@@ -677,7 +686,10 @@ async function openVoicesDialog(item) {
 
 
 async function openProjectWorkspace(item) {
-  openModal(`المشروع · ${item.title}`, '<p class="hint">جارٍ تحميل حالة المشروع…</p>');
+  state.currentProjectSlug = item.slug;
+  $('projectTitle').textContent = item.title;
+  $('projectBody').innerHTML = '<div class="empty">جارٍ تحميل المشروع ونقاط الاستئناف…</div>';
+  showTab('project');
   try {
     const release = await releaseFor(item.slug);
     const manifest = release ? await manifestOf(release) : null;
@@ -687,42 +699,39 @@ async function openProjectWorkspace(item) {
     const pending = Math.max(0, chunks.length - completed - failed);
     const progress = chunks.length ? Math.round((completed * 100) / chunks.length) : 0;
     const speakers = [...new Set(chunks.map((c) => c.speaker || 'SPEAKER_00'))];
-    const dub = state.dubs.find((d) => d.slug === item.slug);
+    const dub = state.dubs.find((d) => d.slug === item.slug); const latest = dub?.latest;
     const active = state.runs.find((r) => isActive(r) && runSlug(r) === item.slug);
-    const stateText = active ? 'يعمل الآن' : manifest?.state === 'failed_resumable' ? 'متوقف وقابل للاستئناف' : manifest?.state === 'completed_waiting_for_cleanup_approval' ? 'مكتمل' : release ? 'محفوظ في نقطة استئناف' : 'لم يبدأ';
+    const stateText = active ? 'تعمل الدبلجة الآن' : manifest?.state === 'failed_resumable' ? 'متوقف وقابل للاستئناف' : manifest?.state === 'completed_waiting_for_cleanup_approval' ? 'مكتمل وجاهز للمراجعة' : release ? 'محفوظ في نقطة استئناف' : 'مشروع جديد';
     const stageTotals = {};
     for (const name of STAGE_ORDER) stageTotals[name] = { success: 0, failed: 0, pending: 0, skipped: 0 };
-    for (const chunk of chunks) for (const name of STAGE_ORDER) {
-      const value = chunk.checklist?.[name]?.state || 'pending';
-      stageTotals[name][value] = (stageTotals[name][value] || 0) + 1;
-    }
-    const stageCards = chunks.length ? STAGE_ORDER.map((name) => {
-      const value = stageTotals[name];
-      return `<div class="stage-summary"><span>${esc(STAGE_LABEL[name])}</span><b>${value.success + value.skipped}/${chunks.length}</b><small>${value.failed ? `${value.failed} فاشل` : value.pending ? `${value.pending} معلّق` : 'مكتمل'}</small></div>`;
-    }).join('') : '<div class="empty compact-empty">تظهر قائمة المراحل بعد بدء تحليل الفيديو.</div>';
-    $('modalBody').innerHTML = `<div class="project-workspace">
-      <div class="workspace-head"><div><p class="eyebrow">${esc(stateText)}</p><h3>${esc(item.title)}</h3><span class="mono">library/${esc(item.slug)}/</span></div><span class="workspace-progress-value">${progress}%</span></div>
-      <div class="progress workspace-progress"><span style="width:${progress}%"></span></div>
-      <div class="workspace-metrics"><div><strong>${chunks.length}</strong><span>كل المقاطع</span></div><div class="ok"><strong>${completed}</strong><span>مكتملة</span></div><div class="err"><strong>${failed}</strong><span>فاشلة</span></div><div><strong>${pending}</strong><span>معلّقة</span></div><div><strong>${speakers.length || (item.voicesJson ? 1 : 0)}</strong><span>شخصيات</span></div><div><strong>${dub?.versions.length || 0}</strong><span>نسخ مدبلجة</span></div></div>
-      <section class="workspace-section"><div class="surface-head"><div><p class="eyebrow">Checklist</p><h3>مراحل المقاطع</h3></div><button id="workspaceCheckpoints" class="btn small">التفاصيل والصوت</button></div><div class="stage-summary-grid">${stageCards}</div></section>
-      <section class="workspace-section"><div class="surface-head"><div><p class="eyebrow">الشخصيات</p><h3>الأصوات المعتمدة</h3></div><button id="workspaceVoices" class="btn small">إدارة الشخصيات والأصوات</button></div><div class="speaker-strip">${speakers.length ? speakers.map((s) => `<span class="chip ${manifest?.voice_profiles?.[s]?.approved ? 'ok' : 'muted'}">${esc(manifest?.voice_profiles?.[s]?.label || s)}</span>`).join('') : '<span class="hint">تُكتشف الشخصيات عند التحليل، ويمكن إعداد SPEAKER_00 قبل البدء.</span>'}</div></section>
-      <section class="workspace-actions"><button id="workspaceStart" class="btn">بدء نسخة جديدة</button>${manifest && completed < chunks.length ? '<button id="workspaceResume" class="btn primary">استئناف غير المكتمل فقط</button>' : ''}${item.whole ? '<button id="workspacePreview" class="btn">معاينة المصدر</button>' : ''}${dub ? '<button id="workspaceDubs" class="btn">فتح النسخ المدبلجة</button>' : ''}<span id="workspaceStatus" class="status"></span></section>
-      ${manifest?.errors?.length ? `<details class="workspace-errors"><summary>آخر الأخطاء (${manifest.errors.length})</summary><ul>${manifest.errors.slice(-5).reverse().map((e) => `<li><b>المقطع ${e.chunk ?? '—'}</b>: ${esc(e.message)}</li>`).join('')}</ul></details>` : ''}
+    for (const chunk of chunks) for (const name of STAGE_ORDER) { const value = chunk.checklist?.[name]?.state || 'pending'; stageTotals[name][value] = (stageTotals[name][value] || 0) + 1; }
+    const stageDone = (name) => chunks.length && (stageTotals[name].success + stageTotals[name].skipped === chunks.length);
+    const flow = [
+      ['المصدر', true], ['الشخصيات', !!item.voicesJson], ['التحليل', chunks.length > 0], ['الصوت', stageDone('tts')], ['المراجعة', stageDone('content_validation')], ['التصدير', !!latest],
+    ];
+    const nextAction = active ? 'متابعة التشغيل الحالي' : !item.voicesJson ? 'إعداد الشخصيات والأصوات' : !manifest ? 'بدء الدبلجة' : completed < chunks.length ? 'استئناف المقاطع غير المكتملة' : !latest ? 'إعادة فتح التشغيل والنشر' : 'مراجعة النسخة النهائية';
+    const rows = chunks.map((chunk) => `<tr class="${chunk.status === 'failed' ? 'failed-row' : ''}"><td class="mono">${String(chunk.index).padStart(4, '0')}</td><td class="mono">${fmtDur(+chunk.start)}–${fmtDur(+chunk.end)}</td><td>${esc(chunk.speaker || 'SPEAKER_00')}</td><td>${esc(chunk.status || 'pending')}</td>${STAGE_ORDER.map((name) => { const value = chunk.checklist?.[name]?.state || 'pending'; return `<td class="stage-${value}" title="${esc(chunk.checklist?.[name]?.error || '')}"><span class="stage-dot"></span></td>`; }).join('')}<td>${release ? `<button class="btn small project-audio" data-index="${chunk.index}">استماع</button>` : ''}</td></tr>`).join('');
+    const voiceProfiles = manifest?.voice_profiles || {};
+    const characters = speakers.length ? speakers.map((speaker) => { const profile = voiceProfiles[speaker] || {}; return `<article class="project-character"><div><span class="avatar">${esc((profile.label || speaker).slice(0, 2))}</span><div><b>${esc(profile.label || speaker)}</b><small class="mono">${esc(speaker)}</small></div></div><dl><dt>المصدر</dt><dd>${esc(profile.reference_mode || 'source')}</dd><dt>المحرك</dt><dd>${esc(profile.tts_engine || manifest?.config?.tts_engine || '—')}</dd><dt>التحويل</dt><dd>${esc(profile.voice_conversion || '—')}</dd></dl></article>`; }).join('') : '<div class="empty compact-empty">لم يبدأ تحليل الشخصيات بعد. يمكنك إعداد متحدث افتراضي الآن.</div>';
+    const errors = manifest?.errors || [];
+    $('projectBody').innerHTML = `<div class="project-screen">
+      <div class="project-command"><div><span class="project-status ${active ? 'active' : failed ? 'failed' : completed && chunks.length ? 'done' : ''}">${esc(stateText)}</span><h3>${esc(item.title)}</h3><p class="mono">library/${esc(item.slug)}/ · ${fmtDur(item.meta.duration)} · ${formatMB(item.size)} MB</p></div><div class="project-command-actions">${active ? `<a class="btn primary" href="${active.html_url}" target="_blank" rel="noreferrer">فتح التشغيل المباشر</a>` : manifest && completed < chunks.length ? '<button id="projectResume" class="btn primary">استئناف غير المكتمل</button>' : '<button id="projectStart" class="btn primary">بدء الدبلجة</button>'}<button id="projectVoices" class="btn">الشخصيات والأصوات</button><button id="projectMore" class="btn">خيارات المشروع</button></div></div>
+      <div class="workflow-track">${flow.map(([label,done],index) => `<div class="workflow-step ${done ? 'done' : index === flow.findIndex((x) => !x[1]) ? 'current' : ''}"><i>${done ? '✓' : index + 1}</i><span>${label}</span></div>`).join('')}</div>
+      <div class="next-action"><span>الإجراء التالي</span><b>${nextAction}</b><small>لن يُعاد أي مقطع مكتمل عند الاستئناف.</small></div>
+      <div class="project-content-grid"><section class="project-source surface">${item.whole ? `<video controls preload="metadata" src="${rawUrl(item.whole.path)}#t=0.5"></video>` : `<div class="noplay">الفيديو مقسّم إلى ${item.parts.length} أجزاء ويُجمع عند التشغيل.</div>`}<div class="workspace-metrics"><div><strong>${chunks.length}</strong><span>المقاطع</span></div><div class="ok"><strong>${completed}</strong><span>مكتملة</span></div><div class="err"><strong>${failed}</strong><span>فاشلة</span></div><div><strong>${pending}</strong><span>معلّقة</span></div></div></section>
+      <section class="surface project-output"><div class="surface-head"><div><p class="eyebrow">المخرج</p><h3>آخر نسخة</h3></div>${latest ? `<button id="projectOutputDetails" class="btn small">التقرير والترجمة</button>` : ''}</div>${latest ? `<video controls preload="metadata" src="${rawUrl(`dubs/${item.slug}/${latest.file}`)}"></video><p class="hint">${esc(latest.file)} · ${latest.quality_ok === false ? 'فشلت الجودة' : latest.quality_ok === true ? 'اجتازت الجودة' : 'بانتظار تقرير الجودة'}</p>` : '<div class="empty compact-empty">لا توجد نسخة مدبلجة منشورة بعد.</div>'}</section></div>
+      <section class="surface project-characters"><div class="surface-head"><div><p class="eyebrow">الشخصيات</p><h3>تعيين الأصوات</h3></div><button id="projectVoices2" class="btn small">تعديل الأصوات</button></div><div class="project-character-grid">${characters}</div></section>
+      <section class="surface project-checklist"><div class="surface-head"><div><p class="eyebrow">المراجعة التفصيلية</p><h3>Checklist المقاطع</h3></div><div class="legend"><span><i class="stage-dot success"></i> ناجح</span><span><i class="stage-dot failed"></i> فاشل</span><span><i class="stage-dot pending"></i> معلّق</span></div></div>${chunks.length ? `<div class="tablewrap project-table"><table class="segs stage-table"><thead><tr><th>#</th><th>الوقت</th><th>الشخصية</th><th>الحالة</th>${STAGE_ORDER.map((name) => `<th>${STAGE_LABEL[name]}</th>`).join('')}<th>الصوت</th></tr></thead><tbody>${rows}</tbody></table></div><div id="projectAudioCompare" class="compare-audio"></div>` : '<div class="empty compact-empty">تظهر مراحل كل مقطع بعد تشغيل التحليل الأول.</div>'}</section>
+      ${errors.length ? `<section class="surface project-errors"><div class="surface-head"><div><p class="eyebrow">التشخيص</p><h3>الأخطاء الأخيرة</h3></div><span class="chip err">${errors.length}</span></div><ul>${errors.slice(-8).reverse().map((error) => `<li><b>المقطع ${error.chunk ?? '—'}</b><span>${esc(error.message)}</span></li>`).join('')}</ul></section>` : ''}
+      <div id="projectStatus" class="status"></div>
     </div>`;
-    $('workspaceVoices').onclick = () => openVoicesDialog(item);
-    $('workspaceCheckpoints').onclick = () => openCheckpointDialog(item);
-    $('workspaceStart').onclick = () => openDubDialog(item);
-    $('workspacePreview')?.addEventListener('click', () => openPlayer(item.title, rawUrl(item.whole.path), item));
-    $('workspaceDubs')?.addEventListener('click', () => { state.searchDubs = item.slug; $('searchDubs').value = item.slug; closeModal(); showTab('dubs'); renderDubs(); });
-    $('workspaceResume')?.addEventListener('click', async () => {
-      const button = $('workspaceResume'); button.disabled = true; setStatus($('workspaceStatus'), 'جارٍ إرسال استئناف المشروع بالإعدادات المحفوظة…', 'info');
-      try {
-        await resumeProject(item, manifest);
-        setStatus($('workspaceStatus'), 'انطلق الاستئناف. المقاطع المكتملة ستُتخطى تلقائياً.', 'ok');
-        setTimeout(async () => { closeModal(); await refreshRuns(); renderAll(); showTab('runs'); }, 1500);
-      } catch (error) { setStatus($('workspaceStatus'), error.message, 'err'); button.disabled = false; }
-    });
-  } catch (error) { $('modalBody').innerHTML = `<p class="status err">${esc(error.message)}</p>`; }
+    const manageVoices = () => openVoicesDialog(item); $('projectVoices').onclick = manageVoices; $('projectVoices2').onclick = manageVoices;
+    $('projectStart')?.addEventListener('click', () => openDubDialog(item));
+    $('projectMore').onclick = () => openCheckpointDialog(item);
+    $('projectResume')?.addEventListener('click', async () => { const button = $('projectResume'); button.disabled = true; setStatus($('projectStatus'), 'جارٍ إرسال الاستئناف بالإعدادات المحفوظة…', 'info'); try { await resumeProject(item, manifest); setStatus($('projectStatus'), 'انطلق الاستئناف؛ المقاطع المكتملة لن تُعاد.', 'ok'); setTimeout(async () => { await refreshRuns(); renderAll(); showTab('runs'); }, 1400); } catch (error) { setStatus($('projectStatus'), error.message, 'err'); button.disabled = false; } });
+    $('projectOutputDetails')?.addEventListener('click', () => openDubDetails(dub, latest));
+    $('projectBody').querySelectorAll('.project-audio').forEach((button) => button.addEventListener('click', () => renderAudioCompare(release, +button.dataset.index, 'projectAudioCompare')));
+  } catch (error) { $('projectBody').innerHTML = `<div class="empty"><span class="status err">${esc(error.message)}</span></div>`; }
 }
 
 // ───────────────────────────────────────────── checkpoints (stages + audio comparisons)
@@ -757,8 +766,8 @@ async function openCheckpointDialog(item) {
     });
   } catch (e) { $('modalBody').innerHTML = `<p class="status err">${esc(e.message)}</p>`; }
 }
-async function renderAudioCompare(release, index) {
-  const box = $('audioCompare'); if (!box) return;
+async function renderAudioCompare(release, index, targetId = 'audioCompare') {
+  const box = $(targetId); if (!box) return;
   const labels = { original: 'الأصل', before_seed_vc: 'قبل Seed-VC', after_seed_vc: 'بعد Seed-VC', final: 'النهائي' };
   const prefix = `chunk-${String(index).padStart(4, '0')}-preview-`;
   const assets = release.assets.filter((a) => a.name.startsWith(prefix) && a.name.endsWith('.mp3'));
@@ -975,6 +984,7 @@ function init() {
   $('quickVoice').onclick = () => { if (!requireConnection()) return; showTab('voices'); setTimeout(() => $('voiceName').focus(), 120); };
   $('quickRuns').onclick = () => showTab('runs');
   $('overviewRefresh').onclick = () => fullRefresh(true);
+  $('projectBack').onclick = () => { state.currentProjectSlug = ''; showTab('overview'); };
   const initial = location.hash.replace('#', ''); if (['overview', 'library', 'dubs', 'runs', 'voices', 'settings'].includes(initial)) showTab(initial); else showTab('overview');
   $('voiceUpload').onclick = uploadVoiceSample;
   $('voiceFile').onchange = () => previewVoiceFile($('voiceFile').files[0]);

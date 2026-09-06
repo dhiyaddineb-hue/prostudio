@@ -14,7 +14,7 @@
     <div>
       <p class="eyebrow">مساحة عمل الدبلجة</p>
       <h1>ProStudio</h1>
-      <p>مكتبتك، أصواتك، وتشغيلاتك في مكان واحد · <code id="repoName"></code></p>
+      <p>إدارة المشاريع والمقاطع والأصوات · <code id="repoName"></code></p>
     </div>
   </div>
   <div class="topstatus">
@@ -26,8 +26,9 @@
   </div>
 </header>
 
+<div class="studio-shell">
 <nav class="tabs" role="tablist" aria-label="أقسام الاستوديو">
-  <button class="tab active" data-tab="overview" role="tab" aria-selected="true">الرئيسية</button>
+  <button class="tab active" data-tab="overview" role="tab" aria-selected="true">المشاريع</button>
   <button class="tab" data-tab="library" role="tab" aria-selected="false">المكتبة <span id="countLibrary" class="count">0</span></button>
   <button class="tab" data-tab="dubs" role="tab" aria-selected="false">المدبلجة <span id="countDubs" class="count">0</span></button>
   <button class="tab" data-tab="runs" role="tab" aria-selected="false">التشغيلات <span id="countRuns" class="count">0</span></button>
@@ -37,50 +38,35 @@
 
 <main>
 
-  <!-- ============================== الرئيسية ============================== -->
+  <!-- ============================== المشاريع ============================== -->
   <section id="tab-overview" class="panel active" role="tabpanel">
-    <div class="overview-hero">
-      <div class="hero-copy">
-        <p class="eyebrow">مركز التحكم</p>
-        <h2>ابدأ من الفيديو، وأنهِ العمل بنسخة مدبلجة جاهزة.</h2>
-        <p>ارفع المصدر، عيّن صوت كل شخصية، تابع المعالجة لحظة بلحظة، ثم راجع النتيجة وحمّلها من الصفحة نفسها.</p>
-        <div class="hero-actions">
-          <button id="quickUpload" class="btn primary">رفع فيديو جديد</button>
-          <button id="quickYoutube" class="btn inverse">دبلجة رابط يوتيوب</button>
-          <button id="quickVoice" class="btn inverse">إضافة عيّنة صوتية</button>
-        </div>
-      </div>
-      <div class="hero-figure" aria-live="polite">
-        <span id="overviewHeroValue">0</span>
-        <small id="overviewHeroLabel">فيديو في مساحة العمل</small>
-      </div>
+    <div class="desk-head">
+      <div><p class="eyebrow">مساحة العمل</p><h2>المشاريع</h2><p>افتح مشروعاً لمتابعة الشخصيات والمقاطع والمراجعة والتصدير.</p></div>
+      <div class="desk-actions"><button id="quickUpload" class="btn primary">مشروع من فيديو</button><button id="quickYoutube" class="btn">مشروع من يوتيوب</button><button id="quickVoice" class="btn">إضافة صوت</button></div>
     </div>
+    <div class="desk-readout">
+      <div class="desk-total"><span id="overviewHeroValue">0</span><small id="overviewHeroLabel">مشروع</small></div>
+      <button data-jump="library"><b id="overviewLibrary">0</b><span>المكتبة</span></button>
+      <button data-jump="library" data-filter="undubbed"><b id="overviewUndubbed">0</b><span>بانتظار البدء</span></button>
+      <button data-jump="dubs"><b id="overviewDubbed">0</b><span>مدبلجة</span></button>
+      <button data-jump="runs"><b id="overviewActive">0</b><span>تعمل الآن</span></button>
+      <button data-jump="voices"><b id="overviewVoices">0</b><span>أصوات</span></button>
+    </div>
+    <section class="project-desk">
+      <div class="surface-head"><div><p class="eyebrow">كل المشاريع</p><h3>اختر مشروعاً للعمل عليه</h3></div><button id="overviewRefresh" class="btn small">تحديث</button></div>
+      <div id="overviewProjects" class="project-list"><div class="empty compact-empty">جارٍ تحميل المشاريع…</div></div>
+    </section>
+    <div class="desk-lower">
+      <section class="surface"><div class="surface-head"><div><p class="eyebrow">قيد التنفيذ</p><h3>التشغيلات</h3></div><button id="quickRuns" class="btn small">عرض الكل</button></div><div id="overviewRunsList" class="overview-list"></div></section>
+      <section class="surface"><div class="surface-head"><div><p class="eyebrow">النتائج</p><h3>آخر المدبلجات</h3></div><button class="btn small" data-jump="dubs">عرض الكل</button></div><div id="overviewRecentList" class="overview-list"></div></section>
+      <aside class="surface readiness"><p class="eyebrow">الاتصال</p><h3>جاهزية التحكم</h3><div id="overviewConn" class="readiness-state">جارٍ الفحص…</div><div class="stack-actions"><button class="btn" data-jump="settings">الإعدادات</button></div></aside>
+    </div>
+  </section>
 
-    <div class="overview-metrics" aria-label="ملخص الاستوديو">
-      <button class="metric-card" data-jump="library"><span>المكتبة</span><strong id="overviewLibrary">0</strong><small>مصادر محفوظة</small></button>
-      <button class="metric-card" data-jump="library" data-filter="undubbed"><span>بانتظار الدبلجة</span><strong id="overviewUndubbed">0</strong><small>جاهزة للبدء</small></button>
-      <button class="metric-card" data-jump="dubs"><span>النسخ المدبلجة</span><strong id="overviewDubbed">0</strong><small>مشاريع منشورة</small></button>
-      <button class="metric-card live" data-jump="runs"><span>يعمل الآن</span><strong id="overviewActive">0</strong><small>تشغيلات نشطة</small></button>
-      <button class="metric-card" data-jump="voices"><span>بنك الأصوات</span><strong id="overviewVoices">0</strong><small>عيّنات قابلة لإعادة الاستخدام</small></button>
-    </div>
-
-    <div class="overview-grid">
-      <article class="surface overview-activity">
-        <div class="surface-head"><div><p class="eyebrow">المتابعة الفورية</p><h3>التشغيلات الأخيرة</h3></div><button id="quickRuns" class="btn small">عرض الكل</button></div>
-        <div id="overviewRunsList" class="overview-list"><div class="empty compact-empty">جارٍ تحميل التشغيلات…</div></div>
-      </article>
-      <article class="surface overview-recent">
-        <div class="surface-head"><div><p class="eyebrow">المخرجات</p><h3>آخر النسخ المدبلجة</h3></div><button class="btn small" data-jump="dubs">فتح المعرض</button></div>
-        <div id="overviewRecentList" class="overview-list"><div class="empty compact-empty">جارٍ تحميل المدبلجات…</div></div>
-      </article>
-      <aside class="surface readiness">
-        <p class="eyebrow">جاهزية الاستوديو</p>
-        <h3>حالة الاتصال</h3>
-        <div id="overviewConn" class="readiness-state">جارٍ الفحص…</div>
-        <p class="hint">تحتاج عمليات الرفع والحذف والتشغيل إلى رمز GitHub محفوظ في هذا المتصفح.</p>
-        <div class="stack-actions"><button class="btn" data-jump="settings">إدارة الاتصال والإعدادات</button><button id="overviewRefresh" class="btn">تحديث البيانات الآن</button></div>
-      </aside>
-    </div>
+  <!-- ============================== مساحة المشروع ============================== -->
+  <section id="tab-project" class="panel" role="tabpanel">
+    <div class="project-page-head"><button id="projectBack" class="btn">العودة إلى المشاريع</button><div><p class="eyebrow">مساحة المشروع</p><h2 id="projectTitle">المشروع</h2></div></div>
+    <div id="projectBody"><div class="empty">اختر مشروعاً من الصفحة الرئيسية.</div></div>
   </section>
 
   <!-- ============================== المكتبة ============================== -->
@@ -198,6 +184,7 @@
     </div>
   </section>
 </main>
+</div>
 
 <!-- ============================== نوافذ ============================== -->
 <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
