@@ -108,6 +108,151 @@ def timeline_metrics(raw: list[dict], duration: float) -> tuple[float, float]:
     return coverage, max(gaps + [0.0])
 
 
+def decode_mono(path: Path, rate: int = SR_TTS) -> np.ndarray:
+    """Decode any media file to mono float32 samples at ``rate`` via ffmpeg."""
+    proc = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(path), "-vn", "-ac", "1", "-ar", str(rate), "-f", "f32le", "-"],
+        capture_output=True, check=True,
+    )
+    return np.frombuffer(proc.stdout, dtype=np.float32)
+
+
+def word_spans(raw: list[dict]) -> list[tuple[float, float]]:
+    spans: list[tuple[float, float]] = []
+    for segment in raw:
+        words = segment.get("words") or []
+        if words:
+            spans.extend((float(w["start"]), float(w["end"])) for w in words if float(w["end"]) > float(w["start"]))
+        elif float(segment.get("end", 0.0)) > float(segment.get("start", 0.0)) and str(segment.get("text", "")).strip():
+            spans.append((float(segment["start"]), float(segment["end"])))
+    return sorted(spans)
+
+
+def find_uncovered_speech(
+    audio: Path | np.ndarray, raw: list[dict], duration: float, *,
+    rate: int = SR_TTS, frame_ms: int = 20, min_seconds: float = 0.8, pad_seconds: float = 0.15,
+    bridge_seconds: float = 0.25, level_margin_db: float = 12.0,
+) -> list[dict]:
+    """Loud stretches of the speech track that the transcript left without words.
+
+    Whisper occasionally drops a whole phrase (its VAD or decoder gives up), and
+    the dub is then silent exactly there, because nothing was translated. This
+    compares the speech-stem energy with the word timeline: frames louder than
+    the transcribed speech minus ``level_margin_db`` that fall outside every
+    word (padded by ``pad_seconds``) are collected into spans of at least
+    ``min_seconds``. Music-only passages are quiet on the speech stem, so they
+    do not register.
+    """
+    samples = decode_mono(audio, rate) if not isinstance(audio, np.ndarray) else audio
+    frame = max(1, int(rate * frame_ms / 1000))
+    count = len(samples) // frame
+    if count == 0:
+        return []
+    rms = np.sqrt(np.mean(samples[:count * frame].reshape(count, frame).astype(np.float64) ** 2, axis=1) + 1e-12)
+    level_db = 20.0 * np.log10(rms + 1e-9)
+    times = (np.arange(count) + 0.5) * frame / rate
+    covered = np.zeros(count, dtype=bool)
+    for start, end in word_spans(raw):
+        lo = int(max(0.0, start - pad_seconds) * rate // frame)
+        hi = int(min(duration, end + pad_seconds) * rate // frame) + 1
+        covered[max(0, lo):min(count, hi)] = True
+    if covered.any():
+        speech_level = float(np.median(level_db[covered]))
+        threshold = float(min(-25.0, max(-45.0, speech_level - level_margin_db)))
+    else:
+        threshold = -35.0
+    loud_uncovered = (level_db > threshold) & ~covered
+    spans: list[list[float]] = []
+    for index in np.flatnonzero(loud_uncovered):
+        t0 = float(index * frame / rate)
+        t1 = float((index + 1) * frame / rate)
+        if spans and t0 - spans[-1][1] <= bridge_seconds:
+            spans[-1][1] = t1
+        else:
+            spans.append([t0, t1])
+    result = []
+    for t0, t1 in spans:
+        if t1 - t0 + 1e-9 < min_seconds:
+            continue
+        mask = (times >= t0) & (times < t1)
+        result.append({
+            "start": round(t0, 3), "end": round(min(t1, duration), 3), "seconds": round(min(t1, duration) - t0, 3),
+            "median_db": round(float(np.median(level_db[mask])), 1) if mask.any() else None,
+            "threshold_db": round(threshold, 1),
+        })
+    return result
+
+
+def recover_uncovered_speech(
+    audio: Path, raw: list[dict], spans: list[dict], *, duration: float, work_dir: Path,
+    model_name: str, device: str, language: str | None, transcribe_fn=None,
+) -> tuple[list[dict], int]:
+    """Re-transcribe each uncovered span on its own (no VAD) and merge the words.
+
+    The slice is padded by 0.35 s but never reaches into neighbouring
+    transcribed words, so nothing already recognised is heard twice. Recovered
+    segments are tagged ``recovered: true``; a span that still yields nothing
+    stays in the report for the quality gate.
+    """
+    transcribe_fn = transcribe_fn or transcribe
+    existing = word_spans(raw)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    recovered: list[dict] = []
+    for number, span in enumerate(spans):
+        start, end = float(span["start"]), float(span["end"])
+        previous_end = max([e for _s, e in existing if e <= start + 1e-6] + [0.0])
+        next_start = min([s for s, _e in existing if s >= end - 1e-6] + [duration])
+        lo = max(0.0, start - 0.35, previous_end)
+        hi = min(duration, end + 0.35, next_start)
+        if hi - lo < 0.4:
+            continue
+        clip = work_dir / f"span-{number:02d}.wav"
+        slice_audio(audio, lo, hi - lo, clip)
+        try:
+            segments, _language = transcribe_fn(clip, model_name=model_name, device=device, language=language, use_vad=False)
+        except Exception as exc:  # noqa: BLE001 - recovery must never break the analysis
+            print(f"ASR recovery for {lo:.2f}-{hi:.2f}s failed: {exc}", file=sys.stderr)
+            continue
+        for segment in segments:
+            words = []
+            for word in segment.get("words") or []:
+                w_start, w_end = float(word["start"]) + lo, float(word["end"]) + lo
+                middle = (w_start + w_end) / 2
+                if middle < lo or middle > hi:
+                    continue
+                if any(s - 0.05 <= middle <= e + 0.05 for s, e in existing):
+                    continue
+                words.append({**word, "start": round(w_start, 3), "end": round(min(w_end, hi), 3)})
+            text = " ".join(str(w["word"]).strip() for w in words).strip()
+            if not words or not text:
+                continue
+            recovered.append({
+                "start": words[0]["start"], "end": words[-1]["end"], "text": text,
+                "confidence": float(segment.get("confidence", 0.0)),
+                "no_speech_prob": float(segment.get("no_speech_prob", 0.0)),
+                "words": words, "recovered": True,
+            })
+    if not recovered:
+        return raw, 0
+    merged = sorted(list(raw) + recovered, key=lambda item: float(item["start"]))
+    return merged, sum(len(item["words"]) for item in recovered)
+
+
+def summarize_speech_coverage(report: dict | None) -> dict:
+    if not report:
+        return {"measured": False}
+    before = report.get("spans_before") or []
+    after = report.get("spans_after") or []
+    return {
+        "measured": True,
+        "before_seconds": round(sum(float(s["seconds"]) for s in before), 3),
+        "after_seconds": round(sum(float(s["seconds"]) for s in after), 3),
+        "longest_after_seconds": round(max([float(s["seconds"]) for s in after] + [0.0]), 3),
+        "recovered_words": int(report.get("recovered_words") or 0),
+        "spans_after": after,
+    }
+
+
 def atempo_filter(speed: float) -> str:
     values: list[float] = []
     remaining = max(float(speed), 0.01)
@@ -1099,6 +1244,7 @@ async def main_async(args) -> None:
         detected_language = analysis_meta.get("detected_language") or args.source_lang
         asr_coverage = float(analysis_meta.get("asr_coverage", timeline_metrics(raw, source_duration)[0]))
         asr_max_gap = float(analysis_meta.get("asr_max_gap", timeline_metrics(raw, source_duration)[1]))
+        speech_coverage = analysis_meta.get("speech_coverage")
         print(f"Reusing full-video ASR ({len(raw)} timed segments)")
     else:
         working_speech = loaded.audio_path
@@ -1130,6 +1276,23 @@ async def main_async(args) -> None:
             if (recovered_gap, -recovered_coverage) < (asr_max_gap, -asr_coverage):
                 raw, detected_language = recovered, recovered_language or detected_language
                 asr_coverage, asr_max_gap = recovered_coverage, recovered_gap
+        # Whisper can drop a whole phrase while the speaker keeps talking; the
+        # dub would then fall silent there. Compare the speech-stem energy with
+        # the word timeline and re-transcribe only the loud, wordless spans.
+        uncovered_before = find_uncovered_speech(working_speech, raw, source_duration)
+        speech_coverage = {"spans_before": uncovered_before, "recovered_words": 0, "spans_after": uncovered_before}
+        if uncovered_before:
+            total_uncovered = sum(float(s["seconds"]) for s in uncovered_before)
+            print(f"ASR left {total_uncovered:.2f}s of loud speech without words in {len(uncovered_before)} span(s); re-transcribing them without VAD")
+            raw, recovered_words = recover_uncovered_speech(
+                working_speech, raw, uncovered_before, duration=source_duration,
+                work_dir=analysis / "asr-recovery", model_name=args.model, device=device,
+                language=forced or detected_language,
+            )
+            speech_coverage["recovered_words"] = recovered_words
+            speech_coverage["spans_after"] = find_uncovered_speech(working_speech, raw, source_duration)
+            asr_coverage, asr_max_gap = timeline_metrics(raw, source_duration)
+            print(f"ASR recovery added {recovered_words} words; {sum(float(s['seconds']) for s in speech_coverage['spans_after']):.2f}s remain uncovered")
         if args.diarize:
             raw = annotate_segments(working_speech, raw)
         atomic_write_json(asr_path, raw)
@@ -1141,6 +1304,7 @@ async def main_async(args) -> None:
             "asr_max_gap": asr_max_gap,
             "speech_audio": str(working_speech),
             "background_audio": str(working_background) if working_background else None,
+            "speech_coverage": speech_coverage,
         })
         if not speech_audio.exists():
             convert_analysis_audio(working_speech, speech_audio)
@@ -1791,7 +1955,10 @@ async def main_async(args) -> None:
         "source_language": detected_language or args.source_lang,
         "target_language": args.target_lang,
         "background_preserved": bool(args.preserve_background),
-        "asr_timeline": {"coverage": asr_coverage, "max_gap": asr_max_gap},
+        "asr_timeline": {
+            "coverage": asr_coverage, "max_gap": asr_max_gap,
+            "uncovered_speech": summarize_speech_coverage(speech_coverage),
+        },
         "smart_chunking": {
             "max_seconds": args.max_seconds,
             "target_seconds": args.target_seconds,
