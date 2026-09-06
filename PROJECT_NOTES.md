@@ -339,3 +339,16 @@ projects/<اسم>/
   GitHub/Azure وليس على الترويسات. الحلول: عنوان API بديل من الخدمة بلا WAF، أو مزوّد يقبل الخوادم (DeepSeek الرسمي / Gemini / Groq /
   OpenRouter)، أو runner ذاتي. إلى أن يُحل، يتوقف dub.yml عند preflight مبكراً (وضع `fail`)؛ ضبط `TRANSLATE_FALLBACK=google` يسمح بالمتابعة
   بالمترجم القديم مع تحذير.
+
+### الحل المعتمد بعد البحث — GitHub Models (2026-09-06)
+- بحث الويب أكد أن agentrouter.org خلف Aliyun WAF يسمح فقط لعملاء محددين (Claude Code / Codex CLI / Gemini CLI / Qwen Code / SDK
+  أنثروبيك بايثون المتزامن) ويقدّم صفحة تحدّي JavaScript لغيرها؛ من خوادم GitHub تُحجب حتى نسخة curl التي تنجح من الجهاز الشخصي.
+- البديل الذي لا يحتاج أي مفتاح: **GitHub Models** (`TRANSLATE_PROVIDER=github`): endpoint متوافق مع OpenAI
+  `https://models.github.ai/inference/chat/completions`، مجاني للحسابات الشخصية، يعمل من داخل Actions بتوكن الـ workflow نفسه
+  بعد إضافة `permissions: models: read` (أُضيفت في `dub.yml` و`translation-preflight.yml`). الحدود المجانية (قابلة للتغيير):
+  فئة High مثل `openai/gpt-4.1`: 10 طلبات/دقيقة، 50/يوم، 8k إدخال / 4k إخراج لكل طلب؛ فئة Low مثل `openai/gpt-4.1-mini` أو
+  `openai/gpt-4o-mini`: 15/دقيقة، 150/يوم. لذلك الإعداد المسبق يستخدم نوافذ 25 مقطعاً و`max_tokens=4000`؛ فيلم 20 دقيقة ≈ 7–10 طلبات.
+  الطبقة المجانية موجَّهة للتجريب لا للإنتاج التجاري بحسب شروط GitHub.
+- المتغيّرات الآن: `TRANSLATE_PROVIDER=github`، `TRANSLATE_MODEL=openai/gpt-4.1`. السرّ `TRANSLATE_API_KEY` (مفتاح agentrouter) بقي
+  دون حذف لكنه غير مستخدم مع مزوّد github (توكن الـ workflow له الأولوية).
+- إعادة المحاولة تحترم `Retry-After` عند 429 (تراجع 3/6/12/24/48 ث، حتى 90 ث بحسب الترويسة)، `TRANSLATE_MAX_RETRIES` الافتراضي 5.

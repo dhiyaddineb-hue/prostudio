@@ -15,8 +15,13 @@ Environment:
     TRANSLATE_API_KEY      required to enable the LLM translator
     TRANSLATE_PROVIDER     openai | deepseek | groq | openrouter | gemini |
                            mistral | together | xai | anthropic | agentrouter |
-                           custom (default: openai, or anthropic when the base
-                           URL points at api.anthropic.com)
+                           github | custom (default: openai, or anthropic when
+                           the base URL points at api.anthropic.com)
+                           "github" is GitHub Models: free for personal
+                           accounts, reachable from GitHub-hosted runners, and
+                           authenticated with the workflow's own GITHUB_TOKEN
+                           (permissions: models: read) — no TRANSLATE_API_KEY
+                           needed; a PAT with the models scope also works.
     TRANSLATE_API_BASE     override the provider base URL (OpenAI-compatible
                            ``/chat/completions`` or Anthropic ``/messages``)
     TRANSLATE_MODEL        model name (provider default when omitted)
@@ -60,6 +65,7 @@ PROVIDER_BASES = {
     "xai": "https://api.x.ai/v1",
     "anthropic": "https://api.anthropic.com/v1",
     "agentrouter": "https://agentrouter.org/v1",
+    "github": "https://models.github.ai/inference",
 }
 
 PROVIDER_DEFAULT_MODELS = {
@@ -73,12 +79,20 @@ PROVIDER_DEFAULT_MODELS = {
     "xai": "grok-3-mini",
     "anthropic": "claude-3-5-haiku-latest",
     "agentrouter": "deepseek-v4-flash",
+    "github": "openai/gpt-4.1",
+}
+
+# Free-tier request caps (GitHub Models: 8k input / 4k output tokens per request)
+# call for smaller windows and a matching completion budget.
+PROVIDER_DEFAULT_LIMITS: dict[str, dict[str, int]] = {
+    "github": {"window": 25, "max_tokens": 4000},
 }
 
 # Gateways with a WAF in front only admit requests that look like a known
 # client; these defaults can be extended or overridden by TRANSLATE_EXTRA_HEADERS.
 PROVIDER_DEFAULT_HEADERS: dict[str, dict[str, str]] = {
     "agentrouter": {"User-Agent": "codex_cli_rs/0.146.0", "originator": "codex_cli_rs"},
+    "github": {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
 }
 
 # Speech that continues straight into the next chunk (the planner had to cut
@@ -212,6 +226,16 @@ def extract_json_object(text: str) -> dict:
     return data
 
 
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    raw = (response.headers.get("retry-after") or response.headers.get("x-ratelimit-reset-after") or "").strip()
+    if not raw:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return None
+
+
 class TranslationConfigError(RuntimeError):
     """The translator is enabled but cannot work with the given settings."""
 
@@ -219,10 +243,13 @@ class TranslationConfigError(RuntimeError):
 class TranslationAPIError(RuntimeError):
     """The API rejected or failed the request."""
 
-    def __init__(self, message: str, *, status: int | None = None, permanent: bool = False):
+    def __init__(
+        self, message: str, *, status: int | None = None, permanent: bool = False, retry_after: float | None = None,
+    ):
         super().__init__(message)
         self.status = status
         self.permanent = permanent
+        self.retry_after = retry_after
 
 
 @dataclass
@@ -237,7 +264,7 @@ class LLMTranslateConfig:
     window: int = 40
     context_segments: int = 6
     timeout_seconds: float = 180.0
-    max_retries: int = 4
+    max_retries: int = 5
     fallback: str = "fail"
     temperature: float = 0.2
     extra_headers: dict[str, str] = field(default_factory=dict)
@@ -247,9 +274,6 @@ class LLMTranslateConfig:
     @classmethod
     def from_env(cls, environ: dict[str, str] | None = None) -> "LLMTranslateConfig | None":
         env = os.environ if environ is None else environ
-        key = (env.get("TRANSLATE_API_KEY") or "").strip()
-        if not key:
-            return None
         base = (env.get("TRANSLATE_API_BASE") or "").strip().rstrip("/")
         provider = (env.get("TRANSLATE_PROVIDER") or "").strip().lower()
         if not provider:
@@ -258,6 +282,13 @@ class LLMTranslateConfig:
             raise TranslationConfigError(
                 f"unknown TRANSLATE_PROVIDER={provider!r}; expected one of {', '.join(sorted(PROVIDER_BASES))} or custom"
             )
+        key = (env.get("TRANSLATE_API_KEY") or "").strip()
+        if provider == "github":
+            # The runner's own token carries the models:read permission; a PAT
+            # with the models scope may be supplied as TRANSLATE_API_KEY instead.
+            key = (env.get("GITHUB_TOKEN") or env.get("GH_TOKEN") or "").strip() or key
+        if not key:
+            return None
         if not base:
             if provider == "custom":
                 raise TranslationConfigError("TRANSLATE_API_BASE is required when TRANSLATE_PROVIDER=custom")
@@ -273,6 +304,7 @@ class LLMTranslateConfig:
             raise TranslationConfigError("TRANSLATE_JSON_MODE must be auto, on or off")
         headers = dict(PROVIDER_DEFAULT_HEADERS.get(provider, {}))
         headers.update(parse_headers(env.get("TRANSLATE_EXTRA_HEADERS")))
+        limits = PROVIDER_DEFAULT_LIMITS.get(provider, {})
 
         def _float(name: str, default: float) -> float:
             raw = (env.get(name) or "").strip()
@@ -292,11 +324,12 @@ class LLMTranslateConfig:
             style=(env.get("TRANSLATE_STYLE") or "").strip(),
             glossary=parse_glossary(env.get("TRANSLATE_GLOSSARY")),
             words_per_second=_float("TRANSLATE_WORDS_PER_SECOND", 2.7),
-            window=max(1, int(_float("TRANSLATE_WINDOW", 40))),
+            window=max(1, int(_float("TRANSLATE_WINDOW", limits.get("window", 40)))),
             fallback=fallback,
             extra_headers=headers,
-            max_tokens=max(256, int(_float("TRANSLATE_MAX_TOKENS", 8192))),
+            max_tokens=max(256, int(_float("TRANSLATE_MAX_TOKENS", limits.get("max_tokens", 8192)))),
             json_mode=json_mode,
+            max_retries=max(0, int(_float("TRANSLATE_MAX_RETRIES", 5))),
         )
 
     @property
@@ -433,7 +466,7 @@ class LLMTranslator:
                 if response.status_code >= 400:
                     raise TranslationAPIError(
                         f"translation API error {response.status_code}: {response.text[:300]}",
-                        status=response.status_code,
+                        status=response.status_code, retry_after=_retry_after_seconds(response),
                     )
                 try:
                     data = response.json()
@@ -446,7 +479,12 @@ class LLMTranslator:
                 last_error = exc
                 if attempt >= config.max_retries:
                     break
-                await self._sleep(min(2.0 ** attempt, 20.0))
+                # Rate limits (429) usually say how long to wait; honour that,
+                # otherwise back off exponentially: 3, 6, 12, 24, 48 s.
+                delay = min(3.0 * (2.0 ** attempt), 60.0)
+                if exc.retry_after is not None:
+                    delay = min(max(delay, exc.retry_after), 90.0)
+                await self._sleep(delay)
         raise TranslationAPIError(f"translation API failed after {config.max_retries + 1} attempts: {last_error}")
 
     def _extract_text(self, data: dict) -> str:
@@ -649,7 +687,13 @@ def _cli() -> int:
         print(json.dumps({"ok": False, "engine": "llm", "error": str(exc)}, ensure_ascii=False))
         return 2
     if config is None:
-        report = {"ok": True, "engine": "google-unofficial", "note": "TRANSLATE_API_KEY not set; using the built-in Google Translate client"}
+        provider = (os.environ.get("TRANSLATE_PROVIDER") or "").strip().lower()
+        note = "TRANSLATE_API_KEY not set; using the built-in Google Translate client"
+        if provider == "github":
+            note = "TRANSLATE_PROVIDER=github but no GITHUB_TOKEN/GH_TOKEN (or TRANSLATE_API_KEY) is available; using the built-in Google Translate client"
+        elif provider:
+            note = f"TRANSLATE_PROVIDER={provider} but TRANSLATE_API_KEY is not set; using the built-in Google Translate client"
+        report = {"ok": True, "engine": "google-unofficial", "note": note}
         print(json.dumps(report, ensure_ascii=False))
         if args.report:
             args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  models: read
 
 jobs:
   preflight:
@@ -37,6 +38,7 @@ jobs:
 
       - name: Translate one sentence with the configured API
         env:
+          GH_TOKEN: ${{ github.token }}
           TRANSLATE_API_KEY: ${{ secrets.TRANSLATE_API_KEY }}
           TRANSLATE_PROVIDER: ${{ vars.TRANSLATE_PROVIDER }}
           TRANSLATE_API_BASE: ${{ vars.TRANSLATE_API_BASE }}
@@ -57,6 +59,7 @@ jobs:
       - name: Gateway diagnostics (only when the preflight failed)
         if: failure()
         env:
+          GH_TOKEN: ${{ github.token }}
           TRANSLATE_API_KEY: ${{ secrets.TRANSLATE_API_KEY }}
           TRANSLATE_API_BASE: ${{ vars.TRANSLATE_API_BASE }}
           TRANSLATE_PROVIDER: ${{ vars.TRANSLATE_PROVIDER }}

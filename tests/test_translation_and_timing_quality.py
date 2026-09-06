@@ -690,3 +690,67 @@ def test_preflight_exit_code_honours_the_google_fallback():
     assert lt.preflight_exit_code({"ok": False, "error": "waf"}, strict) == 1
     assert lt.preflight_exit_code({"ok": False, "error": "waf"}, lenient) == 0
     assert lt.preflight_exit_code({"ok": False}, None) == 1
+
+
+# ---------------------------------------------------------- GitHub Models
+def test_github_models_preset_uses_the_runner_token_and_free_tier_limits():
+    assert lt.LLMTranslateConfig.from_env({"TRANSLATE_PROVIDER": "github"}) is None
+    config = lt.LLMTranslateConfig.from_env({"TRANSLATE_PROVIDER": "github", "GH_TOKEN": "ghs_runner"})
+    assert config.api_key == "ghs_runner"
+    assert config.api_base == "https://models.github.ai/inference" and config.model == "openai/gpt-4.1"
+    assert config.window == 25 and config.max_tokens == 4000
+    assert config.extra_headers == {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    # The workflow token wins over a stale TRANSLATE_API_KEY meant for another gateway.
+    config = lt.LLMTranslateConfig.from_env({
+        "TRANSLATE_PROVIDER": "github", "GITHUB_TOKEN": "ghs_runner", "TRANSLATE_API_KEY": "sk-other",
+        "TRANSLATE_WINDOW": "12", "TRANSLATE_MAX_TOKENS": "3000", "TRANSLATE_MODEL": "openai/gpt-4.1-mini",
+    })
+    assert config.api_key == "ghs_runner" and config.window == 12 and config.max_tokens == 3000
+    assert config.model == "openai/gpt-4.1-mini"
+    # A PAT with the models scope may be supplied explicitly when no runner token exists.
+    config = lt.LLMTranslateConfig.from_env({"TRANSLATE_PROVIDER": "github", "TRANSLATE_API_KEY": "github_pat_x"})
+    assert config.api_key == "github_pat_x"
+    # Other providers ignore the runner token entirely.
+    assert lt.LLMTranslateConfig.from_env({"TRANSLATE_PROVIDER": "openai", "GH_TOKEN": "ghs_runner"}) is None
+
+    api = FakeAPI([_reply({0: "Hello"})])
+    translator = _translator(lt.LLMTranslateConfig.from_env({"TRANSLATE_PROVIDER": "github", "GH_TOKEN": "ghs_runner"}), api)
+    asyncio.run(translator.translate_segments(_segments("مرحبا"), source_lang="ar", target_lang="en"))
+    asyncio.run(translator.close())
+    request = api.requests[0]
+    assert request["url"] == "https://models.github.ai/inference/chat/completions"
+    assert request["headers"]["authorization"] == "Bearer ghs_runner"
+    assert request["headers"]["x-github-api-version"] == "2022-11-28"
+    assert request["body"]["max_tokens"] == 4000 and request["body"]["model"] == "openai/gpt-4.1"
+
+
+def test_rate_limit_retry_after_is_honoured():
+    api = FakeAPI([httpx.Response(429, text="slow down", headers={"Retry-After": "7"}), _reply({0: "Hello"})])
+    delays = []
+
+    async def record(seconds):
+        delays.append(seconds)
+
+    translator = lt.LLMTranslator(_config(), transport=httpx.MockTransport(api.handler), sleep=record)
+    results = asyncio.run(translator.translate_segments(_segments("مرحبا"), source_lang="ar", target_lang="en"))
+    asyncio.run(translator.close())
+    assert results[0]["text"] == "Hello" and delays == [7.0]
+
+    api = FakeAPI([(503, "busy"), (503, "busy"), _reply({0: "Hello"})])
+    delays.clear()
+    translator = lt.LLMTranslator(_config(), transport=httpx.MockTransport(api.handler), sleep=record)
+    asyncio.run(translator.translate_segments(_segments("مرحبا"), source_lang="ar", target_lang="en"))
+    asyncio.run(translator.close())
+    assert delays == [3.0, 6.0]
+
+
+def test_workflows_grant_models_read_and_pass_the_runner_token():
+    import yaml
+
+    for path in (WORKFLOW, ROOT / ".github/workflows/translation-preflight.yml"):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        assert data["permissions"]["models"] == "read"
+    dub = WORKFLOW.read_text(encoding="utf-8")
+    preflight = dub.split("- name: Preflight environment and credentials", 1)[1].split("- name: Upload preflight diagnostic", 1)[0]
+    smart = dub.split("- name: Run resumable speech-aware smart chunks", 1)[1].split("- name: Confirm complete resumable delivery", 1)[0]
+    assert "GH_TOKEN: ${{ github.token }}" in preflight and "GH_TOKEN: ${{ github.token }}" in smart
