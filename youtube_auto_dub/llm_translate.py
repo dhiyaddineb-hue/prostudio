@@ -41,6 +41,7 @@ import asyncio
 import json
 import os
 import re
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -666,10 +667,23 @@ def _cli() -> int:
             report.update(asyncio.run(_run()))
         except Exception as exc:  # noqa: BLE001 - surfaced verbatim to the operator
             report.update({"ok": False, "error": str(exc)})
+    code = preflight_exit_code(report, config)
+    if code == 0 and not report.get("ok", True):
+        report["note"] = "translation API unreachable; TRANSLATE_FALLBACK=google will translate with the built-in client"
+        print(json.dumps({"warning": report["note"]}, ensure_ascii=False), file=sys.stderr)
     print(json.dumps(report, ensure_ascii=False))
     if args.report:
         args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    return 0 if report.get("ok", True) else 1
+    return code
+
+
+def preflight_exit_code(report: dict[str, Any], config: LLMTranslateConfig | None) -> int:
+    """0 when the run may proceed: the API works, or the operator opted into the Google fallback."""
+    if report.get("ok", True):
+        return 0
+    if config is not None and config.fallback == "google":
+        return 0
+    return 1
 
 
 if __name__ == "__main__":

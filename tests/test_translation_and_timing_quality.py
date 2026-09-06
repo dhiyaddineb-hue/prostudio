@@ -681,3 +681,12 @@ def test_translation_preflight_workflow_exists_and_reuses_the_same_settings():
         assert f"{name}: ${{{{ vars.{name} }}}}" in text
     assert "python -m youtube_auto_dub.llm_translate --preflight" in text
     assert "gh release" not in text and "checkpoints" not in text
+
+
+def test_preflight_exit_code_honours_the_google_fallback():
+    strict = _config(fallback="fail")
+    lenient = _config(fallback="google")
+    assert lt.preflight_exit_code({"ok": True}, strict) == 0
+    assert lt.preflight_exit_code({"ok": False, "error": "waf"}, strict) == 1
+    assert lt.preflight_exit_code({"ok": False, "error": "waf"}, lenient) == 0
+    assert lt.preflight_exit_code({"ok": False}, None) == 1

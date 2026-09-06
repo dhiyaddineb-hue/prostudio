@@ -334,3 +334,8 @@ projects/<اسم>/
   glm-5.3, gpt-5.6-sol.
 - workflow يدوي جديد `translation-preflight.yml` يترجم جملة واحدة من داخل GitHub للتأكد من المفتاح دون لمس أي مشروع أو release.
 - تنبيه أمني: المفتاح لُصق في محادثة؛ يُستحسن تدويره لاحقاً وتحديث السرّ فقط.
+- **نتيجة الفحص من داخل GitHub (تشغيلتا preflight 34029523068 و34029636171)**: كل المحاولات — بما فيها نفس أمر curl الذي نجح من جهاز
+  المستخدم — تُرجع صفحة تحدّي JavaScript من Aliyun WAF (status 200, text/html) بدل JSON. أي أن الحجب على مستوى عناوين IP لخوادم
+  GitHub/Azure وليس على الترويسات. الحلول: عنوان API بديل من الخدمة بلا WAF، أو مزوّد يقبل الخوادم (DeepSeek الرسمي / Gemini / Groq /
+  OpenRouter)، أو runner ذاتي. إلى أن يُحل، يتوقف dub.yml عند preflight مبكراً (وضع `fail`)؛ ضبط `TRANSLATE_FALLBACK=google` يسمح بالمتابعة
+  بالمترجم القديم مع تحذير.
