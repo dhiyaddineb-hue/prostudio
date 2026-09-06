@@ -100,9 +100,11 @@ git add .github/workflows/clone.yml && git commit -m "enable clone workflow" && 
 
 ```bash
 pip install f5-tts
-PROJECT=Phantom-Thread python scripts/clone_project.py
-PROJECT=Phantom-Thread python scripts/build_phantom_dub.py
+PROJECT=<اسم-المشروع> python scripts/clone_project.py
+PROJECT=<اسم-المشروع> python scripts/build_phantom_dub.py
 ```
+
+(`<اسم-المشروع>` مجلد موجود تحت `projects/` يحوي `project.json`؛ التشغيل عبر Actions يرفض قيمة فارغة أو مشروعاً غير موجود.)
 
 التسجيلات السابقة تُنسخ إلى `voices_before_clone/` قبل الاستبدال، فالتراجع ممكن.
 
@@ -166,6 +168,30 @@ python scripts/build_phantom_dub.py
 
 الأولوية دائماً لما تحدّده صراحةً — الرابط أو المسار أو الملف المرفوع.
 مجلد `inbox/` يُستخدم فقط عند تشغيل الأمر بلا مصدر.
+
+## بنية المستودع الرسمية
+
+نُظّف المستودع في 2026-09-06 من كل ملفات التجارب القديمة (فيديوهات Napoleon والمقاطع
+التجريبية والمخرجات المنشورة السابقة، ~730 MB، إضافة إلى checkpoints بحجم ~1 GB).
+البنية المعتمدة للعمل الرسمي:
+
+```
+youtube_auto_dub/   النواة: تفريغ، ترجمة (Google أو LLM اختياري)، TTS، مزامنة، مزج
+scripts/            نقاط التشغيل: resumable_smart_dub.py (الخط الرسمي)، publish_*، validate_*، أدوات مساعدة
+tests/              اختبارات pytest (بلا شبكة)
+web/ · studio/      الواجهة المحلية والاستوديو
+lip_sync/ · config/ مزامنة الشفاه (اختياري) وملفات الإعداد
+.github/workflows/  dub.yml (الدبلجة الرسمية)، translation-preflight.yml، cleanup-dub-checkpoints.yml، …
+docs/               موقع GitHub Pages: الصفحات، الأدلة (guides/)، أبحاث (research/)، وما تنشره التشغيلات
+samples/            عيّنتان صغيرتان فقط للتجربة (ProStudio_Arabic_Demo.mp4 و shorts-test.mp4) + أصوات الاستوديو
+projects/           تُنشئه التشغيلات المنشورة (فارغ الآن)
+inbox/              رفعات مؤقتة — لا تُحفَظ في git
+```
+
+**قواعد ثابتة**: لا حذف لملفات أو checkpoints دون موافقة صريحة (سير العمل
+`cleanup-dub-checkpoints.yml` يطلب كتابة `DELETE <project_id>`)؛ المصادر الكبيرة لا
+تُرفع إلى git إلا عند الحاجة وكأجزاء `.part0/.part1` أقل من 100 MB؛ والتفاصيل التقنية
+اليومية في `PROJECT_NOTES.md`.
 
 ## الترخيص
 

@@ -60,3 +60,7 @@ projects/*/source/
 # only "!docs/samples/*.mp3" silently keeps them all out.
 !docs/samples/
 !docs/samples/*.mp3
+
+# Smart-dub runtime state lives in the checkpoint release, never in git.
+checkpoints/
+voice-audit/

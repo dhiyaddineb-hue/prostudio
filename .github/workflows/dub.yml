@@ -27,9 +27,9 @@ on:
           - clone
           - dub
       project:
-        description: "clone: project folder under projects/"
+        description: "clone: project folder under projects/ (create it first; see README)"
         required: false
-        default: "Phantom-Thread"
+        default: ""
         type: string
       ref_seconds:
         description: "clone: seconds of the actor to clone from (3-12)"
@@ -161,6 +161,20 @@ jobs:
     steps:
       - name: Check out this branch
         uses: actions/checkout@v4
+
+      - name: Require an existing project folder
+        env:
+          PROJECT: ${{ inputs.project }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PROJECT" ]; then
+            echo "clone needs the 'project' input: a folder under projects/ with project.json" >&2
+            exit 1
+          fi
+          test -f "projects/$PROJECT/project.json" || {
+            echo "projects/$PROJECT/project.json is missing; create the project before cloning" >&2
+            exit 1
+          }
 
       - name: Ensure FFmpeg is available
         timeout-minutes: 10

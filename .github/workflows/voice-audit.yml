@@ -5,7 +5,7 @@ on:
       source_path:
         description: Source video/audio path in the repository
         required: true
-        default: samples/11.11_destiny_source.mp4
+        default: samples/ProStudio_Arabic_Demo.mp4
 permissions:
   contents: read
 jobs:
@@ -24,7 +24,7 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           test -n "$HF_TOKEN"
-          python speaker_voice_audit.py "${{ inputs.source_path }}" --out voice-audit --hf-token "$HF_TOKEN"
+          python scripts/speaker_voice_audit.py "${{ inputs.source_path }}" --out voice-audit --hf-token "$HF_TOKEN"
       - uses: actions/upload-artifact@v4
         with:
           name: speaker-voice-audit

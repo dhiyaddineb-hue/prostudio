@@ -371,3 +371,21 @@ projects/<اسم>/
   فاعتبرها الكاشف الأول "مغطاة" ونُشر ناتج بلا صمت لكن بمحتوى مفقود (الكلام مُدِّد فوق الفجوة). أُضيف `untrusted_word_spans`: كلمة أطول
   من 1.5 ث أو مقطع بكثافة < 0.7 كلمة/ث لمدة ≥ 2 ث لا تُعدّ تغطية، وتُعاد الفترة للتفريغ، وتُستبدل الرموز المهملة بالكلمات المستعادة
   (تبقى كما هي إن لم يُستعد شيء). على بيانات #156 الحقيقية: الفترة 25.9–29.56 مكشوفة؛ Napoleon: رمز ممتد واحد (222.45–226.11) و7 فترات.
+
+
+## 🧹 تنظيف المستودع بموافقة صريحة («نعم») — 2026-09-06
+- حُذفت من الفرع `arena/01a03969-prostudio` ملفات التجارب القديمة (الكوميت اللاحق لهذا السجل):
+  - `docs/`: 38 ملفاً، 194.9 MB
+  - `inbox/`: 19 ملفاً، 101.6 MB
+  - `output/`: 35 ملفاً، 118.2 MB
+  - `projects/`: 121 ملفاً، 200.5 MB
+  - `samples/`: 24 ملفاً، 112.8 MB
+  - `transcripts/`: 1 ملفاً، 0.4 MB
+  منها `samples/napoleon.part0` و`samples/napoleon.part1` وكل الدبلجات المنشورة السابقة (docs/*.mp4|srt|vtt) ونسخها في projects/
+  ومشاريع الاستنساخ الأربعة (Phantom-Thread, Vikings-Ragnar-Floki, Bob-Proctor-*) و`output/` و`inbox/` و`transcripts/`.
+- أُبقي على: الكود والاختبارات وصفحات docs، `samples/ProStudio_Arabic_Demo.mp4` (+srt)، `samples/shorts-test.mp4`، `samples/voices/*`.
+- نُقلت من الجذر: أبحاث → `docs/research/`، دليل الاستنساخ → `docs/guides/`، `speaker_voice_audit.py` و`latest_langmap_generate.py` → `scripts/`.
+- `docs/projects.json` أُعيد فارغاً؛ `.gitignore` يمنع `checkpoints/` و`voice-audit/`؛ `dub.yml`: القيمة الافتراضية لـ `project` فارغة مع
+  خطوة تحقق من وجود المشروع؛ `voice-audit.yml` يشير إلى العينة الافتراضية والمسار الجديد للسكربت.
+- Releases المحذوفة (مسودّات checkpoint): 383579396 (shorts-test-v2-4a99eab1c1b4-en-d0e8defb), 383572470 (shorts-test-v2-4a99eab1c1b4-en-10682ce9), 383564807 (shorts-test-4a99eab1c1b4-en-10682ce9), 383216365 (napoleon-29aee5f74783-en-10682ce9), 383036926 (1156866-3fafd0dff2d0-en-10682ce9) — مجموعها ~988 MB.
+- لم يُمسّ: تاريخ git (591 MB)، الفروع الأخرى، الفرع `main`.

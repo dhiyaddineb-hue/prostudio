@@ -5,7 +5,8 @@ from typing import Any, Dict
 
 import edge_tts
 
-BASE_DIR = Path(__file__).resolve().parent
+# Lives in scripts/; the language map belongs to the package one level up.
+BASE_DIR = Path(__file__).resolve().parents[1]
 LANG_MAP_FILE = BASE_DIR / "youtube_auto_dub" / "language_map.json"
 
 async def generate_lang_map() -> None:
