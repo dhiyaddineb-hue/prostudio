@@ -117,12 +117,41 @@ def decode_mono(path: Path, rate: int = SR_TTS) -> np.ndarray:
     return np.frombuffer(proc.stdout, dtype=np.float32)
 
 
-def word_spans(raw: list[dict]) -> list[tuple[float, float]]:
+# A real word does not last 1.5 s, and real speech does not run at fewer than
+# 0.7 words per second for two seconds. Whisper produces both when it gives up
+# on a passage: one token stretched over the whole span (run #156 heard "بي"
+# for 3.98 s) or a near-empty segment. Such words are not trusted as coverage.
+MAX_TRUSTED_WORD_SECONDS = 1.5
+MIN_TRUSTED_WORDS_PER_SECOND = 0.7
+MIN_DENSITY_SEGMENT_SECONDS = 2.0
+
+
+def untrusted_word_spans(raw: list[dict]) -> list[tuple[float, float]]:
+    """Word intervals that look like ASR give-ups rather than speech."""
+    spans: list[tuple[float, float]] = []
+    for segment in raw:
+        words = [w for w in (segment.get("words") or []) if float(w["end"]) > float(w["start"])]
+        if not words:
+            continue
+        seg_start, seg_end = float(words[0]["start"]), float(words[-1]["end"])
+        seg_seconds = seg_end - seg_start
+        sparse = seg_seconds >= MIN_DENSITY_SEGMENT_SECONDS and len(words) / seg_seconds < MIN_TRUSTED_WORDS_PER_SECOND
+        for w in words:
+            if sparse or float(w["end"]) - float(w["start"]) > MAX_TRUSTED_WORD_SECONDS:
+                spans.append((float(w["start"]), float(w["end"])))
+    return sorted(spans)
+
+
+def word_spans(raw: list[dict], *, trusted_only: bool = False) -> list[tuple[float, float]]:
+    untrusted = set(untrusted_word_spans(raw)) if trusted_only else set()
     spans: list[tuple[float, float]] = []
     for segment in raw:
         words = segment.get("words") or []
         if words:
-            spans.extend((float(w["start"]), float(w["end"])) for w in words if float(w["end"]) > float(w["start"]))
+            spans.extend(
+                (float(w["start"]), float(w["end"])) for w in words
+                if float(w["end"]) > float(w["start"]) and (float(w["start"]), float(w["end"])) not in untrusted
+            )
         elif float(segment.get("end", 0.0)) > float(segment.get("start", 0.0)) and str(segment.get("text", "")).strip():
             spans.append((float(segment["start"]), float(segment["end"])))
     return sorted(spans)
@@ -135,13 +164,14 @@ def find_uncovered_speech(
 ) -> list[dict]:
     """Loud stretches of the speech track that the transcript left without words.
 
-    Whisper occasionally drops a whole phrase (its VAD or decoder gives up), and
-    the dub is then silent exactly there, because nothing was translated. This
-    compares the speech-stem energy with the word timeline: frames louder than
-    the transcribed speech minus ``level_margin_db`` that fall outside every
-    word (padded by ``pad_seconds``) are collected into spans of at least
-    ``min_seconds``. Music-only passages are quiet on the speech stem, so they
-    do not register.
+    Whisper occasionally drops a whole phrase (its VAD or decoder gives up), or
+    stretches a single token over it, and the dub then says nothing — or
+    something else — exactly there, because nothing real was translated. This
+    compares the speech-stem energy with the timeline of *trusted* words (see
+    ``untrusted_word_spans``): frames louder than the transcribed speech minus
+    ``level_margin_db`` that fall outside every trusted word (padded by
+    ``pad_seconds``) are collected into spans of at least ``min_seconds``.
+    Music-only passages are quiet on the speech stem, so they do not register.
     """
     samples = decode_mono(audio, rate) if not isinstance(audio, np.ndarray) else audio
     frame = max(1, int(rate * frame_ms / 1000))
@@ -152,7 +182,7 @@ def find_uncovered_speech(
     level_db = 20.0 * np.log10(rms + 1e-9)
     times = (np.arange(count) + 0.5) * frame / rate
     covered = np.zeros(count, dtype=bool)
-    for start, end in word_spans(raw):
+    for start, end in word_spans(raw, trusted_only=True):
         lo = int(max(0.0, start - pad_seconds) * rate // frame)
         hi = int(min(duration, end + pad_seconds) * rate // frame) + 1
         covered[max(0, lo):min(count, hi)] = True
@@ -195,9 +225,11 @@ def recover_uncovered_speech(
     stays in the report for the quality gate.
     """
     transcribe_fn = transcribe_fn or transcribe
-    existing = word_spans(raw)
+    existing = word_spans(raw, trusted_only=True)
+    untrusted = set(untrusted_word_spans(raw))
     work_dir.mkdir(parents=True, exist_ok=True)
     recovered: list[dict] = []
+    replaced_ranges: list[tuple[float, float]] = []
     for number, span in enumerate(spans):
         start, end = float(span["start"]), float(span["end"])
         previous_end = max([e for _s, e in existing if e <= start + 1e-6] + [0.0])
@@ -232,9 +264,32 @@ def recover_uncovered_speech(
                 "no_speech_prob": float(segment.get("no_speech_prob", 0.0)),
                 "words": words, "recovered": True,
             })
+            replaced_ranges.append((lo, hi))
     if not recovered:
         return raw, 0
-    merged = sorted(list(raw) + recovered, key=lambda item: float(item["start"]))
+    # A give-up token that the recovery just re-heard properly must not stay in
+    # the transcript beside the real words, or it would be translated too.
+    cleaned: list[dict] = []
+    for segment in raw:
+        words = segment.get("words") or []
+        if not words or not untrusted:
+            cleaned.append(segment)
+            continue
+        kept = [
+            w for w in words
+            if (float(w["start"]), float(w["end"])) not in untrusted
+            or not any(lo - 1e-6 <= (float(w["start"]) + float(w["end"])) / 2 <= hi + 1e-6 for lo, hi in replaced_ranges)
+        ]
+        if len(kept) == len(words):
+            cleaned.append(segment)
+        elif kept:
+            cleaned.append({
+                **segment, "words": kept, "start": kept[0]["start"], "end": kept[-1]["end"],
+                "text": " ".join(str(w["word"]).strip() for w in kept).strip(),
+                "recovery_replaced_words": len(words) - len(kept),
+            })
+        # a segment whose only words were give-up tokens disappears entirely
+    merged = sorted(cleaned + recovered, key=lambda item: float(item["start"]))
     return merged, sum(len(item["words"]) for item in recovered)
 
 

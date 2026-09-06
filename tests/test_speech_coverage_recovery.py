@@ -64,9 +64,15 @@ def _namespace(tmp_path: Path) -> dict:
     import sys
 
     namespace = {"Path": Path, "np": np, "subprocess": subprocess, "sys": sys, "SR_TTS": SR, "transcribe": None}
+    tree = ast.parse(SCRIPT.read_text(encoding="utf-8"))
+    constants = [
+        n for n in tree.body
+        if isinstance(n, ast.Assign) and all(isinstance(t, ast.Name) and t.id.isupper() for t in n.targets)
+    ]
+    exec(compile(ast.Module(body=constants, type_ignores=[]), str(SCRIPT), "exec"), namespace)
     _extract(SCRIPT, {
-        "run", "decode_mono", "word_spans", "find_uncovered_speech", "recover_uncovered_speech",
-        "summarize_speech_coverage", "slice_audio",
+        "run", "decode_mono", "word_spans", "untrusted_word_spans", "find_uncovered_speech",
+        "recover_uncovered_speech", "summarize_speech_coverage", "slice_audio",
     }, namespace)
     return namespace
 
@@ -112,7 +118,8 @@ def test_loud_wordless_span_is_found_and_music_free_silence_is_not(tmp_path):
     assert abs(spans[0]["start"] - 5.0) < 0.1 and abs(spans[0]["end"] - 8.5) < 0.1
     assert spans[0]["seconds"] > 3.3 and spans[0]["median_db"] > spans[0]["threshold_db"]
     # Fully transcribed speech reports nothing.
-    assert ns["find_uncovered_speech"](audio, raw + _words((5.0, 6.5), (6.5, 8.5)), 12.0) == []
+    full = raw + _words((5.0, 5.6), (5.6, 6.3), (6.3, 7.0), (7.0, 7.8), (7.8, 8.5))
+    assert ns["find_uncovered_speech"](audio, full, 12.0) == []
     # Short wordless blips (< 0.8 s) are ignored; they are breaths, laughs, or ASR word-edge slop.
     blip = _timeline(6.0, [(1.0, 2.0), (3.0, 3.5)])
     assert ns["find_uncovered_speech"](blip, _words((1.0, 2.0)), 6.0) == []
@@ -233,3 +240,55 @@ def test_quality_gate_checks_uncovered_speech_only_when_measured():
     assert '"speech_covered_by_transcript": speech_covered' in text
     for policy, limit in (("safe", 3.5), ("balanced", 2.0), ("strict", 1.0)):
         assert f'"{policy}":{{' in text and f'"uncovered_speech":{limit}' in text.split(f'"{policy}":{{', 1)[1].split("}", 1)[0]
+
+
+def test_a_token_stretched_over_seconds_is_not_trusted_as_coverage(tmp_path):
+    ns = _namespace(tmp_path)
+    audio = _timeline(12.0, [(1.0, 3.0), (5.0, 9.0), (10.0, 11.0)])
+    # Run #156: Whisper "heard" one token spanning the whole 4 s passage.
+    raw = _words((1.0, 1.5), (1.5, 2.2), (2.2, 3.0)) + _words((5.0, 9.0)) + _words((10.0, 10.5), (10.5, 11.0))
+    assert ns["untrusted_word_spans"](raw) == [(5.0, 9.0)]
+    assert (5.0, 9.0) not in ns["word_spans"](raw, trusted_only=True)
+    assert (5.0, 9.0) in ns["word_spans"](raw)
+    spans = ns["find_uncovered_speech"](audio, raw, 12.0)
+    assert len(spans) == 1 and abs(spans[0]["start"] - 5.0) < 0.1 and abs(spans[0]["end"] - 9.0) < 0.1
+    # A sparse segment (few words over a long stretch) is treated the same way.
+    sparse = _words((5.0, 5.4), (8.4, 9.0))
+    assert ns["untrusted_word_spans"](sparse) == [(5.0, 5.4), (8.4, 9.0)]
+    # Normal speech density and word lengths are trusted.
+    assert ns["untrusted_word_spans"](_words((1.0, 1.5), (1.5, 2.2), (2.2, 3.0))) == []
+
+
+def test_recovery_replaces_the_stretched_token_with_real_words(tmp_path):
+    ns = _namespace(tmp_path)
+    audio = _timeline(12.0, [(1.0, 3.0), (5.0, 9.0), (10.0, 11.0)])
+    source = tmp_path / "speech.wav"
+    _write_wav(source, audio)
+    raw = _words((1.0, 1.5), (1.5, 2.2), (2.2, 3.0)) + _words((5.0, 9.0)) + _words((10.0, 10.5), (10.5, 11.0))
+    raw[1]["text"] = "بي"
+    spans = ns["find_uncovered_speech"](source, raw, 12.0)
+
+    def fake_transcribe(path, model_name, device, language, use_vad):
+        return ([{
+            "start": 0.3, "end": 3.9, "text": "real words here", "confidence": 0.8, "no_speech_prob": 0.1,
+            "words": [{"word": " real", "start": 0.3, "end": 1.2}, {"word": " words", "start": 1.3, "end": 2.4},
+                      {"word": " here", "start": 2.5, "end": 3.9}],
+        }], "ar")
+
+    merged, count = ns["recover_uncovered_speech"](
+        source, raw, spans, duration=12.0, work_dir=tmp_path / "recovery",
+        model_name="medium", device="cpu", language="ar", transcribe_fn=fake_transcribe,
+    )
+    assert count == 3
+    texts = [seg["text"] for seg in merged]
+    assert "بي" not in texts and "real words here" in texts
+    assert len(merged) == 3 and [float(s["start"]) for s in merged] == sorted(float(s["start"]) for s in merged)
+    assert ns["untrusted_word_spans"](merged) == []
+    assert ns["find_uncovered_speech"](source, merged, 12.0) == []
+
+    # If the re-transcription yields nothing, the original token is kept (never make it worse).
+    merged2, count2 = ns["recover_uncovered_speech"](
+        source, raw, spans, duration=12.0, work_dir=tmp_path / "recovery2",
+        model_name="medium", device="cpu", language="ar", transcribe_fn=lambda *a, **k: ([], "ar"),
+    )
+    assert count2 == 0 and merged2 == raw
