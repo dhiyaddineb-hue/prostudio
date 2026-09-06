@@ -285,3 +285,43 @@ projects/<اسم>/
    **سيفشل بهذين الاختبارين**. الإصلاح: إضافة `librosa>=0.10` إلى `dependencies`
    أو `pip install -r requirements.txt` في `ci.yml`.
    (تصحيح لنسخة سابقة من هذه المذكرة: `edge-tts` **موجود** في التبعيات، فلم يكن هو المشكلة.)
+
+
+## 🌐 الترجمة بنموذج لغوي (اختياري) + تحسينات التوقيت — 2026-09-06
+
+**الدافع**: أول فيلم كامل (Napoleon، التشغيلة #154) أظهر أن الترجمة تُنفَّذ مقطعاً مقطعاً (≤10 ث، 124 من 156 قطعاً وسط الجملة)
+عبر Google Translate غير الرسمي بلا سياق، فظهرت أخطاء أسماء ("Al-Namsa" بدل Austria، "Tanerand" بدل Talleyrand) وجُمل بلا معنى،
+كما ظهرت فراغات صامتة داخل الكلام المتصل، وحواف باهتة عند كل وصلة، ومقطع واحد وُلِّد بطول 29.5 ث لنافذة 7.8 ث ثم ضُغِط 3.8x.
+
+### 1) المترجم الجديد `youtube_auto_dub/llm_translate.py`
+- يعمل **فقط** عند وجود السرّ `TRANSLATE_API_KEY` في المستودع (Settings → Secrets and variables → Actions). بدونه لا يتغير شيء
+  ويبقى `GoogleTranslator` كما هو.
+- الإعدادات غير السرّية عبر **Variables** في المستودع: `TRANSLATE_PROVIDER` (openai | deepseek | groq | openrouter | gemini |
+  mistral | together | xai | anthropic | custom)، `TRANSLATE_MODEL`، `TRANSLATE_API_BASE` (لـ custom أو للتجاوز)،
+  `TRANSLATE_STYLE` (مثل "documentary narration")، `TRANSLATE_GLOSSARY` ("نابليون=>Napoleon; النمسا=>Austria" أو مسار ملف JSON)،
+  `TRANSLATE_FALLBACK` (الافتراضي `fail` = توقّف قابل للاستئناف بدل خلط محرّكين؛ `google` = إكمال الباقي بالمترجم القديم).
+- يترجم النص بترتيبه الكامل في نوافذ من 40 مقطعاً مع سياق المقاطع السابقة، ويعطي كل مقطع **ميزانية كلمات** من نافذته الزمنية
+  (2.7 كلمة/ث افتراضياً)، ويعلّم المقاطع المقطوعة وسط الجملة (`continues`) لتُقرأ متصلة، ويثبّت الأسماء ويصلح أخطاء التفريغ من السياق.
+- تحقق صارم: عدد المعرّفات، لا نص فارغ، لا حروف من لغة المصدر في الهدف؛ إعادة طلب عند الرفض؛ محاولات مع تراجع أسّي عند 429/5xx؛
+  الأخطاء الدائمة (401/403/404) تفشل فوراً؛ تمريرة تقصير واحدة للمقاطع التي تتجاوز ميزانيتها بـ35%+.
+- التقدّم يُحفَظ ويُرفَع للـ Release بعد كل نافذة (استئناف آمن). المحرّك يُسجَّل لكل مقطع في `translation_engine`،
+  وملخص الإعداد والاستهلاك في المفتاح `translation` بالـ manifest. **ليس جزءاً من `config_hash`** → المشاريع القديمة تستأنف كما هي.
+- فحص أولي في الـ workflow (`python -m youtube_auto_dub.llm_translate --preflight`) يترجم جملة واحدة قبل بدء العمل؛ مفتاح خاطئ
+  يُفشِل التشغيلة في أول دقيقة بدل آخر ساعة. التقرير في `output/translation-preflight.json` وداخل `preflight.json`.
+
+### 2) التوقيت (في `scripts/resumable_smart_dub.py`)
+- `match_duration_bounded`: مطابقة ثنائية الاتجاه مع **حدّ إبطاء 0.85x** (`SLOW_TEMPO_FLOOR`). في مسار VoxCPM فقط (بدون Seed-VC)
+  أضيفت خطوة `window-fill` بعد `pre-render`: الكلام الأقصر من نافذته يُبطَّأ ليملأها (حتى 0.85x) وما يبقى يظل صامتاً؛ لا تسريع إضافي
+  (`max_tempo=1.0`). المسارات التي كانت تُبطئ بلا حدّ (مزامنة Seed-VC لكل مقطع، وإعادة المحاولة بعد فحص المحتوى) صارت محدودة بنفس الحدّ.
+- الحواف: 15 ms تبقى عند الوقفات الطبيعية، أما القطع وسط الجملة (`word_boundary`/`hard_limit_guard`) فتحصل على حارس نقرة 3 ms فقط
+  (`boundary_fades`)؛ قيم التلاشي تُسجَّل في `mix-report.json`.
+- **لا إعادة بناء قسرية** للمقاطع المكتملة: التحسينات تنطبق على ما يُصيَّر من الآن (فيديوهات قادمة أو مقاطع غير مكتملة).
+
+### 3) معقولية طول التوليد (`youtube_auto_dub/voxcpm_tts.py`)
+- `speak_voxcpm(..., max_seconds)`: الحدّ المعقول = 1.7 × (الكلمات ÷ 2.7) + 0.8 ث (`plausible_tts_seconds`). الأخذة الأطول تُحفَظ باسم
+  `generated.long-take-N.wav` للمراجعة ويُعاد التوليد حتى 3 أخذات (`YAD_TTS_LONG_TAKE_ATTEMPTS`)، وإن بقيت كلها طويلة تُستخدم الأقصر
+  بدل توقف الخط. `tts_duration_warning` يُسجَّل في بيانات المقطع.
+
+### الاختبارات
+- `tests/test_translation_and_timing_quality.py` (26 اختباراً، بلا شبكة: `httpx.MockTransport`). المجموعة الكاملة محلياً: 249 ناجحاً،
+  4 متجاوَزة، 14 فشلاً بيئياً معروفاً (librosa/pytest-asyncio/espeak-ng/docs/dashboard.html/studio tts) — لا تراجعات.

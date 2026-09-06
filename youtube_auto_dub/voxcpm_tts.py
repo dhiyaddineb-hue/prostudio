@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from youtube_auto_dub.models import SR_TTS, VOICE_MIN_FILE_SIZE
@@ -123,27 +124,61 @@ def _validate_generated_speech(path: Path) -> None:
         raise RuntimeError(f"generated speech contains {longest_seconds:.2f}s internal silence")
 
 
-async def speak_voxcpm(text, dest, language="en", control="", reference_audio=None):
+def _audio_seconds(path: Path) -> float:
+    import soundfile as sf
+    info = sf.info(str(path))
+    return float(info.frames) / max(int(info.samplerate or SR_TTS), 1)
+
+
+async def speak_voxcpm(text, dest, language="en", control="", reference_audio=None, max_seconds=None):
+    """Generate ``text`` into ``dest``; returns the take duration in seconds.
+
+    ``max_seconds`` is the longest plausible take for this text. A longer take
+    (repeated words, runaway pauses, a crawling read) is kept beside ``dest``
+    as ``<stem>.long-take-N.wav`` for audit and generated again, up to
+    YAD_TTS_LONG_TAKE_ATTEMPTS (default 3) takes. If every take is too long the
+    shortest one is used, so the pipeline never stalls on a stubborn line.
+    """
+    dest = Path(dest)
     generate = _generate_space if _BACKEND == "space" else _generate_local
     # Hosted Spaces can transiently reject queued requests. Keep the preferred
     # engine alive through several independent attempts before falling back.
     default_attempts = 15 if _BACKEND == "space" else 3
     attempts = max(1, int(os.environ.get("YAD_VOXCPM_ATTEMPTS", str(default_attempts))))
+    long_take_attempts = max(1, int(os.environ.get("YAD_TTS_LONG_TAKE_ATTEMPTS", "3")))
+    limit = float(max_seconds) if max_seconds else None
+    long_takes: list[tuple[float, Path]] = []
     last = None
+    failures = 0
     async with _LOCK:
-        for attempt in range(attempts):
+        while failures < attempts:
             try:
                 await asyncio.to_thread(generate, text, dest, control, reference_audio)
                 await asyncio.to_thread(_validate_generated_speech, dest)
-                return
             except Exception as exc:
                 last = exc
+                failures += 1
                 dest.unlink(missing_ok=True)
-                if _BACKEND == "space" and attempt >= 1:
+                if _BACKEND == "space" and failures >= 2:
                     global _CLIENT
                     _CLIENT = None
                 log.warning("VoxCPM[%s] attempt %d/%d failed for %s: %s",
-                            _BACKEND, attempt + 1, attempts, language, exc)
-                if attempt < attempts - 1:
-                    await asyncio.sleep(min(5 * (2 ** min(attempt, 3)), 30))
+                            _BACKEND, failures, attempts, language, exc)
+                if failures < attempts:
+                    await asyncio.sleep(min(5 * (2 ** min(failures - 1, 3)), 30))
+                continue
+            duration = await asyncio.to_thread(_audio_seconds, dest)
+            if limit is None or duration <= limit:
+                return duration
+            kept = dest.with_name(f"{dest.stem}.long-take-{len(long_takes) + 1}{dest.suffix}")
+            os.replace(dest, kept)
+            long_takes.append((duration, kept))
+            log.warning("VoxCPM[%s] take %d is %.2fs for a %.2fs-plausible line; regenerating",
+                        _BACKEND, len(long_takes), duration, limit)
+            if len(long_takes) >= long_take_attempts:
+                shortest_duration, shortest_path = min(long_takes)
+                shutil.copy2(shortest_path, dest)
+                log.warning("VoxCPM[%s] keeping the shortest of %d long takes (%.2fs)",
+                            _BACKEND, len(long_takes), shortest_duration)
+                return shortest_duration
     raise RuntimeError(f"VoxCPM[{_BACKEND}] failed for {language} speech") from last

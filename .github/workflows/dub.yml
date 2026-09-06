@@ -338,12 +338,24 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           YT_COOKIES: ${{ secrets.YT_COOKIES }}
+          TRANSLATE_API_KEY: ${{ secrets.TRANSLATE_API_KEY }}
+          TRANSLATE_PROVIDER: ${{ vars.TRANSLATE_PROVIDER }}
+          TRANSLATE_API_BASE: ${{ vars.TRANSLATE_API_BASE }}
+          TRANSLATE_MODEL: ${{ vars.TRANSLATE_MODEL }}
+          TRANSLATE_STYLE: ${{ vars.TRANSLATE_STYLE }}
+          TRANSLATE_GLOSSARY: ${{ vars.TRANSLATE_GLOSSARY }}
+          TRANSLATE_FALLBACK: ${{ vars.TRANSLATE_FALLBACK }}
         run: |
           set -euo pipefail
           mkdir -p output
           ffmpeg -version >/dev/null
+          # Prove the translation API (when configured) before hours of work depend on it.
+          python -m youtube_auto_dub.llm_translate --preflight \
+            --source-lang "${{ inputs.source_lang }}" --target-lang "${{ inputs.target_lang }}" \
+            --report output/translation-preflight.json
           python - <<'PY'
           import json, os, shutil
+          translation = json.load(open("output/translation-preflight.json", encoding="utf-8"))
           report = {
             "ffmpeg": bool(shutil.which("ffmpeg")),
             "ffprobe": bool(shutil.which("ffprobe")),
@@ -356,6 +368,7 @@ jobs:
             "seed_vc_script": os.path.exists("scripts/seed_vc_enhance.py"),
             "hf_token_present": bool(os.environ.get("HF_TOKEN")),
             "youtube_cookies_present": bool(os.environ.get("YT_COOKIES")),
+            "translation": translation,
             "lip_sync": "disabled",
             "status": "ready_with_warnings",
           }
@@ -437,6 +450,13 @@ jobs:
           YAD_CACHE_DIR: .cache
           YAD_COOKIES_FILE: cookies.txt
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          TRANSLATE_API_KEY: ${{ secrets.TRANSLATE_API_KEY }}
+          TRANSLATE_PROVIDER: ${{ vars.TRANSLATE_PROVIDER }}
+          TRANSLATE_API_BASE: ${{ vars.TRANSLATE_API_BASE }}
+          TRANSLATE_MODEL: ${{ vars.TRANSLATE_MODEL }}
+          TRANSLATE_STYLE: ${{ vars.TRANSLATE_STYLE }}
+          TRANSLATE_GLOSSARY: ${{ vars.TRANSLATE_GLOSSARY }}
+          TRANSLATE_FALLBACK: ${{ vars.TRANSLATE_FALLBACK }}
         run: |
           set -euo pipefail
           chunk_max="${{ inputs.chunk_seconds }}"

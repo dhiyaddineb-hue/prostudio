@@ -31,6 +31,13 @@ from youtube_auto_dub.emotion import infer_emotion
 from youtube_auto_dub.content_validation import is_non_speech_text, normalize_tokens, validate_spoken_content, word_timing_report
 from youtube_auto_dub.voice_profiles import load_voice_profiles, template_for_speakers
 from youtube_auto_dub.googlev4 import GoogleTranslator
+from youtube_auto_dub.llm_translate import (
+    CONTINUATION_CUTS,
+    LLMTranslateConfig,
+    LLMTranslator,
+    TranslationAPIError,
+    TranslationConfigError,
+)
 from youtube_auto_dub.models import SR_TTS
 from youtube_auto_dub.runtime import pick_device
 from youtube_auto_dub.smart_chunks import (
@@ -53,6 +60,21 @@ from youtube_auto_dub.youtube import load_source
 # GitHub refuses files above 100 MB; the published dub must stay well below it.
 PUBLISH_SIZE_BUDGET_BYTES = 85 * 1000 * 1000
 PUBLISH_SIZE_HARD_LIMIT_BYTES = 95 * 1000 * 1000
+
+# Speech that is shorter than its window is slowed down to fill it, but never
+# below this tempo: slower than ~0.85x sounds drugged, so the remainder of the
+# window stays silent instead.
+SLOW_TEMPO_FLOOR = 0.85
+# Boundary fades on the voice track. Where the planner had to cut inside a
+# sentence the speech continues in the next chunk, so only a click guard is
+# applied there; a full fade would dent every mid-sentence seam.
+EDGE_FADE_SECONDS = 0.015
+DECLICK_FADE_SECONDS = 0.003
+# A TTS take far longer than its text warrants (repeats, runaway pauses, a
+# crawling read) is regenerated instead of being crushed into the window.
+TTS_WORDS_PER_SECOND = 2.7
+TTS_LONG_TAKE_RATIO = 1.7
+TTS_LONG_TAKE_SLACK_SECONDS = 0.8
 
 
 def run(cmd: list[str], *, check: bool = True, capture: bool = True) -> subprocess.CompletedProcess:
@@ -190,6 +212,49 @@ def match_duration_without_cutting(source: Path, destination: Path, target_durat
     return destination, actual, final_samples / SR_TTS
 
 
+def match_duration_bounded(
+    source: Path, destination: Path, target_duration: float, *,
+    min_tempo: float = SLOW_TEMPO_FLOOR, max_tempo: float | None = None,
+) -> tuple[Path, float, float]:
+    """Fill the speech window in both directions, but never slow below ``min_tempo``.
+
+    Long speech is accelerated to end with the original phrase unless
+    ``max_tempo`` caps that (``max_tempo=1.0`` means: never speed up here, an
+    earlier budget fit already did). Short speech is slowed only as far as
+    ``min_tempo`` allows; whatever remains of the window stays silent rather
+    than dragging the read. Tempo only: nothing is trimmed or sliced.
+    """
+    if target_duration <= 0.10:
+        raise RuntimeError(f"invalid sync target: {target_duration:.3f}s")
+    min_tempo = min(1.0, max(0.5, float(min_tempo)))
+    info = sf.info(str(source))
+    actual = info.frames / max(int(info.samplerate or SR_TTS), 1)
+    slowest = actual / min_tempo
+    effective_target = min(float(target_duration), slowest)
+    if max_tempo is not None and actual > effective_target:
+        effective_target = max(effective_target, actual / max(1.0, float(max_tempo)))
+    if abs(actual - effective_target) <= 0.012:
+        if Path(source) != Path(destination):
+            shutil.copy2(source, destination)
+        return destination, actual, actual
+    return match_duration_without_cutting(source, destination, effective_target)
+
+
+def plausible_tts_seconds(text: str) -> float:
+    """Upper bound for a sane take of ``text``; longer takes are regenerated."""
+    words = len(normalize_tokens(text or "")) or len((text or "").split()) or 1
+    return TTS_LONG_TAKE_RATIO * (words / TTS_WORDS_PER_SECOND) + TTS_LONG_TAKE_SLACK_SECONDS
+
+
+def boundary_fades(chunks: list[dict], index: int) -> tuple[float, float]:
+    """Voice fade lengths for chunk ``index``: click guards where speech continues across the cut."""
+    chunk = chunks[index]
+    previous = chunks[index - 1] if index > 0 else None
+    fade_in = DECLICK_FADE_SECONDS if previous and previous.get("cut_reason") in CONTINUATION_CUTS else EDGE_FADE_SECONDS
+    fade_out = DECLICK_FADE_SECONDS if chunk.get("cut_reason") in CONTINUATION_CUTS else EDGE_FADE_SECONDS
+    return fade_in, fade_out
+
+
 def convert_analysis_audio(source: Path, speech: Path, background: Path | None = None) -> None:
     speech.parent.mkdir(parents=True, exist_ok=True)
     run(["ffmpeg", "-y", "-i", str(source), "-ar", "24000", "-ac", "1", "-c:a", "flac", str(speech)])
@@ -237,6 +302,8 @@ def build_chunk_audio(
     *,
     background_gain: float,
     voice_is_full_timeline: bool = False,
+    fade_in_seconds: float = EDGE_FADE_SECONDS,
+    fade_out_seconds: float = EDGE_FADE_SECONDS,
 ) -> Path:
     duration = float(chunk["end"]) - float(chunk["start"])
     total = max(1, int(round(duration * SR_TTS)))
@@ -263,11 +330,13 @@ def build_chunk_audio(
             raise RuntimeError(f"fitted voice would be truncated: {len(voice)} samples > {available}")
         count = len(voice)
         if count > 0:
-            fade = min(int(0.015 * SR_TTS), count // 2)
+            fade_in = min(int(max(0.0, fade_in_seconds) * SR_TTS), count // 2)
+            fade_out = min(int(max(0.0, fade_out_seconds) * SR_TTS), count // 2)
             voice = voice.copy()
-            if fade > 1:
-                voice[:fade] *= np.linspace(0.0, 1.0, fade, dtype=np.float32)
-                voice[-fade:] *= np.linspace(1.0, 0.0, fade, dtype=np.float32)
+            if fade_in > 1:
+                voice[:fade_in] *= np.linspace(0.0, 1.0, fade_in, dtype=np.float32)
+            if fade_out > 1:
+                voice[-fade_out:] *= np.linspace(1.0, 0.0, fade_out, dtype=np.float32)
             voice_track[offset:offset + count] = voice
 
     # Duck the background only while translated speech is active. A smoothed
@@ -293,6 +362,8 @@ def build_chunk_audio(
         "duck_floor": duck_floor,
         "speech_active_ratio": round(float(np.mean(active)), 4),
         "peak_before_limit": round(peak, 6),
+        "fade_in_seconds": round(float(fade_in_seconds), 4),
+        "fade_out_seconds": round(float(fade_out_seconds), 4),
     })
     return destination
 
@@ -809,15 +880,21 @@ def observed_transcript(raw: list[dict]) -> tuple[str, list[dict]]:
     return text, words
 
 
-async def synthesize(args, profile: dict, text: str, destination: Path, reference: Path | None) -> str:
+async def synthesize(
+    args, profile: dict, text: str, destination: Path, reference: Path | None,
+    *, max_seconds: float | None = None,
+) -> str:
     engine = profile.get("tts_engine") or args.tts_engine
     style = profile.get("style") or "natural"
+    if max_seconds is None:
+        max_seconds = plausible_tts_seconds(text)
     if engine == "voxcpm":
         try:
             await speak_voxcpm(
                 text, destination, language=args.target_lang,
                 control=f"{style}; delivery: {infer_emotion(text)}",
                 reference_audio=reference,
+                max_seconds=max_seconds,
             )
             return "voxcpm"
         except Exception as exc:
@@ -843,6 +920,93 @@ async def synthesize(args, profile: dict, text: str, destination: Path, referenc
     voice = profile.get("voice") or args.voice or pick_voice(args.target_lang, profile.get("gender") or args.gender)
     await speak_edge(text, voice, destination, lang=args.target_lang, gender=profile.get("gender") or args.gender)
     return "edge"
+
+
+async def translate_with_llm(
+    store: CheckpointStore, mirror: "ReleaseMirror", pending: list[dict], *, source_lang: str, target_lang: str,
+) -> list[dict]:
+    """Translate ``pending`` chunks with the configured LLM; returns chunks still untranslated.
+
+    Only active when ``TRANSLATE_API_KEY`` is set. Speech is translated in
+    transcript order with the surrounding, already translated lines as context
+    and the planned speech window as a spoken-time budget. Progress is saved
+    and mirrored after every window, so a resumed run continues where it
+    stopped. Non-speech labels are kept verbatim. With TRANSLATE_FALLBACK=google
+    an API outage hands the remaining chunks to the default translator; by
+    default it stops the run resumably instead of mixing translation engines.
+    """
+    try:
+        config = LLMTranslateConfig.from_env()
+    except TranslationConfigError as exc:
+        raise RuntimeError(f"LLM translation is misconfigured: {exc}") from exc
+    if config is None:
+        return pending
+    remaining: list[dict] = []
+    segments: list[dict] = []
+    for chunk in pending:
+        text = str(chunk.get("source_text") or "")
+        index = int(chunk["index"])
+        if is_non_speech_text(text):
+            store.update_chunk(index, translated_text=text, status="translated", translation_engine="label")
+            write_text_files(store, index)
+            continue
+        window_seconds = max(0.6, float(chunk.get("speech_end", chunk["end"])) - float(chunk.get("speech_start", chunk["start"])))
+        segments.append({
+            "index": index,
+            "text": text,
+            "seconds": window_seconds,
+            "continues": chunk.get("cut_reason") in CONTINUATION_CUTS,
+        })
+    if not segments:
+        return remaining
+    first_pending = segments[0]["index"]
+    prior = [
+        {"index": int(chunk["index"]), "text": chunk["source_text"], "translation": chunk["translated_text"]}
+        for chunk in store.data["chunks"]
+        if int(chunk["index"]) < first_pending and chunk.get("source_text") and chunk.get("translated_text")
+        and not is_non_speech_text(chunk.get("source_text", ""))
+    ]
+    store.data["translation"] = {**config.public_summary(), "status": "in_progress"}
+    store.save()
+    translator = LLMTranslator(config)
+    translated_indices: set[int] = set()
+
+    def checkpoint(results: list[dict]) -> None:
+        for item in results:
+            index = int(item["index"])
+            store.update_chunk(
+                index, translated_text=item["text"], status="translated",
+                translation_engine=item["engine"], translation_words=item["words"],
+                translation_budget_words=item["max_words"],
+            )
+            write_text_files(store, index)
+            translated_indices.add(index)
+        store.data["translation"]["usage"] = dict(translator.usage)
+        store.save()
+        mirror.upload_manifest(store)
+
+    try:
+        await translator.translate_segments(
+            segments, source_lang=source_lang, target_lang=target_lang, prior=prior, on_window=checkpoint,
+        )
+        store.data["translation"]["status"] = "completed"
+    except TranslationAPIError as exc:
+        left = [chunk for chunk in pending if int(chunk["index"]) not in translated_indices
+                and not is_non_speech_text(str(chunk.get("source_text") or ""))]
+        store.data["translation"].update({"status": "failed", "error": str(exc), "untranslated_chunks": [int(c["index"]) for c in left]})
+        store.save()
+        mirror.upload_manifest(store)
+        if config.fallback == "google":
+            print(f"LLM translation unavailable ({exc}); TRANSLATE_FALLBACK=google translates the remaining {len(left)} chunks", file=sys.stderr)
+            return left
+        raise RuntimeError(
+            f"LLM translation failed after retries ({exc}); {len(left)} chunks are untranslated. "
+            "Fix the API access and re-run to resume, or set TRANSLATE_FALLBACK=google."
+        ) from exc
+    finally:
+        store.save()
+        await translator.close()
+    return remaining
 
 
 def parser() -> argparse.ArgumentParser:
@@ -1042,6 +1206,11 @@ async def main_async(args) -> None:
 
     missing_translation = [chunk for chunk in store.data["chunks"] if chunk.get("source_text") and not chunk.get("translated_text")]
     if missing_translation:
+        missing_translation = await translate_with_llm(
+            store, mirror, missing_translation,
+            source_lang=detected_language or args.source_lang, target_lang=args.target_lang,
+        )
+    if missing_translation:
         translator = GoogleTranslator()
         try:
             for offset in range(0, len(missing_translation), 10):
@@ -1056,7 +1225,7 @@ async def main_async(args) -> None:
                     translated = translation.strip()
                     if not translated:
                         raise RuntimeError(f"empty translation for chunk {index}; refusing to synthesize source-language text")
-                    store.update_chunk(index, translated_text=translated, status="translated")
+                    store.update_chunk(index, translated_text=translated, status="translated", translation_engine="google")
                     write_text_files(store, index)
                 mirror.upload_manifest(store)
         finally:
@@ -1111,6 +1280,8 @@ async def main_async(args) -> None:
                 index, status="voice_generated", engine_used=engine_used,
                 original_tts_duration=round(original_tts_duration, 3),
                 fitted_tts_duration=round(fitted_tts_duration, 3),
+                tts_plausible_seconds=round(plausible_tts_seconds(chunk["translated_text"]), 3),
+                tts_duration_warning=bool(original_tts_duration > plausible_tts_seconds(chunk["translated_text"])),
             )
             store.mark_stage(
                 index, "tts", "success", output=fitted, input_hash=tts_input_hash,
@@ -1315,10 +1486,35 @@ async def main_async(args) -> None:
                     index, "timing_fit", "success", output=fitted_voice,
                     details={"duration": round(pre_fitted_duration, 3), "budget": round(pre_render_budget, 3)},
                 )
+                if not seed_required:
+                    # Without Seed-VC nothing used to slow short speech down, so a
+                    # line that came out shorter than the original left a hole in
+                    # the middle of continuous narration. Fill the planned speech
+                    # window in both directions, bounded by SLOW_TEMPO_FLOOR.
+                    window_target = min(
+                        pre_render_budget,
+                        max(0.12, float(store.chunk(index)["speech_end"]) - float(store.chunk(index)["speech_start"])),
+                    )
+                    fitted_voice, fill_original, fill_fitted = match_duration_bounded(
+                        fitted_voice, directory / f"window-fill{variant}.wav", window_target,
+                        min_tempo=SLOW_TEMPO_FLOOR, max_tempo=1.0,
+                    )
+                    store.update_chunk(
+                        index, timing_mode="window_fill_v1",
+                        window_fill_target=round(window_target, 3),
+                        window_fill_duration=round(fill_fitted, 3),
+                        window_fill_tempo=round(fill_original / max(fill_fitted, 0.001), 4),
+                    )
+                    store.mark_stage(
+                        index, "timing_fit", "success", output=fitted_voice,
+                        details={"duration": round(fill_fitted, 3), "window": round(window_target, 3), "mode": "window_fill_v1"},
+                    )
             # Render and preserve the complete pre-Seed voice-only checkpoint.
+            fade_in_seconds, fade_out_seconds = boundary_fades(store.data["chunks"], index)
             raw_voice_audio = build_chunk_audio(
                 store.chunk(index), fitted_voice, None,
                 directory / f"voice-before-seedvc{variant}.wav", background_gain=0.0,
+                fade_in_seconds=fade_in_seconds, fade_out_seconds=fade_out_seconds,
             )
             raw_dubbed = render_chunk(
                 loaded.video_path, store.chunk(index), raw_voice_audio,
@@ -1342,8 +1538,9 @@ async def main_async(args) -> None:
                         profile_references.get(speaker) or reference, fitted_voice, seed_voice, args.seed_vc_space,
                     )
                 speech_target = max(0.12, float(chunk["speech_end"]) - float(chunk["speech_start"]))
-                final_voice, seed_original_duration, seed_fitted_duration = match_duration_without_cutting(
+                final_voice, seed_original_duration, seed_fitted_duration = match_duration_bounded(
                     seed_voice, directory / f"seedvc.voice-only{variant}.synced.wav", speech_target,
+                    min_tempo=SLOW_TEMPO_FLOOR,
                 )
                 # The converted voice is placed at speech_start and ends with
                 # the original ASR phrase window; trailing media silence remains silent.
@@ -1453,10 +1650,11 @@ async def main_async(args) -> None:
                             retry_raw, directory / f"content-retry-{content_attempt + 1}.trim.wav",
                         )
                     speech_target = max(0.12, float(chunk["speech_end"]) - float(chunk["speech_start"]))
-                    retry_voice, _retry_actual, _retry_fitted = match_duration_without_cutting(
+                    retry_voice, _retry_actual, _retry_fitted = match_duration_bounded(
                         retry_trimmed,
                         directory / f"content-retry-{content_attempt + 1}.synced.wav",
                         speech_target,
+                        min_tempo=SLOW_TEMPO_FLOOR,
                     )
                     if seed_required:
                         retry_seed = apply_seed_vc_audio(
@@ -1465,10 +1663,11 @@ async def main_async(args) -> None:
                             directory / f"content-retry-{content_attempt + 1}.seed.wav",
                             args.seed_vc_space,
                         )
-                        retry_voice, _seed_actual, _seed_fitted = match_duration_without_cutting(
+                        retry_voice, _seed_actual, _seed_fitted = match_duration_bounded(
                             retry_seed,
                             directory / f"content-retry-{content_attempt + 1}.seed.synced.wav",
                             speech_target,
+                            min_tempo=SLOW_TEMPO_FLOOR,
                         )
                     final_voice, _retry_delivery_original, retry_delivery_fitted = fit_without_cutting(
                         retry_voice,
@@ -1498,6 +1697,7 @@ async def main_async(args) -> None:
                 background_audio if args.preserve_background and background_audio.exists() else None,
                 directory / "mixed.wav", background_gain=args.background_gain,
                 voice_is_full_timeline=full_timeline,
+                fade_in_seconds=fade_in_seconds, fade_out_seconds=fade_out_seconds,
             )
             store.mark_stage(index, "audio_mix", "success", output=chunk_audio)
             current_stage = "video_render"
