@@ -1,19 +1,19 @@
 {
   "version": 1,
-  "updated_at": "2026-09-06T21:53:49Z",
-  "purpose": "XTTS v2 cloning from a generated Arabic sample; original video voice is not used as reference",
+  "updated_at": "2026-09-06T22:04:43Z",
+  "purpose": "Tested default path: source voice reference -> VoxCPM -> Seed-VC; XTTS disabled",
   "speakers": {
     "SPEAKER_00": {
       "speaker": "SPEAKER_00",
-      "label": "Arabic synthetic narrator",
-      "reference_mode": "custom",
-      "reference_path": "voices/xtts-reference.mp3",
-      "tts_engine": "xtts",
+      "label": "Source narrator",
+      "reference_mode": "source",
+      "reference_path": "",
+      "tts_engine": "voxcpm",
       "voice": "",
-      "voice_conversion": "none",
-      "style": "natural, clear documentary narration",
+      "voice_conversion": "seed-vc",
+      "style": "natural",
       "gender": "male",
-      "preview_text": "حقائق مذهلة عن الحيوانات والطبيعة.",
+      "preview_text": "",
       "approved": true
     }
   }
