@@ -1238,6 +1238,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--speaker-voices", type=Path)
     ap.add_argument("--require-voice-approval", action="store_true")
     ap.add_argument("--validate-content", action="store_true")
+    ap.add_argument("--analysis-only", action="store_true", help="checkpoint source, ASR, speakers, and chunk plan, then stop before translation")
     ap.add_argument("--content-min-recall", type=float, default=0.70)
     ap.add_argument("--content-min-sequence", type=float, default=0.58)
     ap.add_argument("--release-tag")
@@ -1422,6 +1423,22 @@ async def main_async(args) -> None:
     store.data["voice_profiles"] = profiles
     store.save()
     mirror.upload_manifest(store)
+
+    if args.analysis_only:
+        store.mark_state(
+            "analysis_completed_waiting_for_voice_approval",
+            cleanup_authorized=False,
+            detected_speakers=speakers,
+            analysis_only=True,
+        )
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(args.output_dir / "progress-report.json", store.summary())
+        shutil.copy2(store.manifest_path, args.output_dir / "checkpoint-manifest.json")
+        shutil.copy2(analysis / "speaker-analysis.json", args.output_dir / "speaker-analysis.json")
+        mirror.upload_manifest(store)
+        print(json.dumps(store.summary(), ensure_ascii=False, indent=2))
+        print("ANALYSIS_ONLY=completed; configure and approve every detected speaker before dubbing")
+        return
 
     missing_translation = [chunk for chunk in store.data["chunks"] if chunk.get("source_text") and not chunk.get("translated_text")]
     if missing_translation:

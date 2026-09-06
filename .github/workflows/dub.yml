@@ -157,6 +157,11 @@ on:
         required: false
         default: true
         type: boolean
+      analysis_only:
+        description: "analyze speech and speakers, save checkpoints, then stop before translation and voice generation"
+        required: false
+        default: false
+        type: boolean
 jobs:
   clone:
     if: inputs.task == 'clone'
@@ -512,6 +517,7 @@ jobs:
           if [ "${{ inputs.no_vad }}" = "true" ]; then extra+=(--no-vad); fi
           if [ "${{ inputs.seed_vc }}" = "true" ]; then extra+=(--seed-vc); fi
           if [ "${{ inputs.validate_content }}" = "true" ]; then extra+=(--validate-content); fi
+          if [ "${{ inputs.analysis_only }}" = "true" ]; then extra+=(--analysis-only); fi
           if [ "${{ inputs.profile }}" = "seed_quota_voxcpm" ]; then extra+=(--seed-quota-policy voxcpm); fi
           profile_args=()
           if [ -n "${{ inputs.speaker_voices_path }}" ]; then
@@ -536,6 +542,7 @@ jobs:
             "${profile_args[@]}" "${extra[@]}"
 
       - name: Confirm complete resumable delivery
+        if: inputs.analysis_only == false
         run: |
           set -euo pipefail
           test -s output/final-dub.mp4
@@ -552,6 +559,7 @@ jobs:
           PY
 
       - name: Validate final target language
+        if: inputs.analysis_only == false
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -564,6 +572,7 @@ jobs:
             --report output/language-integrity.json
 
       - name: Enforce professional quality gate
+        if: inputs.analysis_only == false
         env:
           SOURCE_PATH: ${{ inputs.source_path }}
         run: |
@@ -583,7 +592,7 @@ jobs:
             --report output/quality-report.json
 
       - name: Publish project, report, and Pages index
-        if: success()
+        if: success() && inputs.analysis_only == false
         env:
           SOURCE_PATH: ${{ inputs.source_path }}
           RUN_ID: ${{ github.run_id }}
