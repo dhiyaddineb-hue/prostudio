@@ -345,6 +345,9 @@ jobs:
           TRANSLATE_STYLE: ${{ vars.TRANSLATE_STYLE }}
           TRANSLATE_GLOSSARY: ${{ vars.TRANSLATE_GLOSSARY }}
           TRANSLATE_FALLBACK: ${{ vars.TRANSLATE_FALLBACK }}
+          TRANSLATE_EXTRA_HEADERS: ${{ vars.TRANSLATE_EXTRA_HEADERS }}
+          TRANSLATE_MAX_TOKENS: ${{ vars.TRANSLATE_MAX_TOKENS }}
+          TRANSLATE_JSON_MODE: ${{ vars.TRANSLATE_JSON_MODE }}
         run: |
           set -euo pipefail
           mkdir -p output
@@ -457,6 +460,9 @@ jobs:
           TRANSLATE_STYLE: ${{ vars.TRANSLATE_STYLE }}
           TRANSLATE_GLOSSARY: ${{ vars.TRANSLATE_GLOSSARY }}
           TRANSLATE_FALLBACK: ${{ vars.TRANSLATE_FALLBACK }}
+          TRANSLATE_EXTRA_HEADERS: ${{ vars.TRANSLATE_EXTRA_HEADERS }}
+          TRANSLATE_MAX_TOKENS: ${{ vars.TRANSLATE_MAX_TOKENS }}
+          TRANSLATE_JSON_MODE: ${{ vars.TRANSLATE_JSON_MODE }}
         run: |
           set -euo pipefail
           chunk_max="${{ inputs.chunk_seconds }}"

@@ -387,7 +387,8 @@ def test_workflow_passes_translation_settings_and_preflights_them():
     smart = text.split("- name: Run resumable speech-aware smart chunks", 1)[1].split("- name: Confirm complete resumable delivery", 1)[0]
     for section in (preflight, smart):
         assert "TRANSLATE_API_KEY: ${{ secrets.TRANSLATE_API_KEY }}" in section
-        for name in ("TRANSLATE_PROVIDER", "TRANSLATE_API_BASE", "TRANSLATE_MODEL", "TRANSLATE_STYLE", "TRANSLATE_GLOSSARY", "TRANSLATE_FALLBACK"):
+        for name in ("TRANSLATE_PROVIDER", "TRANSLATE_API_BASE", "TRANSLATE_MODEL", "TRANSLATE_STYLE", "TRANSLATE_GLOSSARY",
+                     "TRANSLATE_FALLBACK", "TRANSLATE_EXTRA_HEADERS", "TRANSLATE_MAX_TOKENS", "TRANSLATE_JSON_MODE"):
             assert f"{name}: ${{{{ vars.{name} }}}}" in section
     assert "python -m youtube_auto_dub.llm_translate --preflight" in preflight
     assert "output/translation-preflight.json" in preflight
@@ -604,3 +605,79 @@ def test_synthesize_passes_the_plausible_length_to_voxcpm():
     vox = VOXCPM.read_text(encoding="utf-8")
     assert "def speak_voxcpm(text, dest, language=\"en\", control=\"\", reference_audio=None, max_seconds=None)" in vox
     assert "long-take-" in vox and ".unlink(" not in vox.split("duration = await asyncio.to_thread(_audio_seconds, dest)", 1)[1]
+
+
+# ------------------------------------------------------- gateway support
+def test_agentrouter_preset_sends_the_client_headers_the_waf_requires():
+    config = lt.LLMTranslateConfig.from_env({"TRANSLATE_API_KEY": "k", "TRANSLATE_PROVIDER": "agentrouter"})
+    assert config.api_base == "https://agentrouter.org/v1" and config.model == "deepseek-v4-flash"
+    assert config.extra_headers == {"User-Agent": "codex_cli_rs/0.146.0", "originator": "codex_cli_rs"}
+    assert config.max_tokens == 8192 and config.json_mode == "auto"
+    api = FakeAPI([_reply({0: "Hello"})])
+    translator = _translator(config, api)
+    asyncio.run(translator.translate_segments(_segments("مرحبا"), source_lang="ar", target_lang="en"))
+    asyncio.run(translator.close())
+    request = api.requests[0]
+    assert request["headers"]["user-agent"] == "codex_cli_rs/0.146.0"
+    assert request["headers"]["originator"] == "codex_cli_rs"
+    assert request["headers"]["authorization"] == "Bearer k"
+    assert request["body"]["max_tokens"] == 8192
+    summary = config.public_summary()
+    assert summary["extra_header_names"] == ["User-Agent", "originator"]
+    assert "codex_cli_rs" not in json.dumps(summary)  # names only, never values
+
+
+def test_extra_headers_max_tokens_and_json_mode_are_configurable():
+    config = lt.LLMTranslateConfig.from_env({
+        "TRANSLATE_API_KEY": "k", "TRANSLATE_PROVIDER": "agentrouter",
+        "TRANSLATE_EXTRA_HEADERS": "X-Client: dub; User-Agent: custom/1.0",
+        "TRANSLATE_MAX_TOKENS": "2000", "TRANSLATE_JSON_MODE": "off",
+    })
+    assert config.extra_headers == {"User-Agent": "custom/1.0", "originator": "codex_cli_rs", "X-Client": "dub"}
+    assert config.max_tokens == 2000
+    assert lt.parse_headers('{"A": "1", "B": "2"}') == {"A": "1", "B": "2"}
+    assert lt.parse_headers("") == {}
+    api = FakeAPI([_reply({0: "Hello"})])
+    translator = _translator(config, api)
+    asyncio.run(translator.translate_segments(_segments("مرحبا"), source_lang="ar", target_lang="en"))
+    asyncio.run(translator.close())
+    assert "response_format" not in api.requests[0]["body"]
+    with pytest.raises(lt.TranslationConfigError):
+        lt.LLMTranslateConfig.from_env({"TRANSLATE_API_KEY": "k", "TRANSLATE_JSON_MODE": "maybe"})
+
+
+def test_auto_json_mode_backs_off_after_any_400_but_on_mode_does_not():
+    api = FakeAPI([(400, "unsupported parameter"), _reply({0: "Hello"})])
+    translator = _translator(_config(json_mode="auto"), api)
+    results = asyncio.run(translator.translate_segments(_segments("مرحبا"), source_lang="ar", target_lang="en"))
+    asyncio.run(translator.close())
+    assert results[0]["text"] == "Hello" and "response_format" not in api.requests[1]["body"]
+
+    api = FakeAPI([(400, "unsupported parameter"), _reply({0: "never"})])
+    translator = _translator(_config(json_mode="on"), api)
+    with pytest.raises(lt.TranslationAPIError) as info:
+        asyncio.run(translator.translate_segments(_segments("مرحبا"), source_lang="ar", target_lang="en"))
+    asyncio.run(translator.close())
+    assert info.value.permanent and len(api.requests) == 1
+
+
+def test_waf_rejections_surface_immediately_with_the_gateway_message():
+    api = FakeAPI([(401, "unauthorized client detected")])
+    translator = _translator(_config(), api)
+    with pytest.raises(lt.TranslationAPIError, match="unauthorized client detected"):
+        asyncio.run(translator.translate_segments(_segments("مرحبا"), source_lang="ar", target_lang="en"))
+    asyncio.run(translator.close())
+
+
+def test_translation_preflight_workflow_exists_and_reuses_the_same_settings():
+    import yaml
+
+    path = ROOT / ".github/workflows/translation-preflight.yml"
+    text = path.read_text(encoding="utf-8")
+    data = yaml.safe_load(text)
+    assert "workflow_dispatch" in data.get(True, data.get("on", {}))
+    assert "TRANSLATE_API_KEY: ${{ secrets.TRANSLATE_API_KEY }}" in text
+    for name in ("TRANSLATE_PROVIDER", "TRANSLATE_API_BASE", "TRANSLATE_MODEL", "TRANSLATE_EXTRA_HEADERS", "TRANSLATE_MAX_TOKENS", "TRANSLATE_JSON_MODE"):
+        assert f"{name}: ${{{{ vars.{name} }}}}" in text
+    assert "python -m youtube_auto_dub.llm_translate --preflight" in text
+    assert "gh release" not in text and "checkpoints" not in text

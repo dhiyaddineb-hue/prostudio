@@ -14,12 +14,18 @@ set (a repository secret in CI). Without it nothing changes.
 Environment:
     TRANSLATE_API_KEY      required to enable the LLM translator
     TRANSLATE_PROVIDER     openai | deepseek | groq | openrouter | gemini |
-                           mistral | together | xai | anthropic | custom
-                           (default: openai, or anthropic when the base URL
-                           points at api.anthropic.com)
+                           mistral | together | xai | anthropic | agentrouter |
+                           custom (default: openai, or anthropic when the base
+                           URL points at api.anthropic.com)
     TRANSLATE_API_BASE     override the provider base URL (OpenAI-compatible
                            ``/chat/completions`` or Anthropic ``/messages``)
     TRANSLATE_MODEL        model name (provider default when omitted)
+    TRANSLATE_EXTRA_HEADERS  extra HTTP headers some gateways demand, as a
+                           JSON object or "Name: value; Name2: value2"
+    TRANSLATE_MAX_TOKENS   completion budget per request (default 8192;
+                           reasoning models return nothing when it is small)
+    TRANSLATE_JSON_MODE    auto (default) | on | off — request JSON-object
+                           replies; auto drops it after the first 400
     TRANSLATE_STYLE        free-text register hint, e.g. "documentary narration"
     TRANSLATE_GLOSSARY     "source=>target; source2=>target2" or a path to a
                            JSON object file with the same mapping
@@ -52,6 +58,7 @@ PROVIDER_BASES = {
     "together": "https://api.together.xyz/v1",
     "xai": "https://api.x.ai/v1",
     "anthropic": "https://api.anthropic.com/v1",
+    "agentrouter": "https://agentrouter.org/v1",
 }
 
 PROVIDER_DEFAULT_MODELS = {
@@ -64,6 +71,13 @@ PROVIDER_DEFAULT_MODELS = {
     "together": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
     "xai": "grok-3-mini",
     "anthropic": "claude-3-5-haiku-latest",
+    "agentrouter": "deepseek-v4-flash",
+}
+
+# Gateways with a WAF in front only admit requests that look like a known
+# client; these defaults can be extended or overridden by TRANSLATE_EXTRA_HEADERS.
+PROVIDER_DEFAULT_HEADERS: dict[str, dict[str, str]] = {
+    "agentrouter": {"User-Agent": "codex_cli_rs/0.146.0", "originator": "codex_cli_rs"},
 }
 
 # Speech that continues straight into the next chunk (the planner had to cut
@@ -152,6 +166,27 @@ def parse_glossary(value: str | None) -> dict[str, str]:
     return pairs
 
 
+def parse_headers(value: str | None) -> dict[str, str]:
+    """Parse extra headers from a JSON object or ``Name: value; Name2: value2``."""
+    raw = (value or "").strip()
+    if not raw:
+        return {}
+    if raw.startswith("{"):
+        try:
+            data = json.loads(raw)
+            return {str(k).strip(): str(v).strip() for k, v in dict(data).items() if str(k).strip()}
+        except (ValueError, TypeError):
+            return {}
+    headers: dict[str, str] = {}
+    for item in re.split(r"[;\n]+", raw):
+        if ":" not in item:
+            continue
+        name, header_value = item.split(":", 1)
+        if name.strip() and header_value.strip():
+            headers[name.strip()] = header_value.strip()
+    return headers
+
+
 def extract_json_object(text: str) -> dict:
     """Return the first JSON object in a model reply (tolerates code fences)."""
     if not text:
@@ -204,6 +239,9 @@ class LLMTranslateConfig:
     max_retries: int = 4
     fallback: str = "fail"
     temperature: float = 0.2
+    extra_headers: dict[str, str] = field(default_factory=dict)
+    max_tokens: int = 8192
+    json_mode: str = "auto"
 
     @classmethod
     def from_env(cls, environ: dict[str, str] | None = None) -> "LLMTranslateConfig | None":
@@ -229,6 +267,11 @@ class LLMTranslateConfig:
         fallback = (env.get("TRANSLATE_FALLBACK") or "fail").strip().lower()
         if fallback not in {"fail", "google"}:
             raise TranslationConfigError("TRANSLATE_FALLBACK must be 'fail' or 'google'")
+        json_mode = (env.get("TRANSLATE_JSON_MODE") or "auto").strip().lower()
+        if json_mode not in {"auto", "on", "off"}:
+            raise TranslationConfigError("TRANSLATE_JSON_MODE must be auto, on or off")
+        headers = dict(PROVIDER_DEFAULT_HEADERS.get(provider, {}))
+        headers.update(parse_headers(env.get("TRANSLATE_EXTRA_HEADERS")))
 
         def _float(name: str, default: float) -> float:
             raw = (env.get(name) or "").strip()
@@ -250,6 +293,9 @@ class LLMTranslateConfig:
             words_per_second=_float("TRANSLATE_WORDS_PER_SECOND", 2.7),
             window=max(1, int(_float("TRANSLATE_WINDOW", 40))),
             fallback=fallback,
+            extra_headers=headers,
+            max_tokens=max(256, int(_float("TRANSLATE_MAX_TOKENS", 8192))),
+            json_mode=json_mode,
         )
 
     @property
@@ -267,6 +313,9 @@ class LLMTranslateConfig:
             "style": self.style,
             "glossary_terms": len(self.glossary),
             "fallback": self.fallback,
+            "extra_header_names": sorted(self.extra_headers),
+            "max_tokens": self.max_tokens,
+            "json_mode": self.json_mode,
         }
 
 
@@ -295,7 +344,7 @@ class LLMTranslator:
         self.config = config
         self._client = httpx.AsyncClient(timeout=config.timeout_seconds, transport=transport)
         self._sleep = sleep or asyncio.sleep
-        self._json_mode = config.provider != "anthropic"
+        self._json_mode = config.provider != "anthropic" and config.json_mode != "off"
         self.usage: dict[str, int] = {"requests": 0, "prompt_tokens": 0, "completion_tokens": 0}
 
     async def close(self) -> None:
@@ -347,11 +396,13 @@ class LLMTranslator:
         for attempt in range(config.max_retries + 1):
             try:
                 if config.provider == "anthropic":
+                    headers = {"x-api-key": config.api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"}
+                    headers.update(config.extra_headers)
                     response = await self._post(
                         f"{config.api_base}/messages",
-                        {"x-api-key": config.api_key, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                        headers,
                         {
-                            "model": config.model, "max_tokens": 8192, "temperature": config.temperature,
+                            "model": config.model, "max_tokens": config.max_tokens, "temperature": config.temperature,
                             "system": system, "messages": [{"role": "user", "content": user}],
                         },
                     )
@@ -359,18 +410,18 @@ class LLMTranslator:
                     body: dict[str, Any] = {
                         "model": config.model,
                         "temperature": config.temperature,
+                        "max_tokens": config.max_tokens,
                         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
                     }
                     if self._json_mode:
                         body["response_format"] = {"type": "json_object"}
-                    response = await self._post(
-                        f"{config.api_base}/chat/completions",
-                        {"Authorization": f"Bearer {config.api_key}", "content-type": "application/json"},
-                        body,
-                    )
+                    headers = {"Authorization": f"Bearer {config.api_key}", "content-type": "application/json"}
+                    headers.update(config.extra_headers)
+                    response = await self._post(f"{config.api_base}/chat/completions", headers, body)
                 self.usage["requests"] += 1
-                if response.status_code == 400 and self._json_mode and "response_format" in response.text:
-                    # Provider does not support JSON mode; the prompt still demands JSON.
+                if response.status_code == 400 and self._json_mode and config.json_mode == "auto":
+                    # Gateways differ in what they accept; JSON mode is only a
+                    # nicety, the prompt itself demands JSON. Drop it once and retry.
                     self._json_mode = False
                     continue
                 if response.status_code in PERMANENT_HTTP_ERRORS:

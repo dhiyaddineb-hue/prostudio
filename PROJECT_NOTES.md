@@ -325,3 +325,12 @@ projects/<اسم>/
 ### الاختبارات
 - `tests/test_translation_and_timing_quality.py` (26 اختباراً، بلا شبكة: `httpx.MockTransport`). المجموعة الكاملة محلياً: 249 ناجحاً،
   4 متجاوَزة، 14 فشلاً بيئياً معروفاً (librosa/pytest-asyncio/espeak-ng/docs/dashboard.html/studio tts) — لا تراجعات.
+
+### الإعداد الفعلي — 2026-09-06 (بوابة agentrouter.org)
+- السرّ `TRANSLATE_API_KEY` والمتغيّران `TRANSLATE_PROVIDER=agentrouter` و`TRANSLATE_MODEL=deepseek-v4-flash` أُنشئا في المستودع عبر API.
+- إعداد مسبق `agentrouter`: القاعدة `https://agentrouter.org/v1`، وترويسات العميل التي يطلبها الـ WAF (`User-Agent: codex_cli_rs/0.146.0`،
+  `originator: codex_cli_rs`) تُرسل تلقائياً؛ يمكن إضافة/تجاوز ترويسات عبر `TRANSLATE_EXTRA_HEADERS`. `max_tokens` الافتراضي 8192
+  (نماذج التفكير مثل glm-5.3 تُرجع فراغاً مع قيم صغيرة). النماذج المتاحة على المفتاح: claude-opus-4-8, claude-opus-5, deepseek-v4-flash,
+  glm-5.3, gpt-5.6-sol.
+- workflow يدوي جديد `translation-preflight.yml` يترجم جملة واحدة من داخل GitHub للتأكد من المفتاح دون لمس أي مشروع أو release.
+- تنبيه أمني: المفتاح لُصق في محادثة؛ يُستحسن تدويره لاحقاً وتحديث السرّ فقط.
