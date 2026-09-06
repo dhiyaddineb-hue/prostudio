@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "updated_at": "2026-09-06T21:53:49Z",
+  "purpose": "XTTS v2 cloning from a generated Arabic sample; original video voice is not used as reference",
+  "speakers": {
+    "SPEAKER_00": {
+      "speaker": "SPEAKER_00",
+      "label": "Arabic synthetic narrator",
+      "reference_mode": "custom",
+      "reference_path": "voices/xtts-reference.mp3",
+      "tts_engine": "xtts",
+      "voice": "",
+      "voice_conversion": "none",
+      "style": "natural, clear documentary narration",
+      "gender": "male",
+      "preview_text": "حقائق مذهلة عن الحيوانات والطبيعة.",
+      "approved": true
+    }
+  }
+}
