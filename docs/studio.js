@@ -269,9 +269,9 @@ async function dispatchYoutube(url) {
   const d = defaults();
   const inputs = {
     task: 'dub', source_path: '', youtube_url: url, source_lang: $('ytLang').value.trim() || 'ar',
-    voice: d.voice, tts_engine: d.tts_engine, target_lang: d.target_lang, mode: 'both', gender: d.gender, model: d.model,
+    voice: d.voice, tts_engine: d.tts_engine, target_lang: d.target_lang, gender: d.gender, model: d.model,
     bg_music: String(!!d.bg_music), diarize: String(!!d.diarize), separate_sources: String(!!d.separate_sources), no_vad: 'false',
-    seed_vc: String(!!d.seed_vc), lip_sync: 'false', lip_sync_backend: 'wav2lip', profile: d.profile, quality: d.quality,
+    seed_vc: String(!!d.seed_vc), profile: d.profile, quality: d.quality,
     chunk_seconds: String(d.chunk_seconds), speaker_voices_path: '', validate_content: String(!!d.validate_content),
   };
   await api(`/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW}/dispatches`, { method: 'POST', body: JSON.stringify({ ref: BRANCH, inputs }) });
@@ -517,9 +517,9 @@ async function dispatchDub(item, overrides = {}) {
   const d = { ...defaults(), ...overrides };
   const inputs = {
     task: 'dub', source_path: item.sourcePath, youtube_url: '', source_lang: d.source_lang || item.meta.source_lang || 'ar',
-    voice: d.voice, tts_engine: d.tts_engine, target_lang: d.target_lang, mode: 'both', gender: d.gender, model: d.model,
+    voice: d.voice, tts_engine: d.tts_engine, target_lang: d.target_lang, gender: d.gender, model: d.model,
     bg_music: String(!!d.bg_music), diarize: String(!!d.diarize), separate_sources: String(!!d.separate_sources), no_vad: String(!!d.no_vad),
-    seed_vc: String(!!d.seed_vc), lip_sync: 'false', lip_sync_backend: 'wav2lip', profile: d.profile, quality: d.quality,
+    seed_vc: String(!!d.seed_vc), profile: d.profile, quality: d.quality,
     chunk_seconds: String(d.chunk_seconds), speaker_voices_path: d.speaker_voices_path || '', validate_content: String(!!d.validate_content),
     analysis_only: String(!!d.analysis_only),
   };

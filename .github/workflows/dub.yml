@@ -76,12 +76,6 @@ on:
         required: false
         default: "en"
         type: string
-      mode:
-        description: "dub: mode"
-        required: false
-        default: "both"
-        type: choice
-        options: [both, dub, sub]
       gender:
         description: "dub: voice gender"
         required: false
@@ -119,17 +113,6 @@ on:
         required: false
         default: true
         type: boolean
-      lip_sync:
-        description: "deprecated: visual lip-sync is disabled; audio-only dubbing is used"
-        required: false
-        default: false
-        type: boolean
-      lip_sync_backend:
-        description: "dub: verified visual backend"
-        required: false
-        default: "wav2lip"
-        type: choice
-        options: [none, wav2lip, experiment]
       profile:
         description: "dub: pipeline profile"
         required: false
