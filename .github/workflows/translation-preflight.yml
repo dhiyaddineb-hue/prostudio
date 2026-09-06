@@ -54,6 +54,63 @@ jobs:
             --source-lang "${{ inputs.source_lang }}" --target-lang "${{ inputs.target_lang }}" \
             --report output/translation-preflight.json
 
+      - name: Gateway diagnostics (only when the preflight failed)
+        if: failure()
+        env:
+          TRANSLATE_API_KEY: ${{ secrets.TRANSLATE_API_KEY }}
+          TRANSLATE_API_BASE: ${{ vars.TRANSLATE_API_BASE }}
+          TRANSLATE_PROVIDER: ${{ vars.TRANSLATE_PROVIDER }}
+          TRANSLATE_MODEL: ${{ vars.TRANSLATE_MODEL }}
+          TRANSLATE_EXTRA_HEADERS: ${{ vars.TRANSLATE_EXTRA_HEADERS }}
+        run: |
+          set -uo pipefail
+          python - <<'PY'
+          import json, os, subprocess, sys
+          sys.path.insert(0, os.getcwd())
+          from youtube_auto_dub.llm_translate import LLMTranslateConfig
+          config = LLMTranslateConfig.from_env()
+          if config is None:
+              raise SystemExit("no TRANSLATE_API_KEY")
+          url = f"{config.api_base}/chat/completions" if config.provider != "anthropic" else f"{config.api_base}/messages"
+          body = json.dumps({"model": config.model, "messages": [{"role": "user", "content": "Reply with the single word: pong"}], "max_tokens": 50})
+          headers = dict(config.extra_headers)
+
+          def show(label, status, ctype, text):
+              snippet = (text or "").replace("\n", " ")[:160]
+              print(f"[{label}] status={status} content-type={ctype!r} body={snippet!r}")
+
+          def curl(label, *extra):
+              cmd = ["curl", "-sS", "-o", "/tmp/body", "-w", "%{http_code} %{content_type}", "-X", "POST", url,
+                     "-H", f"Authorization: Bearer {config.api_key}", "-H", "Content-Type: application/json", *extra, "-d", body]
+              for name, value in headers.items():
+                  cmd += ["-H", f"{name}: {value}"]
+              proc = subprocess.run(cmd, capture_output=True, text=True)
+              meta = proc.stdout.strip().split(" ", 1) + [""]
+              text = open("/tmp/body", encoding="utf-8", errors="replace").read() if os.path.exists("/tmp/body") else proc.stderr
+              show(label, meta[0], meta[1], text)
+
+          curl("curl default")
+          curl("curl http1.1", "--http1.1")
+          curl("curl compressed", "--compressed")
+
+          import httpx
+          def probe(label, **kw):
+              try:
+                  with httpx.Client(timeout=60, **kw.pop("client", {})) as client:
+                      response = client.post(url, headers={"Authorization": f"Bearer {config.api_key}", "Content-Type": "application/json", **headers, **kw.get("headers", {})}, content=body)
+                  show(label, response.status_code, response.headers.get("content-type"), response.text)
+              except Exception as exc:
+                  print(f"[{label}] error: {exc}")
+          probe("httpx default")
+          probe("httpx identity-encoding", headers={"Accept-Encoding": "identity", "Accept": "*/*"})
+          try:
+              import h2  # noqa: F401
+              probe("httpx http2", client={"http2": True})
+          except ImportError:
+              subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "httpx[http2]"], check=False)
+              probe("httpx http2", client={"http2": True})
+          PY
+
       - name: Upload the preflight report
         if: always()
         uses: actions/upload-artifact@v4
