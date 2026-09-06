@@ -395,7 +395,39 @@ function statusLabel(run) {
   return { success: 'نجح', failure: 'فشل', cancelled: 'أُلغي', timed_out: 'انتهت المهلة', skipped: 'تُخطّي' }[run.conclusion] || run.conclusion || 'انتهى';
 }
 
-function renderAll() { renderLibrary(); renderDubs(); renderRuns(); renderVoiceBank(); $('clockChip').textContent = `آخر تحديث ${new Date().toLocaleTimeString('ar-EG', { hour12: false })}`; }
+
+function renderOverview() {
+  if (!$('overviewLibrary')) return;
+  const activeRuns = state.runs.filter(isActive);
+  const activeSlugs = new Set(activeRuns.map(runSlug).filter(Boolean));
+  const dubbedSlugs = new Set(state.dubs.map((d) => d.slug));
+  const waiting = state.library.filter((v) => !dubbedSlugs.has(v.slug) && !activeSlugs.has(v.slug)).length;
+
+  $('overviewLibrary').textContent = state.library.length;
+  $('overviewUndubbed').textContent = waiting;
+  $('overviewDubbed').textContent = state.dubs.length;
+  $('overviewActive').textContent = activeRuns.length;
+  $('overviewVoices').textContent = state.voiceBank.length;
+  $('overviewHeroValue').textContent = state.library.length;
+  $('overviewHeroLabel').textContent = state.library.length === 1 ? 'فيديو في مساحة العمل' : 'فيديوهات في مساحة العمل';
+
+  const shownRuns = state.runs.slice(0, 4);
+  $('overviewRunsList').innerHTML = shownRuns.length ? shownRuns.map((run) => {
+    const prog = run._progress;
+    const percent = prog?.total ? Math.round(((prog.counts.completed || 0) * 100) / prog.total) : (run.conclusion === 'success' ? 100 : 0);
+    const active = isActive(run);
+    return `<div class="overview-item"><div><b>${esc(runSource(run) || run.display_title || `تشغيل #${run.run_number}`)}</b><small>${esc(statusLabel(run))} · ${fmtDate(run.run_started_at || run.created_at)}</small>${active || percent ? `<div class="mini-progress"><span style="width:${percent}%"></span></div>` : ''}</div><a class="overview-item-status ${active ? 'active' : ''}" href="${run.html_url}" target="_blank" rel="noreferrer">${active ? `${percent}% · مباشر` : `#${run.run_number}`}</a></div>`;
+  }).join('') : `<div class="empty compact-empty">${state.loaded ? 'لا توجد تشغيلات حتى الآن.' : 'جارٍ تحميل التشغيلات…'}</div>`;
+
+  const recent = state.dubs.map((d) => ({ ...d, stamp: d.latest?.published_at || d.meta?.updated_at || '' }))
+    .sort((a, b) => String(b.stamp).localeCompare(String(a.stamp))).slice(0, 4);
+  $('overviewRecentList').innerHTML = recent.length ? recent.map((d) => `<div class="overview-item"><div><b>${esc(d.meta?.title || d.slug)}</b><small>${d.versions.length} نسخة · ${fmtDate(d.stamp)}</small></div><button class="btn small overview-open-dub" data-slug="${esc(d.slug)}">فتح</button></div>`).join('') : `<div class="empty compact-empty">${state.loaded ? 'لا توجد نسخ مدبلجة بعد.' : 'جارٍ تحميل المدبلجات…'}</div>`;
+  $('overviewRecentList').querySelectorAll('.overview-open-dub').forEach((button) => button.addEventListener('click', () => {
+    state.searchDubs = button.dataset.slug; $('searchDubs').value = button.dataset.slug; showTab('dubs'); renderDubs();
+  }));
+}
+
+function renderAll() { renderLibrary(); renderDubs(); renderRuns(); renderVoiceBank(); renderOverview(); $('clockChip').textContent = `آخر تحديث ${new Date().toLocaleTimeString('ar-EG', { hour12: false })}`; }
 
 // ───────────────────────────────────────────── modal helpers
 function openModal(title, bodyHtml) { $('modalTitle').textContent = title; $('modalBody').innerHTML = bodyHtml; $('modal').classList.remove('hidden'); }
@@ -762,15 +794,25 @@ function schedule() {
 
 // ───────────────────────────────────────────── tabs + wiring
 function showTab(name) {
-  document.querySelectorAll('.tab[data-tab]').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab[data-tab]').forEach((t) => {
+    const active = t.dataset.tab === name;
+    t.classList.toggle('active', active);
+    t.setAttribute('aria-selected', String(active));
+  });
   document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('active', p.id === `tab-${name}`));
   location.hash = name;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function setConnection() {
   const chip = $('connChip');
   if (state.token) { chip.textContent = 'متصل بالرمز'; chip.className = 'chip ok'; }
   else { chip.textContent = 'قراءة فقط — بدون رمز'; chip.className = 'chip warn'; }
-  document.querySelectorAll('#uploadBtn').forEach((b) => { b.disabled = !state.token; });
+  const readiness = $('overviewConn');
+  if (readiness) {
+    readiness.textContent = state.token ? 'متصل وجاهز للرفع والتشغيل والحذف.' : 'وضع القراءة فقط؛ أضف رمز GitHub لتفعيل التحكم.';
+    readiness.className = `readiness-state ${state.token ? 'ok' : ''}`;
+  }
+  document.querySelectorAll('#uploadBtn, #voiceUpload, #ytGo, #runPreflight').forEach((b) => { b.disabled = !state.token; });
 }
 
 function init() {
@@ -783,9 +825,28 @@ function init() {
   fillDefaultsForm(defaults());
 
   document.querySelectorAll('.tab[data-tab]').forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
-  const initial = location.hash.replace('#', ''); if (['library', 'dubs', 'runs', 'voices', 'settings'].includes(initial)) showTab(initial);
+  document.querySelectorAll('[data-jump]').forEach((button) => button.addEventListener('click', () => {
+    if (button.dataset.filter) { state.filterLibrary = button.dataset.filter; $('filterLibrary').value = button.dataset.filter; }
+    showTab(button.dataset.jump);
+    renderAll();
+  }));
+  const requireConnection = () => {
+    if (state.token) return true;
+    showTab('settings');
+    setStatus($('tokenStatus'), 'أضف رمز GitHub أولاً لتفعيل التحكم من الصفحة.', 'info');
+    setTimeout(() => $('token').focus(), 120);
+    return false;
+  };
+  $('quickUpload').onclick = () => { if (!requireConnection()) return; showTab('library'); $('file').click(); };
+  $('libraryUploadShortcut').onclick = () => { if (!requireConnection()) return; $('file').click(); };
+  $('quickYoutube').onclick = () => { if (!requireConnection()) return; showTab('library'); setTimeout(() => { $('ytUrl').focus(); $('uploader').scrollIntoView({ behavior: 'smooth' }); }, 120); };
+  $('quickVoice').onclick = () => { if (!requireConnection()) return; showTab('voices'); setTimeout(() => $('voiceName').focus(), 120); };
+  $('quickRuns').onclick = () => showTab('runs');
+  $('overviewRefresh').onclick = () => fullRefresh(true);
+  const initial = location.hash.replace('#', ''); if (['overview', 'library', 'dubs', 'runs', 'voices', 'settings'].includes(initial)) showTab(initial); else showTab('overview');
   $('voiceUpload').onclick = uploadVoiceSample;
   $('modalClose').onclick = closeModal; $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('modal').classList.contains('hidden')) closeModal(); });
   $('refreshNow').onclick = () => fullRefresh(true);
   $('autoRefresh').onchange = schedule;
   $('searchLibrary').oninput = (e) => { state.searchLibrary = e.target.value; renderLibrary(); };

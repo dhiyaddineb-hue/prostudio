@@ -10,31 +10,82 @@
 <body>
 <header class="top">
   <div class="brand">
-    <h1>ProStudio</h1>
-    <p>الاستوديو الكامل — كل شيء يُقرأ ويُكتب مباشرة في المستودع <code id="repoName"></code></p>
+    <div class="brandmark" aria-hidden="true">PS</div>
+    <div>
+      <p class="eyebrow">مساحة عمل الدبلجة</p>
+      <h1>ProStudio</h1>
+      <p>مكتبتك، أصواتك، وتشغيلاتك في مكان واحد · <code id="repoName"></code></p>
+    </div>
   </div>
   <div class="topstatus">
     <span id="connChip" class="chip">غير متصل</span>
     <span id="rateChip" class="chip muted" title="طلبات GitHub API المتبقية في الساعة">—</span>
     <span id="clockChip" class="chip muted">—</span>
-    <button id="refreshNow" class="btn small">تحديث الآن</button>
-    <label class="toggle"><input type="checkbox" id="autoRefresh" checked> تحديث تلقائي</label>
+    <button id="refreshNow" class="btn small">تحديث</button>
+    <label class="toggle compact"><input type="checkbox" id="autoRefresh" checked> تلقائي</label>
   </div>
 </header>
 
-<nav class="tabs" role="tablist">
-  <button class="tab active" data-tab="library">المكتبة <span id="countLibrary" class="count">0</span></button>
-  <button class="tab" data-tab="dubs">المدبلجة <span id="countDubs" class="count">0</span></button>
-  <button class="tab" data-tab="runs">التشغيلات <span id="countRuns" class="count">0</span></button>
-  <button class="tab" data-tab="voices">بنك الأصوات <span id="countVoices" class="count">0</span></button>
-  <button class="tab" data-tab="settings">الإعدادات</button>
-  <a class="tab link" href="dashboard.html">لوحة المشاريع الذكية ↗</a>
-  <a class="tab link" href="voices.html">الأصوات ↗</a>
+<nav class="tabs" role="tablist" aria-label="أقسام الاستوديو">
+  <button class="tab active" data-tab="overview" role="tab" aria-selected="true">الرئيسية</button>
+  <button class="tab" data-tab="library" role="tab" aria-selected="false">المكتبة <span id="countLibrary" class="count">0</span></button>
+  <button class="tab" data-tab="dubs" role="tab" aria-selected="false">المدبلجة <span id="countDubs" class="count">0</span></button>
+  <button class="tab" data-tab="runs" role="tab" aria-selected="false">التشغيلات <span id="countRuns" class="count">0</span></button>
+  <button class="tab" data-tab="voices" role="tab" aria-selected="false">الأصوات <span id="countVoices" class="count">0</span></button>
+  <button class="tab" data-tab="settings" role="tab" aria-selected="false">الإعدادات</button>
 </nav>
 
 <main>
+
+  <!-- ============================== الرئيسية ============================== -->
+  <section id="tab-overview" class="panel active" role="tabpanel">
+    <div class="overview-hero">
+      <div class="hero-copy">
+        <p class="eyebrow">مركز التحكم</p>
+        <h2>ابدأ من الفيديو، وأنهِ العمل بنسخة مدبلجة جاهزة.</h2>
+        <p>ارفع المصدر، عيّن صوت كل شخصية، تابع المعالجة لحظة بلحظة، ثم راجع النتيجة وحمّلها من الصفحة نفسها.</p>
+        <div class="hero-actions">
+          <button id="quickUpload" class="btn primary">رفع فيديو جديد</button>
+          <button id="quickYoutube" class="btn inverse">دبلجة رابط يوتيوب</button>
+          <button id="quickVoice" class="btn inverse">إضافة عيّنة صوتية</button>
+        </div>
+      </div>
+      <div class="hero-figure" aria-live="polite">
+        <span id="overviewHeroValue">0</span>
+        <small id="overviewHeroLabel">فيديو في مساحة العمل</small>
+      </div>
+    </div>
+
+    <div class="overview-metrics" aria-label="ملخص الاستوديو">
+      <button class="metric-card" data-jump="library"><span>المكتبة</span><strong id="overviewLibrary">0</strong><small>مصادر محفوظة</small></button>
+      <button class="metric-card" data-jump="library" data-filter="undubbed"><span>بانتظار الدبلجة</span><strong id="overviewUndubbed">0</strong><small>جاهزة للبدء</small></button>
+      <button class="metric-card" data-jump="dubs"><span>النسخ المدبلجة</span><strong id="overviewDubbed">0</strong><small>مشاريع منشورة</small></button>
+      <button class="metric-card live" data-jump="runs"><span>يعمل الآن</span><strong id="overviewActive">0</strong><small>تشغيلات نشطة</small></button>
+      <button class="metric-card" data-jump="voices"><span>بنك الأصوات</span><strong id="overviewVoices">0</strong><small>عيّنات قابلة لإعادة الاستخدام</small></button>
+    </div>
+
+    <div class="overview-grid">
+      <article class="surface overview-activity">
+        <div class="surface-head"><div><p class="eyebrow">المتابعة الفورية</p><h3>التشغيلات الأخيرة</h3></div><button id="quickRuns" class="btn small">عرض الكل</button></div>
+        <div id="overviewRunsList" class="overview-list"><div class="empty compact-empty">جارٍ تحميل التشغيلات…</div></div>
+      </article>
+      <article class="surface overview-recent">
+        <div class="surface-head"><div><p class="eyebrow">المخرجات</p><h3>آخر النسخ المدبلجة</h3></div><button class="btn small" data-jump="dubs">فتح المعرض</button></div>
+        <div id="overviewRecentList" class="overview-list"><div class="empty compact-empty">جارٍ تحميل المدبلجات…</div></div>
+      </article>
+      <aside class="surface readiness">
+        <p class="eyebrow">جاهزية الاستوديو</p>
+        <h3>حالة الاتصال</h3>
+        <div id="overviewConn" class="readiness-state">جارٍ الفحص…</div>
+        <p class="hint">تحتاج عمليات الرفع والحذف والتشغيل إلى رمز GitHub محفوظ في هذا المتصفح.</p>
+        <div class="stack-actions"><button class="btn" data-jump="settings">إدارة الاتصال والإعدادات</button><button id="overviewRefresh" class="btn">تحديث البيانات الآن</button></div>
+      </aside>
+    </div>
+  </section>
+
   <!-- ============================== المكتبة ============================== -->
-  <section id="tab-library" class="panel active">
+  <section id="tab-library" class="panel" role="tabpanel">
+    <div class="section-head"><div><p class="eyebrow">المصادر</p><h2>مكتبة الفيديو</h2><p>كل فيديو داخل مجلده الخاص، مع بياناته وأصواته وتشغيلاته.</p></div><button class="btn primary" id="libraryUploadShortcut">رفع فيديو</button></div>
     <div class="uploader" id="uploader">
       <div class="drop" id="drop">
         <input type="file" id="file" accept="video/*,.mp4,.mkv,.webm,.mov" hidden>
@@ -72,7 +123,8 @@
   </section>
 
   <!-- ============================== المدبلجة ============================== -->
-  <section id="tab-dubs" class="panel">
+  <section id="tab-dubs" class="panel" role="tabpanel">
+    <div class="section-head"><div><p class="eyebrow">المعرض</p><h2>الفيديوهات المدبلجة</h2><p>عاين النسخ، راجع الترجمة والجودة، وحمّل النتيجة النهائية.</p></div></div>
     <div class="toolbar">
       <input id="searchDubs" placeholder="بحث في المدبلجة…">
       <span id="dubsStatus" class="status"></span>
@@ -81,7 +133,8 @@
   </section>
 
   <!-- ============================== التشغيلات ============================== -->
-  <section id="tab-runs" class="panel">
+  <section id="tab-runs" class="panel" role="tabpanel">
+    <div class="section-head"><div><p class="eyebrow">العمليات</p><h2>متابعة الدبلجة</h2><p>حالة كل تشغيل وتقدّم المقاطع تتحدث تلقائياً.</p></div></div>
     <div class="toolbar">
       <span class="hint">تُحدَّث كل <span id="runsInterval">15</span> ثانية أثناء وجود تشغيل نشط. التقدم المفصّل يُقرأ من نقاط الاستئناف (checkpoint) لكل مقطع.</span>
       <span id="runsStatus" class="status"></span>
@@ -90,7 +143,8 @@
   </section>
 
   <!-- ============================== بنك الأصوات ============================== -->
-  <section id="tab-voices" class="panel">
+  <section id="tab-voices" class="panel" role="tabpanel">
+    <div class="section-head"><div><p class="eyebrow">الأداء الصوتي</p><h2>بنك الأصوات والشخصيات</h2><p>ارفع عيّنات عامة، ثم اربطها بالشخصيات من بطاقة أي فيديو في المكتبة.</p></div></div>
     <div class="card wide">
       <h2>إضافة عيّنة صوتية</h2>
       <p class="hint">عيّنة نقية لمتحدث واحد (6–20 ثانية، بلا موسيقى) تُحفَظ في <code>voices/</code> ويمكن اختيارها لأي شخصية من نافذة «الأصوات» في بطاقة الفيديو. لكل فيديو أيضاً عيّناته الخاصة في <code>library/&lt;الاسم&gt;/voices/</code>.</p>
@@ -101,7 +155,8 @@
   </section>
 
   <!-- ============================== الإعدادات ============================== -->
-  <section id="tab-settings" class="panel">
+  <section id="tab-settings" class="panel" role="tabpanel">
+    <div class="section-head"><div><p class="eyebrow">النظام</p><h2>الإعدادات</h2><p>الاتصال بالمستودع وخيارات الدبلجة والترجمة الذكية.</p></div></div>
     <div class="card wide">
       <h2>اتصال GitHub</h2>
       <p class="hint">الصفحة ثابتة على GitHub Pages؛ كل عملية (رفع، حذف، تشغيل، متابعة) تتم مباشرة عبر GitHub API من متصفحك. الرمز يُحفَظ في هذا المتصفح فقط ولا يُرسَل إلى أي جهة سوى api.github.com.</p>
@@ -141,7 +196,7 @@
 </main>
 
 <!-- ============================== نوافذ ============================== -->
-<div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
   <div class="modalbox">
     <div class="modalhead"><h3 id="modalTitle"></h3><button id="modalClose" class="btn small">إغلاق</button></div>
     <div id="modalBody"></div>
@@ -149,7 +204,7 @@
 </div>
 
 <footer>
-  ProStudio · <a id="repoLink" target="_blank" rel="noreferrer">المستودع</a> · <a id="actionsLink" target="_blank" rel="noreferrer">Actions</a> · القاعدة: لا حذف إلا بتأكيد صريح داخل الصفحة.
+  ProStudio · الاستوديو الموحد · <a id="repoLink" target="_blank" rel="noreferrer">المستودع</a> · <a id="actionsLink" target="_blank" rel="noreferrer">Actions</a> · القاعدة: لا حذف إلا بتأكيد صريح داخل الصفحة.
 </footer>
 
 <script type="module" src="studio.js"></script>
