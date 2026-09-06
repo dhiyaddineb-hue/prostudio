@@ -149,6 +149,10 @@
       <h2>إضافة عيّنة صوتية</h2>
       <p class="hint">عيّنة نقية لمتحدث واحد (6–20 ثانية، بلا موسيقى) تُحفَظ في <code>voices/</code> ويمكن اختيارها لأي شخصية من نافذة «الأصوات» في بطاقة الفيديو. لكل فيديو أيضاً عيّناته الخاصة في <code>library/&lt;الاسم&gt;/voices/</code>.</p>
       <div class="row"><input id="voiceName" placeholder="اسم العيّنة (لاتيني)، مثل narrator-male" dir="ltr"><input id="voiceFile" type="file" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg"><button id="voiceUpload" class="btn primary">رفع إلى بنك الأصوات</button></div>
+      <div id="voicePreviewPanel" class="sample-preview hidden" aria-live="polite">
+        <audio id="voicePreview" controls preload="metadata"></audio>
+        <div><strong id="voicePreviewName">—</strong><span id="voicePreviewMeta" class="hint">—</span></div>
+      </div>
       <div id="voiceStatus" class="status"></div>
     </div>
     <div id="voicesGrid" class="grid"></div>

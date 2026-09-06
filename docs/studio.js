@@ -315,8 +315,9 @@ function renderLibrary() {
       <div class="chips"><span class="chip ${chipClass}">${esc(st.label)}</span>${it.meta.source_lang ? `<span class="chip muted">${esc(it.meta.source_lang)}</span>` : ''}</div>
       ${prog ? `<div class="progress" title="${prog.counts.completed || 0}/${prog.total} مقطع"><span style="width:${prog.total ? Math.round(((prog.counts.completed || 0) * 100) / prog.total) : 0}%"></span></div>` : ''}
       <div class="buttons">
+        <button class="btn small primary act-project">فتح المشروع</button>
         ${it.whole ? `<button class="btn small act-preview">معاينة</button>` : ''}
-        <button class="btn small primary act-dub" ${st.key === 'running' ? 'disabled' : ''}>${st.key === 'dubbed' ? 'دبلجة نسخة جديدة' : 'دبلجة'}</button>
+        <button class="btn small act-dub" ${st.key === 'running' ? 'disabled' : ''}>${st.key === 'dubbed' ? 'دبلجة نسخة جديدة' : 'دبلجة'}</button>
         ${st.key === 'dubbed' ? `<button class="btn small act-godubs">النسخ المدبلجة</button>` : ''}
         ${st.key === 'running' ? `<button class="btn small act-goruns">متابعة</button>` : ''}
         <button class="btn small act-voices">الأصوات${it.voicesJson ? ' ✓' : ''}</button>
@@ -324,6 +325,7 @@ function renderLibrary() {
         <a class="btn small" href="${REPO_URL}/tree/${encodeURIComponent(BRANCH)}/library/${encodeURIComponent(it.slug)}" target="_blank" rel="noreferrer">GitHub</a>
         <button class="btn small danger act-delete">حذف</button>
       </div></div>`;
+    card.querySelector('.act-project').addEventListener('click', () => openProjectWorkspace(it));
     card.querySelector('.act-preview')?.addEventListener('click', () => openPlayer(it.title, rawUrl(it.whole.path), it));
     card.querySelector('.act-dub').addEventListener('click', () => openDubDialog(it));
     card.querySelector('.act-godubs')?.addEventListener('click', () => { $('searchDubs').value = it.slug; state.searchDubs = it.slug; showTab('dubs'); renderDubs(); });
@@ -505,13 +507,37 @@ async function dispatchDub(item, overrides = {}) {
   needToken();
   const d = { ...defaults(), ...overrides };
   const inputs = {
-    task: 'dub', source_path: item.sourcePath, youtube_url: '', source_lang: item.meta.source_lang || 'ar',
+    task: 'dub', source_path: item.sourcePath, youtube_url: '', source_lang: d.source_lang || item.meta.source_lang || 'ar',
     voice: d.voice, tts_engine: d.tts_engine, target_lang: d.target_lang, mode: 'both', gender: d.gender, model: d.model,
-    bg_music: String(!!d.bg_music), diarize: String(!!d.diarize), separate_sources: String(!!d.separate_sources), no_vad: 'false',
+    bg_music: String(!!d.bg_music), diarize: String(!!d.diarize), separate_sources: String(!!d.separate_sources), no_vad: String(!!d.no_vad),
     seed_vc: String(!!d.seed_vc), lip_sync: 'false', lip_sync_backend: 'wav2lip', profile: d.profile, quality: d.quality,
     chunk_seconds: String(d.chunk_seconds), speaker_voices_path: d.speaker_voices_path || '', validate_content: String(!!d.validate_content),
   };
   await api(`/repos/${OWNER}/${REPO}/actions/workflows/${WORKFLOW}/dispatches`, { method: 'POST', body: JSON.stringify({ ref: BRANCH, inputs }) });
+}
+function resumeOverrides(item, manifest) {
+  const config = manifest?.config || {};
+  return {
+    source_lang: config.source_lang || item.meta.source_lang || 'ar',
+    target_lang: config.target_lang || defaults().target_lang,
+    tts_engine: config.tts_engine || defaults().tts_engine,
+    voice: config.voice || defaults().voice,
+    gender: config.gender || defaults().gender,
+    model: config.model || defaults().model,
+    separate_sources: config.separate_sources ?? defaults().separate_sources,
+    bg_music: config.preserve_background ?? defaults().bg_music,
+    diarize: config.diarize ?? defaults().diarize,
+    no_vad: config.no_vad ?? false,
+    seed_vc: config.seed_vc ?? defaults().seed_vc,
+    chunk_seconds: config.max_seconds || defaults().chunk_seconds,
+    speaker_voices_path: item.voicesJson ? `library/${item.slug}/voices.json` : '',
+    validate_content: true,
+    profile: manifest?.seed_quota_policy === 'voxcpm' ? 'seed_quota_voxcpm' : defaults().profile,
+    quality: defaults().quality,
+  };
+}
+async function resumeProject(item, manifest) {
+  await dispatchDub(item, resumeOverrides(item, manifest));
 }
 function openDubDialog(item) {
   const d = defaults();
@@ -573,7 +599,8 @@ function speakerCard(speaker, p, item) {
       <label class="wide">مسار العيّنة (نسبةً إلى voices.json) <input data-key="reference_path" value="${esc(p.reference_path || '')}" dir="ltr"></label>
       <label class="wide">اختيار من بنك الأصوات <select class="bankpick"><option value="">—</option>${bank}</select></label>
       <label class="wide">رفع عيّنة صوتية لهذا المتحدث (wav/mp3/m4a، 6–20 ثانية كلام نقي) <input type="file" class="samplefile" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg"></label>
-      ${sample ? `<div class="wide"><audio controls preload="none" src="${rawUrl(sample.path)}"></audio><span class="hint mono">${esc(sample.name)}</span></div>` : ''}
+      <div class="wide local-sample-preview hidden"></div>
+      ${sample ? `<div class="wide saved-sample"><span class="hint">العينة المحفوظة</span><audio controls preload="none" src="${rawUrl(sample.path)}"></audio><span class="hint mono">${esc(sample.name)}</span></div>` : ''}
     </div>
     <label class="toggle"><input type="checkbox" data-key="approved" ${p.approved ? 'checked' : ''}> اعتماد إعداد هذا المتحدث</label>
   </article>`;
@@ -597,7 +624,21 @@ async function openVoicesDialog(item) {
       <div class="row"><input id="newSpeaker" placeholder="SPEAKER_01" dir="ltr"><button id="addSpeaker" class="btn small">إضافة متحدث</button></div>
       <div class="row"><button id="saveVoices" class="btn primary">حفظ الخريطة (والعيّنات المرفوعة)</button>${item.voicesJson ? '<button id="deleteVoices" class="btn danger">حذف الخريطة</button>' : ''}<span id="voicesStatus" class="status"></span></div></div>`;
     $('modalBody').querySelectorAll('.bankpick').forEach((sel) => sel.addEventListener('change', () => { const card = sel.closest('.character'); if (sel.value) { card.querySelector('[data-key=reference_path]').value = sel.value; card.querySelector('[data-key=reference_mode]').value = 'custom'; } }));
-    $('modalBody').querySelectorAll('.samplefile').forEach((inp) => inp.addEventListener('change', () => { const card = inp.closest('.character'); if (inp.files[0]) { const ext = (inp.files[0].name.match(/\.[^.]+$/) || ['.wav'])[0].toLowerCase(); card.querySelector('[data-key=reference_path]').value = `voices/${card.dataset.speaker}${ext}`; card.querySelector('[data-key=reference_mode]').value = 'custom'; } }));
+    $('modalBody').querySelectorAll('.samplefile').forEach((inp) => inp.addEventListener('change', async () => {
+      const card = inp.closest('.character'); const file = inp.files[0]; const preview = card.querySelector('.local-sample-preview');
+      if (!file) { preview.classList.add('hidden'); return; }
+      const ext = (file.name.match(/\.[^.]+$/) || ['.wav'])[0].toLowerCase();
+      const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 12);
+      card.querySelector('[data-key=reference_path]').value = `voices/${card.dataset.speaker}-${stamp}${ext}`;
+      card.querySelector('[data-key=reference_mode]').value = 'custom';
+      try {
+        const duration = await probeAudioDuration(file); inp.dataset.duration = String(duration);
+        const ok = duration >= 6 && duration <= 20; const url = URL.createObjectURL(file);
+        preview.innerHTML = `<audio controls preload="metadata" src="${url}"></audio><span class="status ${ok ? 'ok' : 'err'}">${esc(file.name)} · ${duration.toFixed(1)} ثانية${ok ? ' · صالحة مبدئياً' : ' · يجب أن تكون بين 6 و20 ثانية'}</span>`;
+        preview.classList.remove('hidden');
+        if (!ok) setStatus($('voicesStatus'), `${card.dataset.speaker}: مدة العينة ${duration.toFixed(1)} ثانية؛ المطلوب 6–20 ثانية.`, 'err');
+      } catch (error) { inp.dataset.duration = ''; preview.innerHTML = `<span class="status err">تعذر فحص الملف: ${esc(error.message)}</span>`; preview.classList.remove('hidden'); }
+    }));
     $('modalBody').querySelectorAll('.act-rmspeaker').forEach((b) => b.addEventListener('click', () => { delete profiles[b.closest('.character').dataset.speaker]; render(); }));
     $('addSpeaker').onclick = () => { const s = $('newSpeaker').value.trim(); if (!SPEAKER_RE.test(s)) return setStatus($('voicesStatus'), 'معرّف المتحدث: أحرف لاتينية وأرقام و _ . - فقط', 'err'); profiles[s] = defaultProfile(s); render(); };
     $('deleteVoices')?.addEventListener('click', () => confirmTyped({ title: 'حذف خريطة الأصوات', message: `سيُحذف voices.json وكل العيّنات في library/${esc(item.slug)}/voices/.`, expect: item.slug, onConfirm: () => commitChanges({ message: `Remove voice map of ${item.slug} (confirmed in the studio)`, deletions: [item.voicesJson.path, ...item.voiceSamples.map((f) => f.path)] }) }));
@@ -612,6 +653,9 @@ async function openVoicesDialog(item) {
           const file = card.querySelector('.samplefile').files[0];
           if (file) {
             if (file.size > PART_BYTES) throw new Error(`عيّنة ${s} أكبر من 18 MB — قصّها أولاً`);
+            const duration = Number(card.querySelector('.samplefile').dataset.duration) || await probeAudioDuration(file);
+            if (duration < 6 || duration > 20) throw new Error(`${s}: مدة العينة ${duration.toFixed(1)} ثانية؛ يجب أن تكون بين 6 و20 ثانية`);
+            data.reference_duration = Math.round(duration * 100) / 100;
             setStatus(status, `رفع عيّنة ${s}…`, 'info');
             additions.push({ path: `library/${item.slug}/${data.reference_path}`, sha: await createBlob(await toBase64(file), 'base64') });
           }
@@ -629,6 +673,56 @@ async function openVoicesDialog(item) {
     };
   };
   render();
+}
+
+
+async function openProjectWorkspace(item) {
+  openModal(`المشروع · ${item.title}`, '<p class="hint">جارٍ تحميل حالة المشروع…</p>');
+  try {
+    const release = await releaseFor(item.slug);
+    const manifest = release ? await manifestOf(release) : null;
+    const chunks = manifest?.chunks || [];
+    const completed = chunks.filter((c) => c.status === 'completed').length;
+    const failed = chunks.filter((c) => c.status === 'failed' || Object.values(c.checklist || {}).some((s) => s.state === 'failed')).length;
+    const pending = Math.max(0, chunks.length - completed - failed);
+    const progress = chunks.length ? Math.round((completed * 100) / chunks.length) : 0;
+    const speakers = [...new Set(chunks.map((c) => c.speaker || 'SPEAKER_00'))];
+    const dub = state.dubs.find((d) => d.slug === item.slug);
+    const active = state.runs.find((r) => isActive(r) && runSlug(r) === item.slug);
+    const stateText = active ? 'يعمل الآن' : manifest?.state === 'failed_resumable' ? 'متوقف وقابل للاستئناف' : manifest?.state === 'completed_waiting_for_cleanup_approval' ? 'مكتمل' : release ? 'محفوظ في نقطة استئناف' : 'لم يبدأ';
+    const stageTotals = {};
+    for (const name of STAGE_ORDER) stageTotals[name] = { success: 0, failed: 0, pending: 0, skipped: 0 };
+    for (const chunk of chunks) for (const name of STAGE_ORDER) {
+      const value = chunk.checklist?.[name]?.state || 'pending';
+      stageTotals[name][value] = (stageTotals[name][value] || 0) + 1;
+    }
+    const stageCards = chunks.length ? STAGE_ORDER.map((name) => {
+      const value = stageTotals[name];
+      return `<div class="stage-summary"><span>${esc(STAGE_LABEL[name])}</span><b>${value.success + value.skipped}/${chunks.length}</b><small>${value.failed ? `${value.failed} فاشل` : value.pending ? `${value.pending} معلّق` : 'مكتمل'}</small></div>`;
+    }).join('') : '<div class="empty compact-empty">تظهر قائمة المراحل بعد بدء تحليل الفيديو.</div>';
+    $('modalBody').innerHTML = `<div class="project-workspace">
+      <div class="workspace-head"><div><p class="eyebrow">${esc(stateText)}</p><h3>${esc(item.title)}</h3><span class="mono">library/${esc(item.slug)}/</span></div><span class="workspace-progress-value">${progress}%</span></div>
+      <div class="progress workspace-progress"><span style="width:${progress}%"></span></div>
+      <div class="workspace-metrics"><div><strong>${chunks.length}</strong><span>كل المقاطع</span></div><div class="ok"><strong>${completed}</strong><span>مكتملة</span></div><div class="err"><strong>${failed}</strong><span>فاشلة</span></div><div><strong>${pending}</strong><span>معلّقة</span></div><div><strong>${speakers.length || (item.voicesJson ? 1 : 0)}</strong><span>شخصيات</span></div><div><strong>${dub?.versions.length || 0}</strong><span>نسخ مدبلجة</span></div></div>
+      <section class="workspace-section"><div class="surface-head"><div><p class="eyebrow">Checklist</p><h3>مراحل المقاطع</h3></div><button id="workspaceCheckpoints" class="btn small">التفاصيل والصوت</button></div><div class="stage-summary-grid">${stageCards}</div></section>
+      <section class="workspace-section"><div class="surface-head"><div><p class="eyebrow">الشخصيات</p><h3>الأصوات المعتمدة</h3></div><button id="workspaceVoices" class="btn small">إدارة الشخصيات والأصوات</button></div><div class="speaker-strip">${speakers.length ? speakers.map((s) => `<span class="chip ${manifest?.voice_profiles?.[s]?.approved ? 'ok' : 'muted'}">${esc(manifest?.voice_profiles?.[s]?.label || s)}</span>`).join('') : '<span class="hint">تُكتشف الشخصيات عند التحليل، ويمكن إعداد SPEAKER_00 قبل البدء.</span>'}</div></section>
+      <section class="workspace-actions"><button id="workspaceStart" class="btn">بدء نسخة جديدة</button>${manifest && completed < chunks.length ? '<button id="workspaceResume" class="btn primary">استئناف غير المكتمل فقط</button>' : ''}${item.whole ? '<button id="workspacePreview" class="btn">معاينة المصدر</button>' : ''}${dub ? '<button id="workspaceDubs" class="btn">فتح النسخ المدبلجة</button>' : ''}<span id="workspaceStatus" class="status"></span></section>
+      ${manifest?.errors?.length ? `<details class="workspace-errors"><summary>آخر الأخطاء (${manifest.errors.length})</summary><ul>${manifest.errors.slice(-5).reverse().map((e) => `<li><b>المقطع ${e.chunk ?? '—'}</b>: ${esc(e.message)}</li>`).join('')}</ul></details>` : ''}
+    </div>`;
+    $('workspaceVoices').onclick = () => openVoicesDialog(item);
+    $('workspaceCheckpoints').onclick = () => openCheckpointDialog(item);
+    $('workspaceStart').onclick = () => openDubDialog(item);
+    $('workspacePreview')?.addEventListener('click', () => openPlayer(item.title, rawUrl(item.whole.path), item));
+    $('workspaceDubs')?.addEventListener('click', () => { state.searchDubs = item.slug; $('searchDubs').value = item.slug; closeModal(); showTab('dubs'); renderDubs(); });
+    $('workspaceResume')?.addEventListener('click', async () => {
+      const button = $('workspaceResume'); button.disabled = true; setStatus($('workspaceStatus'), 'جارٍ إرسال استئناف المشروع بالإعدادات المحفوظة…', 'info');
+      try {
+        await resumeProject(item, manifest);
+        setStatus($('workspaceStatus'), 'انطلق الاستئناف. المقاطع المكتملة ستُتخطى تلقائياً.', 'ok');
+        setTimeout(async () => { closeModal(); await refreshRuns(); renderAll(); showTab('runs'); }, 1500);
+      } catch (error) { setStatus($('workspaceStatus'), error.message, 'err'); button.disabled = false; }
+    });
+  } catch (error) { $('modalBody').innerHTML = `<p class="status err">${esc(error.message)}</p>`; }
 }
 
 // ───────────────────────────────────────────── checkpoints (stages + audio comparisons)
@@ -649,8 +743,14 @@ async function openCheckpointDialog(item) {
     $('modalBody').innerHTML = `<div class="kv"><b>الإصدار</b><span class="mono">${esc(release.tag_name)}</span><b>الحالة</b><span class="mono">${esc(manifest.state || '')}</span><b>المقاطع</b><span>${counts.completed || 0}/${chunks.length} مكتمل${counts.failed ? ` · ${counts.failed} فاشل` : ''}</span><b>الحجم</b><span>${formatMB(size)} MB · ${release.assets.length} ملف</span><b>Seed-VC</b><span>${manifest.seed_quota_fallback?.active ? 'تراجع إلى VoxCPM (الحصة نفدت)' : 'مفعّل'}</span><b>الترجمة</b><span class="mono">${esc(manifest.translation?.engine || 'google')}${manifest.translation?.model ? ' · ' + esc(manifest.translation.model) : ''}</span></div>
       <div class="tablewrap" style="margin-top:10px"><table class="segs stage-table"><thead><tr><th>#</th><th>الزمن</th><th>الحالة</th>${STAGE_ORDER.map((s) => `<th>${STAGE_LABEL[s]}</th>`).join('')}<th></th></tr></thead><tbody>${rows}</tbody></table></div>
       <div id="audioCompare" class="compare-audio"></div>
-      <div class="row" style="margin-top:10px"><button id="delCheckpoints" class="btn danger">حذف نقاط الاستئناف (الإصدار)</button><span class="hint">الحذف لا يمسّ الفيديو ولا النسخ المدبلجة المنشورة؛ يعيد الدبلجة القادمة من الصفر.</span></div>`;
+      <div class="row" style="margin-top:10px">${(counts.completed || 0) < chunks.length ? '<button id="resumeIncomplete" class="btn primary">استئناف غير المكتمل فقط</button>' : ''}<button id="delCheckpoints" class="btn danger">حذف نقاط الاستئناف (الإصدار)</button><span id="checkpointStatus" class="status"></span></div>
+      <p class="hint">الحذف لا يمسّ الفيديو ولا النسخ المدبلجة المنشورة؛ يعيد الدبلجة القادمة من الصفر.</p>`;
     $('modalBody').querySelectorAll('.act-audio').forEach((b) => b.addEventListener('click', () => renderAudioCompare(release, +b.dataset.index)));
+    $('resumeIncomplete')?.addEventListener('click', async () => {
+      const button = $('resumeIncomplete'); button.disabled = true; setStatus($('checkpointStatus'), 'جارٍ إرسال الاستئناف بالإعدادات المحفوظة…', 'info');
+      try { await resumeProject(item, manifest); setStatus($('checkpointStatus'), 'انطلق الاستئناف؛ ستُتخطى المقاطع المكتملة.', 'ok'); setTimeout(async () => { closeModal(); await refreshRuns(); renderAll(); showTab('runs'); }, 1500); }
+      catch (error) { setStatus($('checkpointStatus'), error.message, 'err'); button.disabled = false; }
+    });
     $('delCheckpoints').onclick = () => confirmTyped({
       title: 'حذف نقاط الاستئناف', message: `سيُحذف الإصدار المسودّ ${esc(release.tag_name)} (${formatMB(size)} MB).`, expect: item.slug,
       onConfirm: async () => { await api(`/repos/${OWNER}/${REPO}/releases/${release.id}`, { method: 'DELETE' }); state.releasesAt = 0; },
@@ -669,6 +769,32 @@ async function renderAudioCompare(release, index) {
     try { const res = await api(`/repos/${OWNER}/${REPO}/releases/assets/${slot.dataset.id}`, { headers: { Accept: 'application/octet-stream' }, raw: true }); const blob = await res.blob(); const audio = document.createElement('audio'); audio.controls = true; audio.autoplay = true; audio.src = URL.createObjectURL(blob); b.replaceWith(audio); }
     catch (e) { b.disabled = false; b.textContent = e.message; }
   }));
+}
+
+
+let voicePreviewUrl = '';
+function probeAudioDuration(file) {
+  return new Promise((resolve, reject) => {
+    const audio = document.createElement('audio'); const url = URL.createObjectURL(file);
+    const done = () => { URL.revokeObjectURL(url); audio.removeAttribute('src'); };
+    audio.preload = 'metadata';
+    audio.onloadedmetadata = () => { const duration = Number(audio.duration); done(); Number.isFinite(duration) && duration > 0 ? resolve(duration) : reject(new Error('مدة صوت غير صالحة')); };
+    audio.onerror = () => { done(); reject(new Error('المتصفح لم يستطع قراءة هذا الملف الصوتي')); };
+    audio.src = url;
+  });
+}
+async function previewVoiceFile(file) {
+  const panel = $('voicePreviewPanel'); const preview = $('voicePreview');
+  if (voicePreviewUrl) URL.revokeObjectURL(voicePreviewUrl);
+  if (!file) { voicePreviewUrl = ''; preview.removeAttribute('src'); panel.classList.add('hidden'); return; }
+  voicePreviewUrl = URL.createObjectURL(file); preview.src = voicePreviewUrl; $('voicePreviewName').textContent = file.name;
+  try {
+    const duration = await probeAudioDuration(file); $('voiceFile').dataset.duration = String(duration);
+    const ok = duration >= 6 && duration <= 20;
+    $('voicePreviewMeta').textContent = `${duration.toFixed(1)} ثانية · ${formatMB(file.size)} MB · ${ok ? 'صالحة مبدئياً' : 'خارج المدة المطلوبة 6–20 ثانية'}`;
+    $('voicePreviewMeta').className = `status ${ok ? 'ok' : 'err'}`;
+  } catch (error) { $('voiceFile').dataset.duration = ''; $('voicePreviewMeta').textContent = error.message; $('voicePreviewMeta').className = 'status err'; }
+  panel.classList.remove('hidden');
 }
 
 // ───────────────────────────────────────────── voice bank
@@ -690,14 +816,20 @@ async function uploadVoiceSample() {
   if (!file) return setStatus(status, 'اختر ملفاً صوتياً أولاً', 'err');
   try { needToken(); } catch (e) { return setStatus(status, e.message, 'err'); }
   if (file.size > PART_BYTES) return setStatus(status, 'العيّنة أكبر من 18 MB — قصّها إلى 20 ثانية تقريباً', 'err');
+  let duration;
+  try { duration = Number($('voiceFile').dataset.duration) || await probeAudioDuration(file); }
+  catch (error) { return setStatus(status, error.message, 'err'); }
+  if (duration < 6 || duration > 20) return setStatus(status, `مدة العينة ${duration.toFixed(1)} ثانية؛ يجب أن تكون بين 6 و20 ثانية`, 'err');
   const ext = (file.name.match(/\.[^.]+$/) || ['.wav'])[0].toLowerCase();
-  const name = (slugify($('voiceName').value || file.name) || 'voice') + ext;
+  let baseName = slugify($('voiceName').value || file.name) || 'voice';
+  let name = baseName + ext; let version = 2;
+  while (state.voiceBank.some((sample) => sample.name === name)) name = `${baseName}-${version++}${ext}`;
   $('voiceUpload').disabled = true;
   try {
     setStatus(status, 'رفع العيّنة…', 'info');
     const sha = await createBlob(await toBase64(file), 'base64');
     await commitChanges({ message: `Add voice sample ${name} to the voice bank`, additions: [{ path: `voices/${name}`, sha }] });
-    setStatus(status, `تمت الإضافة: voices/${name}`, 'ok'); $('voiceFile').value = ''; $('voiceName').value = '';
+    setStatus(status, `تمت الإضافة: voices/${name} · ${duration.toFixed(1)} ثانية`, 'ok'); $('voiceFile').value = ''; $('voiceFile').dataset.duration = ''; $('voiceName').value = ''; previewVoiceFile(null);
     await fullRefresh(true);
   } catch (e) { setStatus(status, e.message, 'err'); } finally { $('voiceUpload').disabled = false; }
 }
@@ -845,6 +977,7 @@ function init() {
   $('overviewRefresh').onclick = () => fullRefresh(true);
   const initial = location.hash.replace('#', ''); if (['overview', 'library', 'dubs', 'runs', 'voices', 'settings'].includes(initial)) showTab(initial); else showTab('overview');
   $('voiceUpload').onclick = uploadVoiceSample;
+  $('voiceFile').onchange = () => previewVoiceFile($('voiceFile').files[0]);
   $('modalClose').onclick = closeModal; $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('modal').classList.contains('hidden')) closeModal(); });
   $('refreshNow').onclick = () => fullRefresh(true);
