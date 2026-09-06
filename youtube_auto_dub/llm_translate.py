@@ -71,7 +71,7 @@ PROVIDER_DEFAULT_MODELS = {
     "deepseek": "deepseek-chat",
     "groq": "llama-3.3-70b-versatile",
     "openrouter": "openai/gpt-4o-mini",
-    "gemini": "gemini-2.5-flash",
+    "gemini": "gemini-3.6-flash",
     "mistral": "mistral-large-latest",
     "together": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
     "xai": "grok-3-mini",

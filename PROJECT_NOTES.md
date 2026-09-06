@@ -404,3 +404,4 @@ projects/<اسم>/
 - `.gitignore`: `!library/**` و`!dubs/**`. الصفحات القديمة (dashboard.html, voices.html) ما زالت متاحة من التبويبات.
 - Gemini: السرّ `TRANSLATE_API_KEY` حُدِّث بمفتاح AI Studio الذي أرسله المستخدم (في المحادثة — يُستحسن تدويره لاحقاً)، و`TRANSLATE_FALLBACK=fail`.
 - الاختبارات: `tests/test_studio_library.py` (7).
+- فحص Gemini الأول: المفتاح صحيح لكن `gemini-2.5-flash` لم يعد متاحاً للمستخدمين الجدد (404 يقترح `gemini-3.6-flash`) → حُدِّث المتغيّر والإعداد المسبق.

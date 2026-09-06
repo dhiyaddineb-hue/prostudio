@@ -725,7 +725,7 @@ def test_gone_endpoints_are_not_retried():
 def test_runner_reachable_free_presets():
     gemini = lt.LLMTranslateConfig.from_env({"TRANSLATE_API_KEY": "k", "TRANSLATE_PROVIDER": "gemini"})
     assert gemini.api_base == "https://generativelanguage.googleapis.com/v1beta/openai"
-    assert gemini.model == "gemini-2.5-flash" and gemini.max_tokens == 16384
+    assert gemini.model == "gemini-3.6-flash" and gemini.max_tokens == 16384
     groq = lt.LLMTranslateConfig.from_env({"TRANSLATE_API_KEY": "k", "TRANSLATE_PROVIDER": "groq"})
     assert groq.api_base == "https://api.groq.com/openai/v1" and groq.max_tokens == 8192
     assert "github" not in lt.PROVIDER_BASES
