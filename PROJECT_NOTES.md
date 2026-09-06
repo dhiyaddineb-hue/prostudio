@@ -340,15 +340,16 @@ projects/<اسم>/
   OpenRouter)، أو runner ذاتي. إلى أن يُحل، يتوقف dub.yml عند preflight مبكراً (وضع `fail`)؛ ضبط `TRANSLATE_FALLBACK=google` يسمح بالمتابعة
   بالمترجم القديم مع تحذير.
 
-### الحل المعتمد بعد البحث — GitHub Models (2026-09-06)
-- بحث الويب أكد أن agentrouter.org خلف Aliyun WAF يسمح فقط لعملاء محددين (Claude Code / Codex CLI / Gemini CLI / Qwen Code / SDK
-  أنثروبيك بايثون المتزامن) ويقدّم صفحة تحدّي JavaScript لغيرها؛ من خوادم GitHub تُحجب حتى نسخة curl التي تنجح من الجهاز الشخصي.
-- البديل الذي لا يحتاج أي مفتاح: **GitHub Models** (`TRANSLATE_PROVIDER=github`): endpoint متوافق مع OpenAI
-  `https://models.github.ai/inference/chat/completions`، مجاني للحسابات الشخصية، يعمل من داخل Actions بتوكن الـ workflow نفسه
-  بعد إضافة `permissions: models: read` (أُضيفت في `dub.yml` و`translation-preflight.yml`). الحدود المجانية (قابلة للتغيير):
-  فئة High مثل `openai/gpt-4.1`: 10 طلبات/دقيقة، 50/يوم، 8k إدخال / 4k إخراج لكل طلب؛ فئة Low مثل `openai/gpt-4.1-mini` أو
-  `openai/gpt-4o-mini`: 15/دقيقة، 150/يوم. لذلك الإعداد المسبق يستخدم نوافذ 25 مقطعاً و`max_tokens=4000`؛ فيلم 20 دقيقة ≈ 7–10 طلبات.
-  الطبقة المجانية موجَّهة للتجريب لا للإنتاج التجاري بحسب شروط GitHub.
-- المتغيّرات الآن: `TRANSLATE_PROVIDER=github`، `TRANSLATE_MODEL=openai/gpt-4.1`. السرّ `TRANSLATE_API_KEY` (مفتاح agentrouter) بقي
-  دون حذف لكنه غير مستخدم مع مزوّد github (توكن الـ workflow له الأولوية).
+### نتيجة البحث عن بديل يعمل من خوادم GitHub — 2026-09-06
+- **agentrouter.org**: خلف Aliyun WAF يسمح فقط لعملاء محددين (Claude Code / Codex CLI / Gemini CLI / Qwen Code / SDK أنثروبيك بايثون
+  المتزامن) ويقدّم صفحة تحدّي JavaScript لغيرها؛ من GitHub-hosted runners تُحجب حتى نسخة curl التي تنجح من الجهاز الشخصي (اختُبر في
+  التشغيلتين 34029523068 و34029636171). غير قابل للاستخدام من Actions بلا وسيط على IP غير سحابي.
+- **GitHub Models** (كان مجانياً بتوكن الـ workflow): **أُوقف نهائياً في 2026-07-30**؛ الـ endpoint يُرجع 410 برسالة "brownout" مضللة
+  (اختُبر في التشغيلة 34030124823). أُضيف 410 إلى الأخطاء الدائمة كي لا يُعاد المحاولة أبداً، وحُذف الإعداد المسبق.
+- **الخيارات المجانية التي تعمل من الخوادم** (بحسب مقارنات 2026): Google AI Studio / Gemini API (مجاني لنماذج Flash، ≈10 طلبات/دقيقة
+  و≈1500/يوم للمشروع، بلا بطاقة)، Groq (مفتاح مجاني، llama-3.3-70b-versatile أو openai/gpt-oss-120b)، Mistral free mode، OpenRouter
+  (نماذج `:free` بحدود صغيرة). التوصية للعربية: **Gemini** (`TRANSLATE_PROVIDER=gemini`, `TRANSLATE_MODEL=gemini-2.5-flash`؛
+  `max_tokens` الافتراضي 16384 لأن تفكير النموذج يُحسب من الميزانية).
+- المتغيّرات الآن: `TRANSLATE_PROVIDER=gemini`، `TRANSLATE_MODEL=gemini-2.5-flash`. السرّ `TRANSLATE_API_KEY` ما زال يحمل مفتاح
+  agentrouter (لم يُحذف) ويجب استبداله بمفتاح AI Studio؛ إلى ذلك الحين يتوقف dub.yml عند preflight مبكراً.
 - إعادة المحاولة تحترم `Retry-After` عند 429 (تراجع 3/6/12/24/48 ث، حتى 90 ث بحسب الترويسة)، `TRANSLATE_MAX_RETRIES` الافتراضي 5.

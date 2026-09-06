@@ -15,13 +15,12 @@ Environment:
     TRANSLATE_API_KEY      required to enable the LLM translator
     TRANSLATE_PROVIDER     openai | deepseek | groq | openrouter | gemini |
                            mistral | together | xai | anthropic | agentrouter |
-                           github | custom (default: openai, or anthropic when
-                           the base URL points at api.anthropic.com)
-                           "github" is GitHub Models: free for personal
-                           accounts, reachable from GitHub-hosted runners, and
-                           authenticated with the workflow's own GITHUB_TOKEN
-                           (permissions: models: read) — no TRANSLATE_API_KEY
-                           needed; a PAT with the models scope also works.
+                           custom (default: openai, or anthropic when the base
+                           URL points at api.anthropic.com). "gemini" (Google AI
+                           Studio key, free tier) and "groq" (free tier) are
+                           reachable from GitHub-hosted runners; agentrouter's
+                           WAF is not (see PROJECT_NOTES). GitHub Models was
+                           retired on 2026-07-30 and is deliberately absent.
     TRANSLATE_API_BASE     override the provider base URL (OpenAI-compatible
                            ``/chat/completions`` or Anthropic ``/messages``)
     TRANSLATE_MODEL        model name (provider default when omitted)
@@ -65,7 +64,6 @@ PROVIDER_BASES = {
     "xai": "https://api.x.ai/v1",
     "anthropic": "https://api.anthropic.com/v1",
     "agentrouter": "https://agentrouter.org/v1",
-    "github": "https://models.github.ai/inference",
 }
 
 PROVIDER_DEFAULT_MODELS = {
@@ -73,26 +71,24 @@ PROVIDER_DEFAULT_MODELS = {
     "deepseek": "deepseek-chat",
     "groq": "llama-3.3-70b-versatile",
     "openrouter": "openai/gpt-4o-mini",
-    "gemini": "gemini-2.0-flash",
+    "gemini": "gemini-2.5-flash",
     "mistral": "mistral-large-latest",
     "together": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
     "xai": "grok-3-mini",
     "anthropic": "claude-3-5-haiku-latest",
     "agentrouter": "deepseek-v4-flash",
-    "github": "openai/gpt-4.1",
 }
 
-# Free-tier request caps (GitHub Models: 8k input / 4k output tokens per request)
-# call for smaller windows and a matching completion budget.
+# Provider-specific request defaults. Gemini Flash models "think" before they
+# answer and the thinking tokens count against max_tokens, so leave headroom.
 PROVIDER_DEFAULT_LIMITS: dict[str, dict[str, int]] = {
-    "github": {"window": 25, "max_tokens": 4000},
+    "gemini": {"max_tokens": 16384},
 }
 
 # Gateways with a WAF in front only admit requests that look like a known
 # client; these defaults can be extended or overridden by TRANSLATE_EXTRA_HEADERS.
 PROVIDER_DEFAULT_HEADERS: dict[str, dict[str, str]] = {
     "agentrouter": {"User-Agent": "codex_cli_rs/0.146.0", "originator": "codex_cli_rs"},
-    "github": {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
 }
 
 # Speech that continues straight into the next chunk (the planner had to cut
@@ -120,7 +116,9 @@ _LANGUAGE_SCRIPT = {
     "ru": "cyrillic", "ja": "cjk", "zh": "cjk", "ko": "cjk", "hi": "devanagari",
 }
 
-PERMANENT_HTTP_ERRORS = {400, 401, 403, 404, 422}
+# 410 Gone is permanent by definition: a retired endpoint (GitHub Models, 2026-07)
+# answers every request with it and a retry loop would spin forever.
+PERMANENT_HTTP_ERRORS = {400, 401, 403, 404, 410, 422}
 
 
 def _lang_code(value: str) -> str:
@@ -283,10 +281,6 @@ class LLMTranslateConfig:
                 f"unknown TRANSLATE_PROVIDER={provider!r}; expected one of {', '.join(sorted(PROVIDER_BASES))} or custom"
             )
         key = (env.get("TRANSLATE_API_KEY") or "").strip()
-        if provider == "github":
-            # The runner's own token carries the models:read permission; a PAT
-            # with the models scope may be supplied as TRANSLATE_API_KEY instead.
-            key = (env.get("GITHUB_TOKEN") or env.get("GH_TOKEN") or "").strip() or key
         if not key:
             return None
         if not base:
@@ -689,9 +683,7 @@ def _cli() -> int:
     if config is None:
         provider = (os.environ.get("TRANSLATE_PROVIDER") or "").strip().lower()
         note = "TRANSLATE_API_KEY not set; using the built-in Google Translate client"
-        if provider == "github":
-            note = "TRANSLATE_PROVIDER=github but no GITHUB_TOKEN/GH_TOKEN (or TRANSLATE_API_KEY) is available; using the built-in Google Translate client"
-        elif provider:
+        if provider:
             note = f"TRANSLATE_PROVIDER={provider} but TRANSLATE_API_KEY is not set; using the built-in Google Translate client"
         report = {"ok": True, "engine": "google-unofficial", "note": note}
         print(json.dumps(report, ensure_ascii=False))

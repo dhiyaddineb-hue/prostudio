@@ -2,9 +2,6 @@ name: Run YouTube Auto Dub
 
 permissions:
   contents: write
-  # GitHub Models (TRANSLATE_PROVIDER=github): free, reachable from the runner,
-  # authenticated with the workflow's own token.
-  models: read
 
 concurrency:
   group: prostudio-dub-${{ github.ref }}
@@ -339,7 +336,6 @@ jobs:
 
       - name: Preflight environment and credentials
         env:
-          GH_TOKEN: ${{ github.token }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           YT_COOKIES: ${{ secrets.YT_COOKIES }}
           TRANSLATE_API_KEY: ${{ secrets.TRANSLATE_API_KEY }}
