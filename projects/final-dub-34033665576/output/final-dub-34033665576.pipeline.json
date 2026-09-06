@@ -1,0 +1,158 @@
+{
+  "run_id": "34033665576",
+  "engine": "voxcpm",
+  "source_lang": "ar",
+  "target_lang": "en",
+  "seed_vc": true,
+  "bg_music": false,
+  "diarize": false,
+  "video": "output/final-dub.mp4",
+  "published_at": "2026-09-06T12:47:34+00:00",
+  "quality": {
+    "ok": true,
+    "policy": "balanced",
+    "checks": {
+      "duration_match": true,
+      "no_clipping": true,
+      "playback_compatible_audio": true,
+      "language_valid": true,
+      "silence_not_added": true,
+      "segment_coverage": true,
+      "segment_gaps": true,
+      "segments_present": true,
+      "speech_covered_by_transcript": true,
+      "asr_confidence": true
+    },
+    "metrics": {
+      "source_duration": 33.205,
+      "transcript_source": "asr",
+      "source_active_ratio": 1.0,
+      "required_segment_coverage": 0.72,
+      "final_duration": 33.133,
+      "duration_delta": -0.071,
+      "peak_db": -3.4,
+      "audio_stream": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      },
+      "source_longest_silence": 0.0,
+      "final_longest_silence": 0.0,
+      "final_silence_over_speech": 0.0,
+      "speech_only_dub": true,
+      "uncovered_speech": {
+        "measured": true,
+        "longest_after_seconds": 0.0,
+        "after_seconds": 0.0,
+        "recovered_words": 9,
+        "limit_seconds": 2.0,
+        "spans": []
+      },
+      "segment_count": 4,
+      "non_speech_cues_ignored": 0,
+      "mean_asr_confidence": 0.82,
+      "frac_high_conf": 1.0,
+      "coverage": 0.9999,
+      "max_gap": 0.0045,
+      "internal_max_gap": 0.0,
+      "leading_gap": 0.0,
+      "trailing_gap": 0.0045
+    },
+    "limits": {
+      "duration": 1.0,
+      "peak": -0.3,
+      "extra_silence": 2.5,
+      "segment_gap": 6.0,
+      "coverage": 0.72,
+      "asr_confidence": 0.4,
+      "uncovered_speech": 2.0
+    },
+    "language": {
+      "expected": "en",
+      "detected": "en",
+      "probability": 0.9994,
+      "text_chars": 780,
+      "script_latin_ratio": 1.0,
+      "valid": true,
+      "video_sha256": "78bf54aedef1e661b081ade9b6f0841ca55526198feb9d89447c4844a76ea63a"
+    }
+  },
+  "language": {
+    "expected": "en",
+    "detected": "en",
+    "probability": 0.9994,
+    "text_chars": 780,
+    "script_latin_ratio": 1.0,
+    "valid": true,
+    "video_sha256": "78bf54aedef1e661b081ade9b6f0841ca55526198feb9d89447c4844a76ea63a"
+  },
+  "pipeline_report": {
+    "ok": true,
+    "policy": "balanced",
+    "checks": {
+      "duration_match": true,
+      "no_clipping": true,
+      "playback_compatible_audio": true,
+      "language_valid": true,
+      "silence_not_added": true,
+      "segment_coverage": true,
+      "segment_gaps": true,
+      "segments_present": true,
+      "speech_covered_by_transcript": true,
+      "asr_confidence": true
+    },
+    "metrics": {
+      "source_duration": 33.205,
+      "transcript_source": "asr",
+      "source_active_ratio": 1.0,
+      "required_segment_coverage": 0.72,
+      "final_duration": 33.133,
+      "duration_delta": -0.071,
+      "peak_db": -3.4,
+      "audio_stream": {
+        "codec": "aac",
+        "sample_rate": 48000,
+        "channels": 2
+      },
+      "source_longest_silence": 0.0,
+      "final_longest_silence": 0.0,
+      "final_silence_over_speech": 0.0,
+      "speech_only_dub": true,
+      "uncovered_speech": {
+        "measured": true,
+        "longest_after_seconds": 0.0,
+        "after_seconds": 0.0,
+        "recovered_words": 9,
+        "limit_seconds": 2.0,
+        "spans": []
+      },
+      "segment_count": 4,
+      "non_speech_cues_ignored": 0,
+      "mean_asr_confidence": 0.82,
+      "frac_high_conf": 1.0,
+      "coverage": 0.9999,
+      "max_gap": 0.0045,
+      "internal_max_gap": 0.0,
+      "leading_gap": 0.0,
+      "trailing_gap": 0.0045
+    },
+    "limits": {
+      "duration": 1.0,
+      "peak": -0.3,
+      "extra_silence": 2.5,
+      "segment_gap": 6.0,
+      "coverage": 0.72,
+      "asr_confidence": 0.4,
+      "uncovered_speech": 2.0
+    },
+    "language": {
+      "expected": "en",
+      "detected": "en",
+      "probability": 0.9994,
+      "text_chars": 780,
+      "script_latin_ratio": 1.0,
+      "valid": true,
+      "video_sha256": "78bf54aedef1e661b081ade9b6f0841ca55526198feb9d89447c4844a76ea63a"
+    }
+  }
+}
