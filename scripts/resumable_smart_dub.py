@@ -1876,8 +1876,15 @@ async def main_async(args) -> None:
                             # the final retained retry, synthesize two shorter
                             # phrases and concatenate them before timing fit.
                             words = retry_text.split()
-                            middle = max(1, min(len(words) - 1, len(words) // 2))
-                            split_texts = [" ".join(words[:middle]), " ".join(words[middle:])]
+                            # Keep each synthesis request short enough that
+                            # VoxCPM cannot silently drop a clause, while
+                            # avoiding a one-word tail.
+                            part_count = max(2, math.ceil(len(words) / 5))
+                            part_size = math.ceil(len(words) / part_count)
+                            split_texts = [
+                                " ".join(words[offset:offset + part_size])
+                                for offset in range(0, len(words), part_size)
+                            ]
                             split_audio = []
                             for part_index, part_text in enumerate(split_texts, start=1):
                                 part_raw = directory / f"content-retry-{content_attempt + 1}.part{part_index}.wav"
