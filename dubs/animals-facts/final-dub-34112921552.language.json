@@ -1,0 +1,9 @@
+{
+  "expected": "en",
+  "detected": "en",
+  "probability": 0.9994,
+  "text_chars": 896,
+  "script_latin_ratio": 1.0,
+  "valid": true,
+  "video_sha256": "bfd6c6c102edc2ee94617e9ffccbf779a182368a6aa97186038972979a7e02af"
+}
