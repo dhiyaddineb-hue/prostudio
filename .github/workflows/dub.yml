@@ -278,13 +278,31 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      - name: Cache dubbing Python environment
+        id: dub_venv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: dub-venv-${{ runner.os }}-py311-${{ hashFiles('requirements.txt') }}-v1
+
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -U yt-dlp
-          pip install -r requirements.txt
-          pip install faster-whisper edge-tts
-          pip install gradio_client
+          set -euo pipefail
+          if [ ! -x .venv/bin/python ]; then
+            python -m venv .venv
+            . .venv/bin/activate
+            python -m pip install --upgrade pip
+            pip install -U yt-dlp
+            pip install -r requirements.txt
+            pip install faster-whisper edge-tts gradio_client
+          else
+            . .venv/bin/activate
+            python - <<'PY'
+          import faster_whisper, gradio_client
+          print("Cached dubbing environment is ready")
+          PY
+          fi
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       # Download the selected Whisper weights on the GitHub runner. The cache
       # makes later runs fast while keeping all model files inside GitHub.
@@ -507,22 +525,40 @@ jobs:
             test -f "${{ inputs.speaker_voices_path }}" || { echo "speaker voice profile file is missing" >&2; exit 1; }
             profile_args+=(--speaker-voices "${{ inputs.speaker_voices_path }}")
           fi
-          python scripts/resumable_smart_dub.py \
-            --source "${{ steps.smart_project.outputs.source }}" \
-            --project-id "${{ steps.smart_project.outputs.id }}" \
-            --release-tag "${{ steps.smart_project.outputs.release_tag }}" \
-            --checkpoint-root checkpoints \
-            --output-dir output \
-            --source-lang "${{ inputs.source_lang }}" \
-            --target-lang "${{ inputs.target_lang }}" \
-            --tts-engine "${{ inputs.tts_engine }}" \
-            --voice "${{ inputs.voice }}" \
-            --gender "${{ inputs.gender }}" \
-            --model "${{ inputs.model }}" \
-            --max-seconds "$chunk_max" \
-            --target-seconds "8" \
-            --min-seconds "2.5" \
-            "${profile_args[@]}" "${extra[@]}"
+          run_smart_dub() {
+            python scripts/resumable_smart_dub.py \
+              --source "${{ steps.smart_project.outputs.source }}" \
+              --project-id "${{ steps.smart_project.outputs.id }}" \
+              --release-tag "${{ steps.smart_project.outputs.release_tag }}" \
+              --checkpoint-root checkpoints \
+              --output-dir output \
+              --source-lang "${{ inputs.source_lang }}" \
+              --target-lang "${{ inputs.target_lang }}" \
+              --tts-engine "${{ inputs.tts_engine }}" \
+              --voice "${{ inputs.voice }}" \
+              --gender "${{ inputs.gender }}" \
+              --model "${{ inputs.model }}" \
+              --max-seconds "$chunk_max" \
+              --target-seconds "8" \
+              --min-seconds "2.5" \
+              "${profile_args[@]}" "${extra[@]}"
+          }
+          last_status=1
+          for pass in 1 2; do
+            echo "Smart dubbing pass $pass/2"
+            if run_smart_dub; then
+              last_status=0
+              break
+            else
+              last_status=$?
+            fi
+            if [ "$pass" -lt 2 ]; then
+              echo "::warning::A resumable chunk failed; retrying once on the same runner with preserved checkpoints"
+            fi
+          done
+          if [ "$last_status" -ne 0 ]; then
+            exit "$last_status"
+          fi
 
       - name: Confirm complete resumable delivery
         if: inputs.analysis_only == false
