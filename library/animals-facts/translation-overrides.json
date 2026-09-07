@@ -1,7 +1,9 @@
 {
-  "version": 1,
+  "version": 2,
   "reason": "Approved concise wording for a repeatedly incomplete VoxCPM take",
-  "chunks": {
-    "5": "سنة. وكان قصر أعمارهم بسبب إصابات الصيد ومواجهة الحيوانات المفترسة."
+  "targets": {
+    "ar": {
+      "5": "سنة. وكان قصر أعمارهم بسبب إصابات الصيد ومواجهة الحيوانات المفترسة."
+    }
   }
 }

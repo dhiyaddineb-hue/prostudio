@@ -1427,9 +1427,12 @@ async def main_async(args) -> None:
     override_path = args.speaker_voices.with_name("translation-overrides.json") if args.speaker_voices else None
     if override_path and override_path.exists():
         override_doc = json.loads(override_path.read_text(encoding="utf-8"))
-        override_chunks = override_doc.get("chunks", override_doc)
+        if isinstance(override_doc.get("targets"), dict):
+            override_chunks = override_doc["targets"].get(args.target_lang, {})
+        else:
+            override_chunks = override_doc.get("chunks", override_doc)
         if not isinstance(override_chunks, dict):
-            raise ValueError("translation-overrides.json must contain a chunks object")
+            raise ValueError("translation-overrides.json must contain chunks or targets.<language>")
         for raw_index, override_text in override_chunks.items():
             index = int(raw_index)
             if index < 0 or index >= len(store.data["chunks"]):
