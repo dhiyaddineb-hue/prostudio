@@ -399,10 +399,17 @@ jobs:
           set -euo pipefail
           mkdir -p output
           ffmpeg -version >/dev/null
-          # Prove the translation API (when configured) before hours of work depend on it.
-          python -m youtube_auto_dub.llm_translate --preflight \
-            --source-lang "${{ inputs.source_lang }}" --target-lang "${{ inputs.target_lang }}" \
-            --report output/translation-preflight.json
+          # Same-language re-voicing needs no translation provider.
+          if [ "${{ inputs.source_lang }}" = "${{ inputs.target_lang }}" ] && [ "${{ inputs.source_lang }}" != "auto" ]; then
+            python - <<'PY'
+          import json
+          json.dump({"ok": True, "engine": "same_language_passthrough", "skipped": True}, open("output/translation-preflight.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+          PY
+          else
+            python -m youtube_auto_dub.llm_translate --preflight \
+              --source-lang "${{ inputs.source_lang }}" --target-lang "${{ inputs.target_lang }}" \
+              --report output/translation-preflight.json
+          fi
           python - <<'PY'
           import json, os, shutil
           translation = json.load(open("output/translation-preflight.json", encoding="utf-8"))

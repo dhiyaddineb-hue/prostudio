@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "updated_at": "2026-09-07T12:51:08Z",
+  "purpose": "Arabic same-language re-voicing with the user-provided sample; XTTS not authorized",
+  "speakers": {
+    "SPEAKER_00": {
+      "speaker": "SPEAKER_00",
+      "label": "العينة المرفوعة",
+      "reference_mode": "custom",
+      "reference_path": "voices/custom-reference.mp3",
+      "tts_engine": "voxcpm",
+      "voice_conversion": "seed-vc",
+      "style": "natural",
+      "approved": true
+    }
+  }
+}

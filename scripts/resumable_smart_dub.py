@@ -1349,6 +1349,20 @@ async def main_async(args) -> None:
         return
 
     missing_translation = [chunk for chunk in store.data["chunks"] if chunk.get("source_text") and not chunk.get("translated_text")]
+    effective_source = str(detected_language or args.source_lang).lower().split("-")[0]
+    effective_target = str(args.target_lang).lower().split("-")[0]
+    if missing_translation and effective_source == effective_target:
+        for chunk in missing_translation:
+            index = int(chunk["index"])
+            text = str(chunk.get("source_text") or "").strip()
+            store.update_chunk(
+                index, translated_text=text, status="translated",
+                translation_engine="same_language_passthrough", error=None,
+            )
+            write_text_files(store, index)
+        store.save()
+        mirror.upload_manifest(store)
+        missing_translation = []
     if missing_translation:
         missing_translation = await translate_with_llm(
             store, mirror, missing_translation,
