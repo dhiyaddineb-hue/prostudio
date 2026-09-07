@@ -269,7 +269,7 @@ async function dispatchYoutube(url) {
   const d = defaults();
   const inputs = {
     task: 'dub', source_path: '', youtube_url: url, source_lang: $('ytLang').value.trim() || 'ar',
-    voice: d.voice, tts_engine: d.tts_engine, target_lang: d.target_lang, gender: d.gender, model: d.model,
+    tts_engine: d.tts_engine, allow_xtts: String(!!d.allow_xtts), target_lang: d.target_lang, gender: d.gender, model: d.model,
     bg_music: String(!!d.bg_music), diarize: String(!!d.diarize), separate_sources: String(!!d.separate_sources), no_vad: 'false',
     seed_vc: String(!!d.seed_vc), profile: d.profile, quality: d.quality,
     chunk_seconds: String(d.chunk_seconds), speaker_voices_path: '', validate_content: String(!!d.validate_content),
@@ -495,20 +495,20 @@ function confirmCancel(run) {
 function defaults() {
   let saved = {}; try { saved = JSON.parse(localStorage.getItem(DEFAULTS_KEY) || '{}'); } catch { /* fresh */ }
   return {
-    target_lang: 'en', voice: 'en-US-AndrewMultilingualNeural', tts_engine: 'voxcpm', gender: 'male', model: 'medium',
+    target_lang: 'en', tts_engine: 'voxcpm', allow_xtts: false, gender: 'male', model: 'medium',
     profile: 'seed_quota_voxcpm', quality: 'balanced', chunk_seconds: '10', seed_vc: true, separate_sources: true,
     bg_music: false, diarize: false, validate_content: true, ...saved,
   };
 }
 function readDefaultsForm() {
   return {
-    target_lang: $('dTarget').value.trim() || 'en', voice: $('dVoice').value.trim(), tts_engine: $('dEngine').value, gender: $('dGender').value,
+    target_lang: $('dTarget').value.trim() || 'en', tts_engine: $('dEngine').value, allow_xtts: $('dAllowXtts').checked, gender: $('dGender').value,
     model: $('dModel').value, profile: $('dProfile').value, quality: $('dQuality').value, chunk_seconds: $('dChunk').value.trim() || '10',
     seed_vc: $('dSeed').checked, separate_sources: $('dSeparate').checked, bg_music: $('dBg').checked, diarize: $('dDiarize').checked, validate_content: $('dValidate').checked,
   };
 }
 function fillDefaultsForm(d) {
-  $('dTarget').value = d.target_lang; $('dVoice').value = d.voice; $('dEngine').value = d.tts_engine; $('dGender').value = d.gender; $('dModel').value = d.model;
+  $('dTarget').value = d.target_lang; $('dEngine').value = d.tts_engine; $('dAllowXtts').checked = !!d.allow_xtts; $('dGender').value = d.gender; $('dModel').value = d.model;
   $('dProfile').value = d.profile; $('dQuality').value = d.quality; $('dChunk').value = d.chunk_seconds; $('dSeed').checked = d.seed_vc; $('dSeparate').checked = d.separate_sources;
   $('dBg').checked = d.bg_music; $('dDiarize').checked = d.diarize; $('dValidate').checked = d.validate_content;
 }
@@ -517,7 +517,7 @@ async function dispatchDub(item, overrides = {}) {
   const d = { ...defaults(), ...overrides };
   const inputs = {
     task: 'dub', source_path: item.sourcePath, youtube_url: '', source_lang: d.source_lang || item.meta.source_lang || 'ar',
-    voice: d.voice, tts_engine: d.tts_engine, target_lang: d.target_lang, gender: d.gender, model: d.model,
+    tts_engine: d.tts_engine, allow_xtts: String(!!d.allow_xtts), target_lang: d.target_lang, gender: d.gender, model: d.model,
     bg_music: String(!!d.bg_music), diarize: String(!!d.diarize), separate_sources: String(!!d.separate_sources), no_vad: String(!!d.no_vad),
     seed_vc: String(!!d.seed_vc), profile: d.profile, quality: d.quality,
     chunk_seconds: String(d.chunk_seconds), speaker_voices_path: d.speaker_voices_path || '', validate_content: String(!!d.validate_content),
@@ -531,7 +531,7 @@ function resumeOverrides(item, manifest) {
     source_lang: config.source_lang || item.meta.source_lang || 'ar',
     target_lang: config.target_lang || defaults().target_lang,
     tts_engine: config.tts_engine || defaults().tts_engine,
-    voice: config.voice || defaults().voice,
+    allow_xtts: false,
     gender: config.gender || defaults().gender,
     model: config.model || defaults().model,
     separate_sources: config.separate_sources ?? defaults().separate_sources,
@@ -568,8 +568,8 @@ async function openDubDialog(item) {
         <div class="dub-form-grid">
           <label>لغة المصدر <input id="xSource" value="${esc(manifest?.config?.source_lang || item.meta.source_lang || 'ar')}" dir="ltr"></label>
           <label>لغة الدبلجة <input id="xTarget" value="${esc(manifest?.config?.target_lang || d.target_lang)}" dir="ltr"></label>
-          <label>محرك الصوت الافتراضي <select id="xEngine"><option value="voxcpm">VoxCPM</option><option value="xtts">XTTS</option><option value="qwen">Qwen</option><option value="edge">Edge-TTS</option></select></label>
-          <label>الصوت الجاهز الافتراضي <input id="xVoice" value="${esc(manifest?.config?.voice || d.voice)}" dir="ltr"></label>
+          <label>محرك الصوت الافتراضي <select id="xEngine"><option value="voxcpm">المسار الافتراضي المجرّب</option><option value="xtts">XTTS v2 — بطلب صريح فقط</option></select></label>
+          <label class="option-toggle compact-option"><input type="checkbox" id="xAllowXtts"><span><b>تأكيد XTTS v2</b><small>اتركه معطلاً دائماً إلا عندما تطلب XTTS صراحة.</small></span></label>
           <label>مستوى الجودة <select id="xQuality"><option value="balanced">متوازن</option><option value="strict">صارم</option><option value="safe">آمن</option></select></label>
           <label>نموذج التفريغ <select id="xModel"><option value="medium">Medium — أدق</option><option value="small">Small — أسرع</option><option value="base">Base</option><option value="tiny">Tiny</option></select></label>
         </div>
@@ -594,7 +594,7 @@ async function openDubDialog(item) {
       <div class="dub-submit"><div><b>${analysisReady ? 'الإعداد جاهز للمراجعة' : 'ابدأ بتحليل الشخصيات إذا كان الفيديو متعدد المتحدثين'}</b><small>كل النتائج الناجحة تحفظ في نقاط الاستئناف، والفاشل فقط يعاد.</small></div><div><button id="xAnalyze" class="btn">تحليل الشخصيات فقط</button><button id="xGo" class="btn primary">حفظ الأصوات وبدء الدبلجة</button></div></div>
       <div id="xStatus" class="status"></div>
     </div>`;
-    $('xEngine').value = manifest?.config?.tts_engine || d.tts_engine; $('xQuality').value = d.quality; $('xModel').value = manifest?.config?.model || d.model; $('xProfile').value = d.profile; $('xChunk').value = String(manifest?.config?.max_seconds || d.chunk_seconds); $('xGender').value = manifest?.config?.gender || d.gender;
+    $('xEngine').value = manifest?.config?.tts_engine || d.tts_engine; $('xAllowXtts').checked = false; $('xQuality').value = d.quality; $('xModel').value = manifest?.config?.model || d.model; $('xProfile').value = d.profile; $('xChunk').value = String(manifest?.config?.max_seconds || d.chunk_seconds); $('xGender').value = manifest?.config?.gender || d.gender;
     const characterRoot = $('dubCharacters');
     characterRoot.querySelectorAll('.act-rmspeaker').forEach((button) => button.remove());
     characterRoot.querySelectorAll('.bankpick').forEach((select) => select.addEventListener('change', () => { const card = select.closest('.character'); if (select.value) { card.querySelector('[data-key=reference_path]').value = select.value; card.querySelector('[data-key=reference_mode]').value = 'custom'; } }));
@@ -605,11 +605,11 @@ async function openDubDialog(item) {
       try { const duration = await probeAudioDuration(file); input.dataset.duration = String(duration); const ok = duration >= 6 && duration <= 20; const url = URL.createObjectURL(file); preview.innerHTML = `<audio controls src="${url}"></audio><span class="status ${ok ? 'ok' : 'err'}">${duration.toFixed(1)} ثانية · ${ok ? 'صالحة' : 'المطلوب 6–20 ثانية'}</span>`; preview.classList.remove('hidden'); }
       catch (error) { preview.innerHTML = `<span class="status err">${esc(error.message)}</span>`; preview.classList.remove('hidden'); }
     }));
-    const values = () => ({ source_lang: $('xSource').value.trim() || 'ar', target_lang: $('xTarget').value.trim() || 'en', tts_engine: $('xEngine').value, voice: $('xVoice').value.trim(), quality: $('xQuality').value, model: $('xModel').value, gender: $('xGender').value, profile: $('xProfile').value, chunk_seconds: $('xChunk').value, separate_sources: $('xSeparate').checked, bg_music: $('xBg').checked, diarize: $('xDiarize').checked, no_vad: $('xNoVad').checked, seed_vc: [...characterRoot.querySelectorAll('[data-key=voice_conversion]')].some((select) => select.value === 'seed-vc'), validate_content: $('xValidate').checked });
-    const analyze = async () => { const status = $('xStatus'); setStatus(status, 'جارٍ تشغيل تحليل المصدر والشخصيات فقط…', 'info'); $('xAnalyze').disabled = true; $('xAnalyzeTop')?.setAttribute('disabled', ''); try { await dispatchDub(item, { ...values(), analysis_only: true, speaker_voices_path: '' }); setStatus(status, 'انطلق التحليل. عند انتهائه افتح المشروع ثم عد إلى إعداد الدبلجة لتظهر الشخصيات.', 'ok'); setTimeout(async () => { await refreshRuns(); renderAll(); showTab('runs'); }, 1400); } catch (error) { setStatus(status, error.message, 'err'); $('xAnalyze').disabled = false; $('xAnalyzeTop')?.removeAttribute('disabled'); } };
+    const values = () => ({ source_lang: $('xSource').value.trim() || 'ar', target_lang: $('xTarget').value.trim() || 'en', tts_engine: $('xEngine').value, allow_xtts: $('xAllowXtts').checked, quality: $('xQuality').value, model: $('xModel').value, gender: $('xGender').value, profile: $('xProfile').value, chunk_seconds: $('xChunk').value, separate_sources: $('xSeparate').checked, bg_music: $('xBg').checked, diarize: $('xDiarize').checked, no_vad: $('xNoVad').checked, seed_vc: [...characterRoot.querySelectorAll('[data-key=voice_conversion]')].some((select) => select.value === 'seed-vc'), validate_content: $('xValidate').checked });
+    const analyze = async () => { const status = $('xStatus'); setStatus(status, 'جارٍ تشغيل تحليل المصدر والشخصيات فقط…', 'info'); $('xAnalyze').disabled = true; $('xAnalyzeTop')?.setAttribute('disabled', ''); try { await dispatchDub(item, { ...values(), tts_engine: 'voxcpm', allow_xtts: false, analysis_only: true, speaker_voices_path: '' }); setStatus(status, 'انطلق التحليل. عند انتهائه افتح المشروع ثم عد إلى إعداد الدبلجة لتظهر الشخصيات.', 'ok'); setTimeout(async () => { await refreshRuns(); renderAll(); showTab('runs'); }, 1400); } catch (error) { setStatus(status, error.message, 'err'); $('xAnalyze').disabled = false; $('xAnalyzeTop')?.removeAttribute('disabled'); } };
     $('xAnalyze').onclick = analyze; $('xAnalyzeTop')?.addEventListener('click', analyze);
     $('xGo').onclick = async () => {
-      const status = $('xStatus'); const config = values(); if (config.diarize && !analysisReady) return setStatus(status, 'الفيديو متعدد الشخصيات: نفّذ «تحليل الشخصيات فقط» أولاً، ثم عيّن صوت كل شخصية.', 'err');
+      const status = $('xStatus'); const config = values(); const wantsXtts = config.tts_engine === 'xtts' || [...characterRoot.querySelectorAll('[data-key=tts_engine]')].some((select) => select.value === 'xtts'); if (wantsXtts && !config.allow_xtts) return setStatus(status, 'XTTS v2 مقفل. فعّل تأكيد XTTS فقط إذا طلبته صراحة.', 'err'); if (config.diarize && !analysisReady) return setStatus(status, 'الفيديو متعدد الشخصيات: نفّذ «تحليل الشخصيات فقط» أولاً، ثم عيّن صوت كل شخصية.', 'err');
       $('xGo').disabled = true;
       try {
         needToken(); const speakers = {}; const additions = [];
@@ -618,7 +618,7 @@ async function openDubDialog(item) {
           for (const element of card.querySelectorAll('[data-key]')) data[element.dataset.key] = element.type === 'checkbox' ? element.checked : element.value.trim();
           const file = card.querySelector('.samplefile').files[0];
           if (file) { if (file.size > PART_BYTES) throw new Error(`${speaker}: العينة أكبر من 18 MB`); const duration = Number(card.querySelector('.samplefile').dataset.duration) || await probeAudioDuration(file); if (duration < 6 || duration > 20) throw new Error(`${speaker}: يجب أن تكون العينة بين 6 و20 ثانية`); data.reference_duration = Math.round(duration * 100) / 100; additions.push({ path: `library/${item.slug}/${data.reference_path}`, sha: await createBlob(await toBase64(file), 'base64') }); }
-          if (data.reference_mode === 'custom' && !data.reference_path) throw new Error(`${speaker}: اختر أو ارفع عينة صوتية`); if (data.reference_mode === 'synthetic' && data.tts_engine === 'edge' && !data.voice) throw new Error(`${speaker}: أدخل اسم صوت Edge`); if (!data.approved) throw new Error(`${speaker}: اعتمد إعداد الشخصية قبل البدء`); speakers[speaker] = data;
+          if (data.reference_mode === 'custom' && !data.reference_path) throw new Error(`${speaker}: اختر أو ارفع عينة صوتية`); if (!data.approved) throw new Error(`${speaker}: اعتمد إعداد الشخصية قبل البدء`); speakers[speaker] = data;
         }
         setStatus(status, 'حفظ إعدادات الشخصيات…', 'info'); additions.push({ path: `library/${item.slug}/voices.json`, sha: await createBlob(JSON.stringify({ version: 1, updated_at: new Date().toISOString(), speakers }, null, 2) + '\n', 'utf-8') }); await commitChanges({ message: `Approve dubbing voices for ${item.slug}`, additions });
         setStatus(status, 'تشغيل الدبلجة…', 'info'); await dispatchDub(item, { ...config, analysis_only: false, speaker_voices_path: `library/${item.slug}/voices.json` }); setStatus(status, 'انطلقت الدبلجة. تابع المقاطع من صفحة التشغيلات أو مساحة المشروع.', 'ok'); setTimeout(async () => { await refreshRuns(); renderAll(); showTab('runs'); }, 1400);
@@ -628,7 +628,7 @@ async function openDubDialog(item) {
 }
 
 // ───────────────────────────────────────────── voices & characters
-const defaultProfile = (speaker) => ({ speaker, label: speaker, reference_mode: 'source', reference_path: '', tts_engine: defaults().tts_engine, voice: '', voice_conversion: defaults().seed_vc ? 'seed-vc' : 'none', style: 'natural', gender: defaults().gender, approved: false });
+const defaultProfile = (speaker) => ({ speaker, label: speaker, reference_mode: 'source', reference_path: '', tts_engine: defaults().tts_engine, voice_conversion: defaults().seed_vc ? 'seed-vc' : 'none', style: 'natural', gender: defaults().gender, approved: false });
 
 async function releaseFor(slug) {
   if (!state.token) return null;
@@ -652,12 +652,11 @@ function speakerCard(speaker, p, item) {
     <div class="charhead"><h4>${esc(speaker)}</h4><button class="btn small danger act-rmspeaker" title="إزالة من الخريطة">إزالة</button></div>
     <div class="fields">
       <label>الاسم الظاهر <input data-key="label" value="${esc(p.label || speaker)}"></label>
-      <label>مصدر الصوت <select data-key="reference_mode"><option value="source"${sel('source', p.reference_mode || 'source')}>من الفيديو نفسه</option><option value="custom"${sel('custom', p.reference_mode)}>عيّنة صوتية مخصّصة</option><option value="synthetic"${sel('synthetic', p.reference_mode)}>صوت اصطناعي جاهز</option></select></label>
-      <label>محرك الصوت <select data-key="tts_engine"><option value="voxcpm"${sel('voxcpm', p.tts_engine || 'voxcpm')}>VoxCPM</option><option value="xtts"${sel('xtts', p.tts_engine)}>XTTS</option><option value="qwen"${sel('qwen', p.tts_engine)}>Qwen</option><option value="edge"${sel('edge', p.tts_engine)}>Edge-TTS</option></select></label>
+      <label>مصدر الصوت <select data-key="reference_mode"><option value="source"${sel('source', p.reference_mode || 'source')}>من الفيديو نفسه</option><option value="custom"${sel('custom', p.reference_mode)}>عيّنة صوتية مخصّصة</option></select></label>
+      <label>محرك الصوت <select data-key="tts_engine"><option value="voxcpm"${sel('voxcpm', p.tts_engine || 'voxcpm')}>الافتراضي المجرّب (VoxCPM)</option><option value="xtts"${sel('xtts', p.tts_engine)}>XTTS v2 — صريح فقط</option></select></label>
       <label>تحويل الهوية <select data-key="voice_conversion"><option value="seed-vc"${sel('seed-vc', p.voice_conversion || 'seed-vc')}>Seed-VC</option><option value="none"${sel('none', p.voice_conversion)}>بدون</option></select></label>
       <label>الجنس <select data-key="gender"><option value="male"${sel('male', p.gender || 'male')}>ذكر</option><option value="female"${sel('female', p.gender)}>أنثى</option></select></label>
       <label>الأسلوب <input data-key="style" value="${esc(p.style || 'natural')}"></label>
-      <label>صوت Edge الجاهز (للوضع الاصطناعي) <input data-key="voice" value="${esc(p.voice || '')}" dir="ltr"></label>
       <label class="wide">مسار العيّنة (نسبةً إلى voices.json) <input data-key="reference_path" value="${esc(p.reference_path || '')}" dir="ltr"></label>
       <label class="wide">اختيار من بنك الأصوات <select class="bankpick"><option value="">—</option>${bank}</select></label>
       <label class="wide">رفع عيّنة صوتية لهذا المتحدث (wav/mp3/m4a، 6–20 ثانية كلام نقي) <input type="file" class="samplefile" accept="audio/*,.wav,.mp3,.m4a,.flac,.ogg"></label>
@@ -722,7 +721,6 @@ async function openVoicesDialog(item) {
             additions.push({ path: `library/${item.slug}/${data.reference_path}`, sha: await createBlob(await toBase64(file), 'base64') });
           }
           if (data.reference_mode === 'custom' && !data.reference_path) throw new Error(`${s}: العيّنة المخصّصة تحتاج مساراً أو ملفاً`);
-          if (data.reference_mode === 'synthetic' && data.tts_engine === 'edge' && !data.voice) throw new Error(`${s}: الصوت الاصطناعي عبر Edge يحتاج اسم صوت`);
           if (!data.approved) throw new Error(`${s}: يجب اعتماد كل متحدث قبل الحفظ — التشغيل يرفض خريطة غير معتمدة`);
           speakers[s] = data;
         }

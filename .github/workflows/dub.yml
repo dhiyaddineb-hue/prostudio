@@ -60,17 +60,17 @@ on:
         required: false
         default: "ar"
         type: string
-      voice:
-        description: "dub: Edge-TTS voice short name"
-        required: false
-        default: "en-US-AndrewMultilingualNeural"
-        type: string
       tts_engine:
-        description: "dub: speech engine (xtts is opt-in; default is voxcpm)"
+        description: "dub: production speech engine; VoxCPM is default and XTTS v2 is explicit-only"
         required: false
         default: "voxcpm"
         type: choice
-        options: [xtts, edge, voxcpm, qwen]
+        options: [voxcpm, xtts]
+      allow_xtts:
+        description: "explicit authorization to use XTTS v2; keep false unless the user requested XTTS"
+        required: false
+        default: false
+        type: boolean
       target_lang:
         description: "dub: target language"
         required: false
@@ -294,7 +294,7 @@ jobs:
             python -m pip install --upgrade pip
             pip install -U yt-dlp
             pip install -r requirements.txt
-            pip install faster-whisper edge-tts gradio_client
+            pip install faster-whisper gradio_client
           else
             . .venv/bin/activate
             python - <<'PY'
@@ -324,15 +324,38 @@ jobs:
           print(f"Whisper model ready: {model_name}")
           PY
 
+      - name: Enforce production voice policy
+        env:
+          TTS_ENGINE: ${{ inputs.tts_engine }}
+          ALLOW_XTTS: ${{ inputs.allow_xtts }}
+          SPEAKER_VOICES: ${{ inputs.speaker_voices_path }}
+        run: |
+          python - <<'PY'
+          import json, os
+          allowed = {"voxcpm", "xtts"}
+          engines = {os.environ["TTS_ENGINE"]}
+          path = os.environ.get("SPEAKER_VOICES", "").strip()
+          if path:
+              document = json.load(open(path, encoding="utf-8"))
+              profiles = document.get("speakers", document)
+              engines.update(str(profile.get("tts_engine", "voxcpm")) for profile in profiles.values())
+          unsupported = sorted(engines - allowed)
+          if unsupported:
+              raise SystemExit("Unsupported production TTS engine(s): " + ", ".join(unsupported))
+          if "xtts" in engines and os.environ.get("ALLOW_XTTS") != "true":
+              raise SystemExit("XTTS v2 is locked. Set allow_xtts=true only after an explicit user request.")
+          print("Production voice policy accepted: " + ", ".join(sorted(engines)))
+          PY
+
       - name: Cache XTTS-v2 model
-        if: inputs.tts_engine == 'xtts'
+        if: inputs.allow_xtts == true
         uses: actions/cache@v4
         with:
           path: ~/.local/share/tts
           key: coqui-xtts-v2-v1
 
       - name: Download and verify XTTS-v2
-        if: inputs.tts_engine == 'xtts'
+        if: inputs.allow_xtts == true
         run: |
           pip install torchaudio "transformers>=4.57,<5" "coqui-tts[codec]"
           COQUI_TOS_AGREED=1 python - <<'PY'
@@ -475,7 +498,7 @@ jobs:
             fi
             base=$(printf '%s' "$base" | tr -cs '[:alnum:]._-' '-' | sed 's/^-//;s/-$//' | cut -c1-40)
           fi
-          config=$(printf '%s' "${{ inputs.source_lang }}|${{ inputs.target_lang }}|${{ inputs.tts_engine }}|${{ inputs.voice }}|${{ inputs.gender }}|${{ inputs.model }}|${{ inputs.separate_sources }}|${{ inputs.bg_music }}|${{ inputs.diarize }}|${{ inputs.no_vad }}|${{ inputs.seed_vc }}|${{ inputs.chunk_seconds }}" | sha256sum | cut -c1-8)
+          config=$(printf '%s' "${{ inputs.source_lang }}|${{ inputs.target_lang }}|${{ inputs.tts_engine }}|${{ inputs.allow_xtts }}|${{ inputs.gender }}|${{ inputs.model }}|${{ inputs.separate_sources }}|${{ inputs.bg_music }}|${{ inputs.diarize }}|${{ inputs.no_vad }}|${{ inputs.seed_vc }}|${{ inputs.chunk_seconds }}" | sha256sum | cut -c1-8)
           project_id="${base}-${digest}-${{ inputs.target_lang }}-${config}"
           echo "source=$source" >> "$GITHUB_OUTPUT"
           echo "id=$project_id" >> "$GITHUB_OUTPUT"
@@ -522,6 +545,7 @@ jobs:
           if [ "${{ inputs.seed_vc }}" = "true" ]; then extra+=(--seed-vc); fi
           if [ "${{ inputs.validate_content }}" = "true" ]; then extra+=(--validate-content); fi
           if [ "${{ inputs.analysis_only }}" = "true" ]; then extra+=(--analysis-only); fi
+          if [ "${{ inputs.allow_xtts }}" = "true" ]; then extra+=(--allow-xtts); fi
           if [ "${{ inputs.profile }}" = "seed_quota_voxcpm" ]; then extra+=(--seed-quota-policy voxcpm); fi
           profile_args=()
           if [ -n "${{ inputs.speaker_voices_path }}" ]; then
@@ -538,7 +562,6 @@ jobs:
               --source-lang "${{ inputs.source_lang }}" \
               --target-lang "${{ inputs.target_lang }}" \
               --tts-engine "${{ inputs.tts_engine }}" \
-              --voice "${{ inputs.voice }}" \
               --gender "${{ inputs.gender }}" \
               --model "${{ inputs.model }}" \
               --max-seconds "$chunk_max" \
@@ -644,7 +667,7 @@ jobs:
               --setting "tts_engine=${{ inputs.tts_engine }}" --setting "seed_vc=${{ inputs.seed_vc }}" \
               --setting "profile=${{ inputs.profile }}" --setting "quality=${{ inputs.quality }}" \
               --setting "model=${{ inputs.model }}" --setting "bg_music=${{ inputs.bg_music }}" \
-              --setting "chunk_seconds=${{ inputs.chunk_seconds }}" --setting "voice=${{ inputs.voice }}"
+              --setting "chunk_seconds=${{ inputs.chunk_seconds }}"
             git add -f library dubs
             git diff --cached --quiet || git commit -m "Publish verified dub $RUN_ID"
             if git push origin HEAD:"${{ github.ref_name }}"; then exit 0; fi

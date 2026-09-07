@@ -167,7 +167,7 @@ def test_studio_voice_map_matches_the_pipeline_profile_contract():
     vp = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(vp)
     known = set(vp.default_profile("SPEAKER_00"))
-    for key in ("reference_mode", "reference_path", "tts_engine", "voice", "voice_conversion", "style", "gender", "approved"):
+    for key in ("reference_mode", "reference_path", "tts_engine", "voice_conversion", "style", "gender", "approved"):
         assert f'data-key="{key}"' in js and key in known
     for mode in vp.REFERENCE_MODES:
         assert f'value="{mode}"' in js

@@ -115,48 +115,8 @@ def test_checkpoint_archives_exclude_derived_asr_caches():
     assert is_cache(Path("chunks/0003/delivery.fitted_16k.wav")) is True
     assert is_cache(Path("chunks/0003/content-retry-2.synced_16k.wav")) is True
     assert is_cache(Path("chunks/0003/delivery.fitted_16k.tmp-4242.wav")) is True
-    for kept in ("delivery.fitted.wav", "dubbed.mp4", "status.json", "content-retry-2.edge.mp3", "generated.wav"):
+    for kept in ("delivery.fitted.wav", "dubbed.mp4", "status.json", "content-retry-2.part1.wav", "generated.wav"):
         assert is_cache(Path("chunks/0003") / kept) is False, kept
-
-
-def test_edge_retry_output_is_normalised_to_pcm_wav(tmp_path):
-    text = SCRIPT.read_text(encoding="utf-8")
-    edge_branch = text.split("await speak_edge(", 1)[1].split('content_retry_mode="edge_exact_short_phrase"', 1)[0]
-    assert "retry_raw = ensure_pcm_wav(retry_raw)" in edge_branch
-
-    ffmpeg = _ffmpeg()
-    if not ffmpeg:
-        pytest.skip("ffmpeg is not available")
-
-    def run(cmd, *, check=True, capture=True):
-        cmd = [ffmpeg if cmd[0] == "ffmpeg" else cmd[0], *cmd[1:]]
-        return subprocess.run(cmd, check=check, capture_output=capture, text=True)
-
-    namespace = _extract(SCRIPT, {"ensure_pcm_wav"}, {"Path": Path, "shutil": shutil, "run": run, "SR_TTS": 24000, "RuntimeError": RuntimeError})
-    ensure_pcm_wav = namespace["ensure_pcm_wav"]
-
-    # A genuine WAV is returned untouched.
-    wav = tmp_path / "content-retry-1.wav"
-    _write_wav(wav, 0.4, 24000)
-    before = wav.read_bytes()
-    assert ensure_pcm_wav(wav) == wav and wav.read_bytes() == before
-
-    # Edge-TTS writes MPEG audio even when asked for a .wav path.
-    source = tmp_path / "tone.wav"
-    _write_wav(source, 0.6, 24000)
-    disguised = tmp_path / "content-retry-2.wav"
-    probe = subprocess.run([ffmpeg, "-y", "-i", str(source), "-f", "mp3", str(disguised)], capture_output=True, text=True)
-    if probe.returncode != 0 or not disguised.exists():
-        pytest.skip("ffmpeg build cannot encode MP3")
-    assert disguised.read_bytes()[:4] != b"RIFF"
-
-    result = ensure_pcm_wav(disguised)
-
-    assert result == disguised
-    assert disguised.read_bytes()[:4] == b"RIFF"
-    seconds, rate = _wav_seconds(disguised)
-    assert rate == 24000 and abs(seconds - 0.6) < 0.1
-    assert (tmp_path / "content-retry-2.edge.mp3").exists(), "original Edge bytes are preserved, not deleted"
 
 
 def test_completed_silence_chunks_are_not_re_rendered_on_resume():

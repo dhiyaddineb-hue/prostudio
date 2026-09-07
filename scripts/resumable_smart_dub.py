@@ -51,7 +51,6 @@ from youtube_auto_dub.smart_chunks import (
 from youtube_auto_dub.source_separation import separate_dialogue_background, validate_stems
 from youtube_auto_dub.speaker_diarization import annotate_segments
 from youtube_auto_dub.speech import transcribe
-from youtube_auto_dub.voice import pick_voice, speak_edge, speak_qwen
 from youtube_auto_dub import xtts_clone
 from youtube_auto_dub.voxcpm_tts import speak_voxcpm
 from youtube_auto_dub.youtube import load_source
@@ -918,114 +917,6 @@ def is_derived_asr_cache(path: Path) -> bool:
     return name.endswith("_16k.wav") or ".tmp-" in name
 
 
-def ensure_pcm_wav(path: Path) -> Path:
-    """Guarantee a RIFF/PCM WAV at ``path`` (Edge-TTS writes MP3 regardless of suffix).
-
-    The original bytes are kept next to it as ``<stem>.edge.mp3`` so nothing is
-    discarded; only the working copy is transcoded to the project sample rate.
-    """
-    path = Path(path)
-    if not path.exists() or path.stat().st_size < 12:
-        return path
-    with path.open("rb") as handle:
-        header = handle.read(4)
-    if header == b"RIFF":
-        return path
-    original = path.with_name(f"{path.stem}.edge.mp3")
-    shutil.move(str(path), str(original))
-    run([
-        "ffmpeg", "-y", "-i", str(original), "-ar", str(SR_TTS), "-ac", "1",
-        "-c:a", "pcm_s16le", str(path),
-    ])
-    if not path.exists() or path.stat().st_size < 1024:
-        raise RuntimeError("Edge-TTS output could not be converted to PCM WAV")
-    return path
-
-
-class ReleaseMirror:
-    """Incremental durable checkpoint mirror using a draft GitHub Release."""
-
-    def __init__(self, tag: str | None):
-        self.tag = safe_project_id(tag or "") if tag else ""
-        self.enabled = bool(self.tag and os.environ.get("GH_TOKEN") and shutil.which("gh"))
-        self.tmp = Path(tempfile.mkdtemp(prefix="dub-checkpoint-release-"))
-
-    def _gh(self, args: list[str], check: bool = True) -> subprocess.CompletedProcess:
-        return run(["gh", *args], check=check)
-
-    def ensure_and_restore(self, project_root: Path) -> None:
-        if not self.enabled:
-            print("Checkpoint release mirror disabled; using local state only")
-            return
-        view = self._gh(["release", "view", self.tag, "--json", "tagName"], check=False)
-        if view.returncode != 0:
-            target = os.environ.get("GITHUB_SHA", "")
-            command = ["release", "create", self.tag, "--draft", "--title", f"Checkpoint {self.tag}",
-                       "--notes", "Resumable smart-dub chunks. Delete only after explicit owner approval."]
-            if target:
-                command += ["--target", target]
-            self._gh(command)
-            return
-        download = self.tmp / "download"
-        download.mkdir(parents=True, exist_ok=True)
-        result = self._gh(["release", "download", self.tag, "--dir", str(download), "--clobber"], check=False)
-        if result.returncode != 0:
-            return
-        for archive in sorted(download.glob("*.zip")):
-            with zipfile.ZipFile(archive) as handle:
-                handle.extractall(project_root)
-        manifest = download / "checkpoint-manifest.json"
-        if manifest.exists():
-            project_root.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(manifest, project_root / "manifest.json")
-        print(f"Restored checkpoint release {self.tag}")
-
-    def _upload(self, path: Path) -> None:
-        if self.enabled:
-            self._gh(["release", "upload", self.tag, str(path), "--clobber"])
-
-    def upload_manifest(self, store: CheckpointStore) -> None:
-        if not self.enabled:
-            return
-        asset = self.tmp / "checkpoint-manifest.json"
-        shutil.copy2(store.manifest_path, asset)
-        self._upload(asset)
-
-    def upload_tree(self, asset_name: str, project_root: Path, tree: Path) -> None:
-        if not self.enabled or not tree.exists():
-            return
-        asset = self.tmp / asset_name
-        with zipfile.ZipFile(asset, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=3) as handle:
-            for path in sorted(tree.rglob("*")):
-                if path.is_file() and not is_derived_asr_cache(path):
-                    handle.write(path, path.relative_to(project_root))
-        self._upload(asset)
-
-    def upload_chunk(self, store: CheckpointStore, index: int) -> None:
-        directory = store.chunk_dir(index)
-        self.upload_tree(f"chunk-{index:04d}.zip", store.root, directory)
-        if self.enabled:
-            for preview in sorted(directory.glob("preview-*.mp3")):
-                asset = self.tmp / f"chunk-{index:04d}-{preview.name}"
-                shutil.copy2(preview, asset)
-                self._upload(asset)
-        self.upload_manifest(store)
-
-    def upload_final(self, path: Path) -> None:
-        if not self.enabled:
-            return
-        asset = self.tmp / "final-dub.mp4"
-        shutil.copy2(path, asset)
-        self._upload(asset)
-
-    def cached_asset(self, name: str) -> Path | None:
-        """A non-archive asset (e.g. final-dub.mp4) restored with the checkpoint."""
-        candidate = self.tmp / "download" / name
-        if self.enabled and candidate.exists() and candidate.stat().st_size > 1024:
-            return candidate
-        return None
-
-
 def write_text_files(store: CheckpointStore, index: int) -> None:
     chunk = store.chunk(index)
     directory = store.chunk_dir(index)
@@ -1042,9 +933,6 @@ def prepare_profile_references(
     root.mkdir(parents=True, exist_ok=True)
     for speaker, profile in profiles.items():
         mode = profile.get("reference_mode")
-        if mode == "synthetic":
-            out[speaker] = None
-            continue
         destination = root / f"{safe_project_id(speaker)}-{stable_hash(profile)[:10]}.wav"
         if destination.exists() and destination.stat().st_size > 1024:
             out[speaker] = destination
@@ -1089,21 +977,18 @@ async def synthesize(
     if max_seconds is None:
         max_seconds = plausible_tts_seconds(text)
     if engine == "voxcpm":
-        try:
-            await speak_voxcpm(
-                text, destination, language=args.target_lang,
-                control=f"{style}; delivery: {infer_emotion(text)}",
-                reference_audio=reference,
-                max_seconds=max_seconds,
-            )
-            return "voxcpm"
-        except Exception as exc:
-            if not args.fallback_edge:
-                raise
-            print(f"VoxCPM failed, using Edge-TTS fallback: {exc}")
-    elif engine == "xtts":
+        await speak_voxcpm(
+            text, destination, language=args.target_lang,
+            control=f"{style}; delivery: {infer_emotion(text)}",
+            reference_audio=reference,
+            max_seconds=max_seconds,
+        )
+        return "voxcpm"
+    if engine == "xtts":
+        if not args.allow_xtts:
+            raise RuntimeError("XTTS v2 is locked; explicit --allow-xtts approval is required")
         if not reference:
-            raise RuntimeError("XTTS requires the persisted source voice reference")
+            raise RuntimeError("XTTS requires an approved source or custom voice reference")
         ok = await asyncio.to_thread(
             xtts_clone.clone_speak, text, reference, destination,
             args.target_lang, pick_device(),
@@ -1111,16 +996,7 @@ async def synthesize(
         if not ok:
             raise RuntimeError("XTTS failed for this chunk")
         return "xtts"
-    elif engine == "qwen":
-        await speak_qwen(
-            text, destination, voice_sample=reference,
-            language=args.target_lang, device=f"{pick_device()}:0",
-        )
-        return "qwen"
-    voice = profile.get("voice") or args.voice or pick_voice(args.target_lang, profile.get("gender") or args.gender)
-    await speak_edge(text, voice, destination, lang=args.target_lang, gender=profile.get("gender") or args.gender)
-    return "edge"
-
+    raise RuntimeError(f"production TTS engine is not allowed: {engine}")
 
 async def translate_with_llm(
     store: CheckpointStore, mirror: "ReleaseMirror", pending: list[dict], *, source_lang: str, target_lang: str,
@@ -1217,8 +1093,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--output-dir", type=Path, default=Path("output"))
     ap.add_argument("--source-lang", default="ar")
     ap.add_argument("--target-lang", default="en")
-    ap.add_argument("--tts-engine", choices=["voxcpm", "edge", "xtts", "qwen"], default="voxcpm")
-    ap.add_argument("--voice")
+    ap.add_argument("--tts-engine", choices=["voxcpm", "xtts"], default="voxcpm")
     ap.add_argument("--gender", choices=["male", "female"], default="male")
     ap.add_argument("--model", default="medium")
     ap.add_argument("--max-seconds", type=float, default=10.0)
@@ -1229,13 +1104,12 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--no-vad", action="store_true")
     ap.add_argument("--preserve-background", action="store_true")
     ap.add_argument("--background-gain", type=float, default=0.50)
-    ap.add_argument("--fallback-edge", action="store_true", default=False)
     ap.add_argument("--seed-vc", action="store_true")
     ap.add_argument("--seed-vc-space", default="phuoc2005/seed-vc")
     ap.add_argument("--seed-batch-size", type=int, default=8)
     ap.add_argument("--seed-quota-policy", choices=["fail", "voxcpm"], default="fail")
-    ap.add_argument("--no-fallback-edge", dest="fallback_edge", action="store_false")
     ap.add_argument("--speaker-voices", type=Path)
+    ap.add_argument("--allow-xtts", action="store_true", help="explicit authorization required before any XTTS v2 synthesis")
     ap.add_argument("--require-voice-approval", action="store_true")
     ap.add_argument("--validate-content", action="store_true")
     ap.add_argument("--analysis-only", action="store_true", help="checkpoint source, ASR, speakers, and chunk plan, then stop before translation")
@@ -1269,7 +1143,7 @@ async def main_async(args) -> None:
         "source_lang": args.source_lang,
         "target_lang": args.target_lang,
         "tts_engine": args.tts_engine,
-        "voice": args.voice,
+        "allow_xtts": args.allow_xtts,
         "gender": args.gender,
         "model": args.model,
         "max_seconds": args.max_seconds,
@@ -1280,7 +1154,6 @@ async def main_async(args) -> None:
         "no_vad": args.no_vad,
         "preserve_background": args.preserve_background,
         "background_gain": args.background_gain,
-        "fallback_edge": args.fallback_edge,
         "seed_vc": args.seed_vc,
         "seed_vc_space": args.seed_vc_space,
     }
@@ -1384,7 +1257,6 @@ async def main_async(args) -> None:
     profile_defaults = {
         "reference_mode": "source",
         "tts_engine": args.tts_engine,
-        "voice": args.voice or "",
         "voice_conversion": "seed-vc" if args.seed_vc else "none",
         "gender": args.gender,
         "style": "natural",
@@ -1394,6 +1266,10 @@ async def main_async(args) -> None:
         args.speaker_voices, speakers, defaults=profile_defaults,
         require_approval=bool(args.speaker_voices) or args.require_voice_approval,
     )
+    xtts_speakers = [speaker for speaker, profile in profiles.items() if profile.get("tts_engine") == "xtts"]
+    if (args.tts_engine == "xtts" or xtts_speakers) and not args.allow_xtts:
+        requested = ", ".join(xtts_speakers) if xtts_speakers else "project default"
+        raise RuntimeError(f"XTTS v2 is locked; explicit approval is required for: {requested}")
     atomic_write_json(analysis / "voice-profiles-template.json", template_for_speakers(speakers, profile_defaults))
     atomic_write_json(analysis / "voice-profiles-active.json", {"version": 1, "speakers": profiles})
     profile_references = prepare_profile_references(
@@ -1897,28 +1773,12 @@ async def main_async(args) -> None:
                             content_retry_synthesis_text=chunk["translated_text"],
                         )
                     else:
-                        if content_attempt >= 1 and len(expected_tokens) <= 5:
-                            retry_voice_name = profile.get("voice") or args.voice or pick_voice(args.target_lang, profile.get("gender") or args.gender)
-                            await speak_edge(
-                                retry_text, retry_voice_name, retry_raw,
-                                lang=args.target_lang, gender=profile.get("gender") or args.gender,
-                            )
-                            retry_raw = ensure_pcm_wav(retry_raw)
-                            store.update_chunk(
-                                index, content_retry_mode="edge_exact_short_phrase",
-                                content_retry_voice=retry_voice_name,
-                                content_retry_synthesis_text=retry_text,
-                            )
-                        elif content_attempt >= 1 and len(expected_tokens) > 5:
-                            # Long generations can repeatedly omit a clause.  On
-                            # the final retained retry, synthesize two shorter
-                            # phrases and concatenate them before timing fit.
+                        if content_attempt >= 1:
+                            # Never switch engines during recovery. Short, balanced
+                            # parts make the selected engine pronounce every word.
                             words = retry_text.split()
-                            # Keep each synthesis request short enough that
-                            # VoxCPM cannot silently drop a clause, while
-                            # avoiding a one-word tail.
-                            part_count = max(2, math.ceil(len(words) / 5))
-                            part_size = math.ceil(len(words) / part_count)
+                            part_count = max(1, math.ceil(len(words) / 5))
+                            part_size = max(1, math.ceil(len(words) / part_count))
                             split_texts = [
                                 " ".join(words[offset:offset + part_size])
                                 for offset in range(0, len(words), part_size)
@@ -1935,7 +1795,7 @@ async def main_async(args) -> None:
                                 ))
                             retry_raw = concatenate_voice_parts(split_audio, retry_raw, gap_seconds=0.05)
                             store.update_chunk(
-                                index, content_retry_mode="split_exact_long_phrase",
+                                index, content_retry_mode="split_exact_selected_engine",
                                 content_retry_parts=split_texts,
                                 content_retry_synthesis_text=retry_text,
                             )

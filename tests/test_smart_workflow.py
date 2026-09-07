@@ -226,9 +226,19 @@ def test_borrowed_word_is_never_removed_by_silence_trimming():
     assert section.index("retry_trimmed = retry_raw") < section.index("trim_generated(")
 
 
-def test_final_short_phrase_retry_uses_exact_edge_pronunciation():
+def test_content_retry_keeps_the_selected_engine_and_never_uses_edge():
     text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
     assert "content_attempt == 0 and expected_tokens" in text
-    assert "content_attempt >= 1 and len(expected_tokens) <= 5" in text
-    assert 'content_retry_mode="edge_exact_short_phrase"' in text
-    assert "await speak_edge(" in text
+    assert "if content_attempt >= 1:" in text
+    assert 'content_retry_mode="split_exact_selected_engine"' in text
+    assert "speak_edge" not in text
+    assert "speak_qwen" not in text
+
+
+def test_xtts_requires_explicit_authorization_in_script_and_workflow():
+    script = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github/workflows/dub.yml").read_text(encoding="utf-8")
+    assert 'ap.add_argument("--allow-xtts"' in script
+    assert "if not args.allow_xtts" in script
+    assert "allow_xtts:" in workflow
+    assert "XTTS v2 is locked" in workflow

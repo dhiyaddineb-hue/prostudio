@@ -8,10 +8,13 @@ def test_dashboard_has_smart_projects_characters_and_comparisons():
     for marker in (
         'id="refreshSmart"', 'id="smartProjects"', 'id="characterEditor"',
         'إعداد الشخصيات', 'reference_mode', 'tts_engine', 'voice_conversion',
-        'XTTS', 'VoxCPM', 'Qwen', 'Edge-TTS',
+        'XTTS', 'VoxCPM', 'allowXtts',
         'preview-(original|before_seed_vc|after_seed_vc|final)', 'before_seed_vc', 'after_seed_vc',
     ):
         assert marker in text
+    assert 'Edge-TTS' not in text
+    assert '>Qwen<' not in text
+    assert 'value="synthetic"' not in text
 
 
 def test_dashboard_never_triggers_cleanup():

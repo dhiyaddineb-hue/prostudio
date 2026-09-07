@@ -168,8 +168,8 @@
       <h2>الإعدادات الافتراضية للدبلجة</h2>
       <div class="settings-grid">
         <label>لغة الهدف <input id="dTarget" value="en" dir="ltr"></label>
-        <label>الصوت الاحتياطي (Edge) <input id="dVoice" value="en-US-AndrewMultilingualNeural" dir="ltr"></label>
-        <label>محرك الصوت <select id="dEngine"><option value="voxcpm">VoxCPM (استنساخ)</option><option value="edge">Edge-TTS</option><option value="xtts">XTTS</option><option value="qwen">Qwen</option></select></label>
+        <label>محرك الصوت <select id="dEngine"><option value="voxcpm">المسار الافتراضي المجرّب (VoxCPM + Seed-VC)</option><option value="xtts">XTTS v2 — اختيار صريح فقط</option></select></label>
+        <label class="toggle"><input type="checkbox" id="dAllowXtts"> أؤكد أنني أريد استخدام XTTS v2</label>
         <label>الجنس <select id="dGender"><option value="male">ذكر</option><option value="female">أنثى</option></select></label>
         <label>نموذج Whisper <select id="dModel"><option>medium</option><option>small</option><option>base</option><option>tiny</option></select></label>
         <label>الملف الشخصي <select id="dProfile"><option value="seed_quota_voxcpm">seed_quota_voxcpm (Seed-VC ثم VoxCPM عند نفاد الحصة)</option><option value="safe">safe</option><option value="high_quality_single">high_quality_single</option><option value="multi_speaker_cinematic">multi_speaker_cinematic</option></select></label>

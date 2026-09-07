@@ -6,8 +6,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-ENGINES = ("xtts", "voxcpm", "qwen", "edge")
-REFERENCE_MODES = ("source", "custom", "synthetic")
+ENGINES = ("voxcpm", "xtts")
+REFERENCE_MODES = ("source", "custom")
 VOICE_CONVERSIONS = ("seed-vc", "none")
 _SPEAKER_ID = re.compile(r"^[A-Za-z0-9_.-]+$")
 
@@ -20,7 +20,6 @@ def default_profile(speaker: str, defaults: dict[str, Any] | None = None) -> dic
         "reference_mode": values.get("reference_mode", "source"),
         "reference_path": values.get("reference_path", ""),
         "tts_engine": values.get("tts_engine", "voxcpm"),
-        "voice": values.get("voice", ""),
         "voice_conversion": values.get("voice_conversion", "seed-vc"),
         "style": values.get("style", "natural"),
         "gender": values.get("gender", "male"),
@@ -50,8 +49,6 @@ def validate_profile(profile: dict[str, Any], *, base_dir: Path | None = None, r
         if not path.exists() or not path.is_file():
             raise ValueError(f"{speaker}: custom reference is missing: {path}")
         value["reference_path"] = str(path)
-    if value["reference_mode"] == "synthetic" and value["tts_engine"] == "edge" and not str(value.get("voice") or "").strip():
-        raise ValueError(f"{speaker}: Edge-TTS synthetic voice requires voice")
     if require_approval and not value["approved"]:
         raise ValueError(f"{speaker}: voice assignment is not approved")
     return value

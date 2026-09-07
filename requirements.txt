@@ -2,7 +2,6 @@ faster-whisper
 torch
 yt-dlp
 pydub
-edge-tts
 httpx
 beautifulsoup4
 numpy
