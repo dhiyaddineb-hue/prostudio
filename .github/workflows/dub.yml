@@ -278,9 +278,9 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Cache dubbing Python environment
+      - name: Restore dubbing Python environment
         id: dub_venv
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: .venv
           key: dub-venv-${{ runner.os }}-py311-${{ hashFiles('requirements.txt') }}-v1
@@ -303,6 +303,13 @@ jobs:
           PY
           fi
           echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Save dubbing Python environment immediately
+        if: steps.dub_venv.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .venv
+          key: dub-venv-${{ runner.os }}-py311-${{ hashFiles('requirements.txt') }}-v1
 
       # Download the selected Whisper weights on the GitHub runner. The cache
       # makes later runs fast while keeping all model files inside GitHub.
