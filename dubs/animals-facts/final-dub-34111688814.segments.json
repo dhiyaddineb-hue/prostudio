@@ -1,0 +1,197 @@
+{
+  "source_duration": 57.68,
+  "transcript_source": "asr",
+  "source_language": "ar",
+  "target_language": "ar",
+  "background_preserved": true,
+  "asr_timeline": {
+    "coverage": 0.9920249653259362,
+    "max_gap": 0.46000000000000085,
+    "uncovered_speech": {
+      "measured": true,
+      "before_seconds": 4.54,
+      "after_seconds": 0,
+      "longest_after_seconds": 0.0,
+      "recovered_words": 14,
+      "spans_after": []
+    }
+  },
+  "smart_chunking": {
+    "max_seconds": 8.0,
+    "target_seconds": 8.0,
+    "coverage": "contiguous_exactly_once",
+    "chunk_count": 8
+  },
+  "segments": [
+    {
+      "index": 0,
+      "start": 0.0,
+      "end": 7.88,
+      "chunk_start": 0.0,
+      "chunk_end": 7.88,
+      "source_text": "أول أسلاف البشر في بداية التاريخ والمعروفين بالنياندر تال ودول من حوالي 400 ألف سنة وسكنوا شرق أوروبا وكانوا أقصر منننة بس كانوا",
+      "translated_text": "أول أسلاف البشر المعروفون بالنياندرتال عادوا لنحو 400 ألف سنة، سكنوا شرق أوروبا وكانوا أقصر منا لكنهم",
+      "speaker": "SPEAKER_00",
+      "confidence": 0.8341439105974174,
+      "status": "completed",
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 1,
+      "start": 7.88,
+      "end": 15.78,
+      "chunk_start": 7.88,
+      "chunk_end": 15.78,
+      "source_text": "أكوية بشكل مرعب وفي بدايك وجودهم على الأرض ما كانوش يعرفوا شيء عن النور ولا حتى اللغة ولكنهم كانوا بتواصلوا مع بعض باللغة السوطية زي بعض القبال",
+      "translated_text": "أقوياء بشكل مرعب. في بدايتهم لم يعرفوا النار ولا اللغة، بل تواصلوا بالأصوات كبعض القبائل",
+      "speaker": "SPEAKER_00",
+      "confidence": 0.8341439105974174,
+      "status": "completed",
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 2,
+      "start": 15.78,
+      "end": 23.7,
+      "chunk_start": 15.78,
+      "chunk_end": 23.7,
+      "source_text": "اللي موجودة في أفريقيا النهاردة وحياتهم كانت مقتصرة على أكل اللحم الناية من الصيد وأدمغتهم كانت أكبر منننة بكتير وأدواتهم اللي كانوا بيستخدموها في الصيد",
+      "translated_text": "الموجودة في إفريقيا اليوم. واقتصرت حياتهم على اللحم النيء من الصيد، وكانت أدمغتهم أكبر منا بكثير، وأدوات",
+      "speaker": "SPEAKER_00",
+      "confidence": 0.8341439105974174,
+      "status": "completed",
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 3,
+      "start": 23.7,
+      "end": 31.18,
+      "chunk_start": 23.7,
+      "chunk_end": 31.18,
+      "source_text": "كانت بسيطة جداً وما كانوش متطورين بشكل كبير على عكس الإنسان الحديث حسب نظرية التطور والغريبة إن فينا من هنا بتحمل جينات",
+      "translated_text": "صيدهم بسيطة جداً ولم يكونوا متطورين كالإنسان الحديث وفق نظرية التطور. والغريب أن بعضنا يحمل جينات",
+      "speaker": "SPEAKER_00",
+      "confidence": 0.781717776152013,
+      "status": "completed",
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 4,
+      "start": 31.18,
+      "end": 39.0,
+      "chunk_start": 31.18,
+      "chunk_end": 39.0,
+      "source_text": "النياندر تال وده لأن الإنسان الحديث عصر إنسان النياندر تال وهم منقرضوا من حوالي 40 ألف سنة ومتوسط عمر الواحد فيهم من 30 ل 40",
+      "translated_text": "النياندرتال لأن الإنسان الحديث عاصرهم. انقرضوا منذ 40 ألف سنة، وكان متوسط أعمارهم بين 30 و40",
+      "speaker": "SPEAKER_00",
+      "confidence": 0.8000974716361878,
+      "status": "completed",
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 5,
+      "start": 39.0,
+      "end": 46.76,
+      "chunk_start": 39.0,
+      "chunk_end": 46.76,
+      "source_text": "سنة وسبب قصر العمر عندهم ده لأسباب كتير منها الإصابات الكتيرة بسبب الصيد وكمان لأنهم عصروا أقوى الحيوانات سي الاسماء لدون",
+      "translated_text": "سنة. وكان قصر أعمارهم بسبب إصابات الصيد ومواجهة الحيوانات المفترسة.",
+      "speaker": "SPEAKER_00",
+      "confidence": 0.8000974716361878,
+      "status": "completed",
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 6,
+      "start": 46.76,
+      "end": 54.5,
+      "chunk_start": 46.76,
+      "chunk_end": 54.5,
+      "source_text": "وكمان الدب العملاك والزقاب الرهيبة اللي بتعتبر قد زقب الحيلي حوالي مرتين والغريبة إنك لسه ما عملتش like or comment واستنى الحلقة",
+      "translated_text": "والدببة العملاقة والذئاب الرهيبة بضعف حجم الذئب الحالي. والغريب أنك لم تضع إعجاباً أو تعليقاً، وانتظر الحلقة",
+      "speaker": "SPEAKER_00",
+      "confidence": 0.8000974716361878,
+      "status": "completed",
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 7,
+      "start": 54.5,
+      "end": 57.22,
+      "chunk_start": 54.5,
+      "chunk_end": 57.68,
+      "source_text": "الكبيرة اللي هحكي فيها عن الهموسيبيانس وكمان ال",
+      "translated_text": "الكبيرة التي سأتحدث فيها عن الهوموسابينس أيضاً.",
+      "speaker": "SPEAKER_00",
+      "confidence": 0.8000974716361878,
+      "status": "completed",
+      "cut_reason": "source_end"
+    }
+  ],
+  "chunks": [
+    {
+      "index": 0,
+      "start": 0.0,
+      "end": 7.88,
+      "status": "completed",
+      "word_count": 23,
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 1,
+      "start": 7.88,
+      "end": 15.78,
+      "status": "completed",
+      "word_count": 27,
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 2,
+      "start": 15.78,
+      "end": 23.7,
+      "status": "completed",
+      "word_count": 25,
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 3,
+      "start": 23.7,
+      "end": 31.18,
+      "status": "completed",
+      "word_count": 22,
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 4,
+      "start": 31.18,
+      "end": 39.0,
+      "status": "completed",
+      "word_count": 25,
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 5,
+      "start": 39.0,
+      "end": 46.76,
+      "status": "completed",
+      "word_count": 21,
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 6,
+      "start": 46.76,
+      "end": 54.5,
+      "status": "completed",
+      "word_count": 22,
+      "cut_reason": "word_boundary"
+    },
+    {
+      "index": 7,
+      "start": 54.5,
+      "end": 57.68,
+      "status": "completed",
+      "word_count": 8,
+      "cut_reason": "source_end"
+    }
+  ]
+}

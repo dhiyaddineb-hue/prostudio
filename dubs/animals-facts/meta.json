@@ -1,0 +1,42 @@
+{
+  "slug": "animals-facts",
+  "source": "library/animals-facts/source.mp4",
+  "updated_at": "2026-09-07T10:35:09+00:00",
+  "versions": [
+    {
+      "run_id": "34111688814",
+      "file": "final-dub-34111688814.mp4",
+      "size": 2950695,
+      "sha256": "26f034fc8a5519938f6d3d16bb246d5b122f5d5653f8bedc3ef1285c37852290",
+      "duration": 57.624,
+      "published_at": "2026-09-07T10:35:09+00:00",
+      "source": "library/animals-facts/source.mp4",
+      "settings": {
+        "source_lang": "auto",
+        "target_lang": "ar",
+        "tts_engine": "voxcpm",
+        "seed_vc": "true",
+        "profile": "seed_quota_voxcpm",
+        "quality": "balanced",
+        "model": "medium",
+        "bg_music": "true",
+        "chunk_seconds": "8",
+        "voice": "ar-SA-HamedNeural"
+      },
+      "quality_ok": true,
+      "language": {
+        "valid": true,
+        "detected": "ar",
+        "confidence": 0.9885
+      },
+      "segments": 8,
+      "translation_engine": null,
+      "reports": {
+        "quality": "final-dub-34111688814.quality.json",
+        "segments": "final-dub-34111688814.segments.json",
+        "language": "final-dub-34111688814.language.json"
+      },
+      "run_url": "https://github.com/dhiyaddineb-hue/prostudio/actions/runs/34111688814"
+    }
+  ]
+}

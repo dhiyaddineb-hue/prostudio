@@ -1,0 +1,9 @@
+{
+  "expected": "ar",
+  "detected": "ar",
+  "probability": 0.9885,
+  "text_chars": 685,
+  "script_latin_ratio": 0.0,
+  "valid": true,
+  "video_sha256": "26f034fc8a5519938f6d3d16bb246d5b122f5d5653f8bedc3ef1285c37852290"
+}

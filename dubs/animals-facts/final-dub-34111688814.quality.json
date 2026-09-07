@@ -1,0 +1,69 @@
+{
+  "ok": true,
+  "policy": "balanced",
+  "checks": {
+    "duration_match": true,
+    "no_clipping": true,
+    "playback_compatible_audio": true,
+    "language_valid": true,
+    "silence_not_added": true,
+    "segment_coverage": true,
+    "segment_gaps": true,
+    "segments_present": true,
+    "speech_covered_by_transcript": true,
+    "asr_confidence": true
+  },
+  "metrics": {
+    "source_duration": 57.678,
+    "transcript_source": "asr",
+    "source_active_ratio": 1.0,
+    "required_segment_coverage": 0.72,
+    "final_duration": 57.624,
+    "duration_delta": -0.054,
+    "peak_db": -3.5,
+    "audio_stream": {
+      "codec": "aac",
+      "sample_rate": 48000,
+      "channels": 2
+    },
+    "source_longest_silence": 0.0,
+    "final_longest_silence": 0.912,
+    "final_silence_over_speech": 0.912,
+    "speech_only_dub": false,
+    "uncovered_speech": {
+      "measured": true,
+      "longest_after_seconds": 0.0,
+      "after_seconds": 0.0,
+      "recovered_words": 14,
+      "limit_seconds": 2.0,
+      "spans": []
+    },
+    "segment_count": 8,
+    "non_speech_cues_ignored": 0,
+    "mean_asr_confidence": 0.8106,
+    "frac_high_conf": 1.0,
+    "coverage": 0.9921,
+    "max_gap": 0.4584,
+    "internal_max_gap": 0.0,
+    "leading_gap": 0.0,
+    "trailing_gap": 0.4584
+  },
+  "limits": {
+    "duration": 1.0,
+    "peak": -0.3,
+    "extra_silence": 2.5,
+    "segment_gap": 6.0,
+    "coverage": 0.72,
+    "asr_confidence": 0.4,
+    "uncovered_speech": 2.0
+  },
+  "language": {
+    "expected": "ar",
+    "detected": "ar",
+    "probability": 0.9885,
+    "text_chars": 685,
+    "script_latin_ratio": 0.0,
+    "valid": true,
+    "video_sha256": "26f034fc8a5519938f6d3d16bb246d5b122f5d5653f8bedc3ef1285c37852290"
+  }
+}
