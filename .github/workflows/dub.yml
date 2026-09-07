@@ -378,6 +378,7 @@ jobs:
         if: inputs.separate_sources == true
         run: python -m pip install demucs
       - name: Write YouTube cookies
+        if: inputs.youtube_url != ''
         env:
           YT_COOKIES: ${{ secrets.YT_COOKIES }}
         run: |
@@ -524,8 +525,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           YAD_OUTPUT_DIR: output
-          YAD_VOXCPM_BACKEND: "space"
-          YAD_VOXCPM_SPACE: "openbmb/VoxCPM-Demo"
+          YAD_VOXCPM_BACKEND: ${{ vars.VOXCPM_BACKEND || 'space' }}
+          YAD_VOXCPM_SPACE: ${{ vars.VOXCPM_SPACE || 'openbmb/VoxCPM-Demo' }}
+          YAD_VOXCPM_MODEL: ${{ vars.VOXCPM_MODEL || 'openbmb/VoxCPM2' }}
           YAD_VOXCPM_ATTEMPTS: "1"
           YAD_TEMP_DIR: temp
           YAD_CACHE_DIR: .cache
