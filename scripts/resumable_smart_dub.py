@@ -1424,6 +1424,35 @@ async def main_async(args) -> None:
     store.save()
     mirror.upload_manifest(store)
 
+    override_path = args.speaker_voices.with_name("translation-overrides.json") if args.speaker_voices else None
+    if override_path and override_path.exists():
+        override_doc = json.loads(override_path.read_text(encoding="utf-8"))
+        override_chunks = override_doc.get("chunks", override_doc)
+        if not isinstance(override_chunks, dict):
+            raise ValueError("translation-overrides.json must contain a chunks object")
+        for raw_index, override_text in override_chunks.items():
+            index = int(raw_index)
+            if index < 0 or index >= len(store.data["chunks"]):
+                raise ValueError(f"translation override references unknown chunk {index}")
+            text = str(override_text).strip()
+            if not text:
+                raise ValueError(f"translation override for chunk {index} is empty")
+            chunk = store.chunk(index)
+            text_hash = stable_hash(text)
+            if chunk.get("translated_text") != text or chunk.get("translation_override_hash") != text_hash:
+                store.invalidate_from(index, "translation", "approved project translation override changed")
+                store.update_chunk(
+                    index,
+                    translated_text=text,
+                    translation_engine="project_override",
+                    translation_override_hash=text_hash,
+                    status="translated",
+                    error=None,
+                )
+                write_text_files(store, index)
+        store.save()
+        mirror.upload_manifest(store)
+
     if args.analysis_only:
         store.mark_state(
             "analysis_completed_waiting_for_voice_approval",
@@ -1496,6 +1525,8 @@ async def main_async(args) -> None:
         profile = profiles[speaker]
         profile_hash = stable_hash(profile)
         variant = f".{profile_hash[:10]}" if args.speaker_voices else ""
+        if chunk.get("translation_override_hash"):
+            variant += f".text-{chunk['translation_override_hash'][:8]}"
         directory = store.chunk_dir(index)
         generated = directory / f"generated{variant}.wav"
         fitted = directory / f"generated{variant}.fitted.wav"
@@ -1555,6 +1586,8 @@ async def main_async(args) -> None:
                 continue
             profile_hash = stable_hash(profile)
             variant = f".{profile_hash[:10]}" if args.speaker_voices else ""
+            if chunk.get("translation_override_hash"):
+                variant += f".text-{chunk['translation_override_hash'][:8]}"
             directory = store.chunk_dir(index)
             fitted = directory / f"generated{variant}.fitted.wav"
             seed_voice = directory / f"seedvc.voice-only{variant}.wav"
@@ -1641,6 +1674,8 @@ async def main_async(args) -> None:
         profile = profiles[speaker]
         profile_hash = stable_hash(profile)
         variant = f".{profile_hash[:10]}" if args.speaker_voices else ""
+        if chunk.get("translation_override_hash"):
+            variant += f".text-{chunk['translation_override_hash'][:8]}"
         seed_requested = profile.get("voice_conversion") == "seed-vc" and bool(chunk.get("source_text")) and not non_speech
         seed_required = seed_requested and not seed_quota_fallback
         profile_current = not args.speaker_voices or chunk.get("voice_profile_hash") == profile_hash
