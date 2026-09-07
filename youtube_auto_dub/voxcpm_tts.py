@@ -181,4 +181,4 @@ async def speak_voxcpm(text, dest, language="en", control="", reference_audio=No
                 log.warning("VoxCPM[%s] keeping the shortest of %d long takes (%.2fs)",
                             _BACKEND, len(long_takes), shortest_duration)
                 return shortest_duration
-    raise RuntimeError(f"VoxCPM[{_BACKEND}] failed for {language} speech") from last
+    raise RuntimeError(f"VoxCPM[{_BACKEND}] failed for {language} speech: {last}") from last
