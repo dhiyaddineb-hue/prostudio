@@ -1051,6 +1051,10 @@ def observed_transcript(raw: list[dict]) -> tuple[str, list[dict]]:
     return text, words
 
 
+def is_voxcpm_queue_full_error(error: BaseException) -> bool:
+    return "queue is full" in str(error).lower()
+
+
 async def synthesize(
     args, profile: dict, text: str, destination: Path, reference: Path | None,
     *, max_seconds: float | None = None,
@@ -1534,7 +1538,7 @@ async def main_async(args) -> None:
         except Exception as exc:
             generation_failures.append(index)
             message = str(exc)
-            queue_full = (profile.get("tts_engine") or args.tts_engine) == "voxcpm" and "queue is full" in message.lower()
+            queue_full = (profile.get("tts_engine") or args.tts_engine) == "voxcpm" and is_voxcpm_queue_full_error(exc)
             store.mark_stage(index, "tts", "failed", input_hash=tts_input_hash, error=message)
             store.update_chunk(index, status="failed", error=message, queue_circuit_breaker=queue_full)
             store.add_error(index, message)
@@ -2019,6 +2023,9 @@ async def main_async(args) -> None:
             mirror.upload_chunk(store, index)
             print(f"Chunk {index:04d}: FAILED: {exc}", file=sys.stderr)
             message = str(exc).lower()
+            if is_voxcpm_queue_full_error(exc):
+                print("VoxCPM queue is full; stopping this pass immediately with checkpoints preserved", file=sys.stderr)
+                break
             if "quota" in message or "zerogpu" in message:
                 print("External GPU quota is exhausted; stopping safely after checkpoint upload", file=sys.stderr)
                 break
