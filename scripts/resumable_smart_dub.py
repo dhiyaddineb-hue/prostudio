@@ -917,6 +917,89 @@ def is_derived_asr_cache(path: Path) -> bool:
     return name.endswith("_16k.wav") or ".tmp-" in name
 
 
+class ReleaseMirror:
+    """Incremental durable checkpoint mirror using a draft GitHub Release."""
+
+    def __init__(self, tag: str | None):
+        self.tag = safe_project_id(tag or "") if tag else ""
+        self.enabled = bool(self.tag and os.environ.get("GH_TOKEN") and shutil.which("gh"))
+        self.tmp = Path(tempfile.mkdtemp(prefix="dub-checkpoint-release-"))
+
+    def _gh(self, args: list[str], check: bool = True) -> subprocess.CompletedProcess:
+        return run(["gh", *args], check=check)
+
+    def ensure_and_restore(self, project_root: Path) -> None:
+        if not self.enabled:
+            print("Checkpoint release mirror disabled; using local state only")
+            return
+        view = self._gh(["release", "view", self.tag, "--json", "tagName"], check=False)
+        if view.returncode != 0:
+            target = os.environ.get("GITHUB_SHA", "")
+            command = ["release", "create", self.tag, "--draft", "--title", f"Checkpoint {self.tag}",
+                       "--notes", "Resumable smart-dub chunks. Delete only after explicit owner approval."]
+            if target:
+                command += ["--target", target]
+            self._gh(command)
+            return
+        download = self.tmp / "download"
+        download.mkdir(parents=True, exist_ok=True)
+        result = self._gh(["release", "download", self.tag, "--dir", str(download), "--clobber"], check=False)
+        if result.returncode != 0:
+            return
+        for archive in sorted(download.glob("*.zip")):
+            with zipfile.ZipFile(archive) as handle:
+                handle.extractall(project_root)
+        manifest = download / "checkpoint-manifest.json"
+        if manifest.exists():
+            project_root.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(manifest, project_root / "manifest.json")
+        print(f"Restored checkpoint release {self.tag}")
+
+    def _upload(self, path: Path) -> None:
+        if self.enabled:
+            self._gh(["release", "upload", self.tag, str(path), "--clobber"])
+
+    def upload_manifest(self, store: CheckpointStore) -> None:
+        if not self.enabled:
+            return
+        asset = self.tmp / "checkpoint-manifest.json"
+        shutil.copy2(store.manifest_path, asset)
+        self._upload(asset)
+
+    def upload_tree(self, asset_name: str, project_root: Path, tree: Path) -> None:
+        if not self.enabled or not tree.exists():
+            return
+        asset = self.tmp / asset_name
+        with zipfile.ZipFile(asset, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=3) as handle:
+            for path in sorted(tree.rglob("*")):
+                if path.is_file() and not is_derived_asr_cache(path):
+                    handle.write(path, path.relative_to(project_root))
+        self._upload(asset)
+
+    def upload_chunk(self, store: CheckpointStore, index: int) -> None:
+        directory = store.chunk_dir(index)
+        self.upload_tree(f"chunk-{index:04d}.zip", store.root, directory)
+        if self.enabled:
+            for preview in sorted(directory.glob("preview-*.mp3")):
+                asset = self.tmp / f"chunk-{index:04d}-{preview.name}"
+                shutil.copy2(preview, asset)
+                self._upload(asset)
+        self.upload_manifest(store)
+
+    def upload_final(self, path: Path) -> None:
+        if not self.enabled:
+            return
+        asset = self.tmp / "final-dub.mp4"
+        shutil.copy2(path, asset)
+        self._upload(asset)
+
+    def cached_asset(self, name: str) -> Path | None:
+        """A non-archive asset (e.g. final-dub.mp4) restored with the checkpoint."""
+        candidate = self.tmp / "download" / name
+        if self.enabled and candidate.exists() and candidate.stat().st_size > 1024:
+            return candidate
+        return None
+
 def write_text_files(store: CheckpointStore, index: int) -> None:
     chunk = store.chunk(index)
     directory = store.chunk_dir(index)

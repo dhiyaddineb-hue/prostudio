@@ -242,3 +242,14 @@ def test_xtts_requires_explicit_authorization_in_script_and_workflow():
     assert "if not args.allow_xtts" in script
     assert "allow_xtts:" in workflow
     assert "XTTS v2 is locked" in workflow
+
+def test_release_mirror_remains_a_top_level_class():
+    import ast
+
+    text = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    tree = ast.parse(text)
+    mirrors = [node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "ReleaseMirror"]
+    assert len(mirrors) == 1
+    methods = {node.name for node in mirrors[0].body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    assert {"ensure_and_restore", "upload_manifest", "upload_chunk", "upload_final"} <= methods
+
