@@ -1533,10 +1533,16 @@ async def main_async(args) -> None:
             mirror.upload_chunk(store, index)
         except Exception as exc:
             generation_failures.append(index)
-            store.mark_stage(index, "tts", "failed", input_hash=tts_input_hash, error=str(exc))
-            store.update_chunk(index, status="failed", error=str(exc))
-            store.add_error(index, str(exc))
+            message = str(exc)
+            queue_full = (profile.get("tts_engine") or args.tts_engine) == "voxcpm" and "queue is full" in message.lower()
+            store.mark_stage(index, "tts", "failed", input_hash=tts_input_hash, error=message)
+            store.update_chunk(index, status="failed", error=message, queue_circuit_breaker=queue_full)
+            store.add_error(index, message)
             mirror.upload_chunk(store, index)
+            if queue_full:
+                store.mark_state("failed_resumable", failed_chunks=generation_failures, failure_reason="voxcpm_queue_full")
+                mirror.upload_manifest(store)
+                raise RuntimeError("VoxCPM queue is full; stopped immediately with checkpoints preserved") from exc
     if generation_failures:
         store.mark_state("failed_resumable", failed_chunks=generation_failures)
         mirror.upload_manifest(store)

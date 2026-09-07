@@ -526,7 +526,7 @@ jobs:
           YAD_OUTPUT_DIR: output
           YAD_VOXCPM_BACKEND: "space"
           YAD_VOXCPM_SPACE: "openbmb/VoxCPM-Demo"
-          YAD_VOXCPM_ATTEMPTS: "4"
+          YAD_VOXCPM_ATTEMPTS: "1"
           YAD_TEMP_DIR: temp
           YAD_CACHE_DIR: .cache
           YAD_COOKIES_FILE: cookies.txt
@@ -594,6 +594,7 @@ jobs:
             fi
             if [ "$pass" -lt 2 ]; then
               echo "::warning::A resumable chunk failed; retrying once on the same runner with preserved checkpoints"
+              sleep 15
             fi
           done
           if [ "$last_status" -ne 0 ]; then

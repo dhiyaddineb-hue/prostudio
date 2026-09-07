@@ -253,3 +253,11 @@ def test_release_mirror_remains_a_top_level_class():
     methods = {node.name for node in mirrors[0].body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
     assert {"ensure_and_restore", "upload_manifest", "upload_chunk", "upload_final"} <= methods
 
+def test_voxcpm_queue_full_trips_a_global_circuit_breaker():
+    script = (ROOT / "scripts/resumable_smart_dub.py").read_text(encoding="utf-8")
+    workflow = (ROOT / ".github/workflows/dub.yml").read_text(encoding="utf-8")
+    assert '"queue is full" in message.lower()' in script
+    assert 'failure_reason="voxcpm_queue_full"' in script
+    assert "stopped immediately with checkpoints preserved" in script
+    assert 'YAD_VOXCPM_ATTEMPTS: "1"' in workflow
+
