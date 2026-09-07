@@ -1871,6 +1871,29 @@ async def main_async(args) -> None:
                                 content_retry_voice=retry_voice_name,
                                 content_retry_synthesis_text=retry_text,
                             )
+                        elif content_attempt >= 1 and len(expected_tokens) > 5:
+                            # Long generations can repeatedly omit a clause.  On
+                            # the final retained retry, synthesize two shorter
+                            # phrases and concatenate them before timing fit.
+                            words = retry_text.split()
+                            middle = max(1, min(len(words) - 1, len(words) // 2))
+                            split_texts = [" ".join(words[:middle]), " ".join(words[middle:])]
+                            split_audio = []
+                            for part_index, part_text in enumerate(split_texts, start=1):
+                                part_raw = directory / f"content-retry-{content_attempt + 1}.part{part_index}.wav"
+                                await synthesize(
+                                    args, retry_profile, part_text, part_raw,
+                                    profile_references.get(speaker),
+                                )
+                                split_audio.append(trim_generated(
+                                    part_raw, directory / f"content-retry-{content_attempt + 1}.part{part_index}.trim.wav",
+                                ))
+                            retry_raw = concatenate_voice_parts(split_audio, retry_raw, gap_seconds=0.05)
+                            store.update_chunk(
+                                index, content_retry_mode="split_exact_long_phrase",
+                                content_retry_parts=split_texts,
+                                content_retry_synthesis_text=retry_text,
+                            )
                         else:
                             await synthesize(
                                 args, retry_profile, retry_text, retry_raw,
@@ -1893,18 +1916,32 @@ async def main_async(args) -> None:
                         min_tempo=SLOW_TEMPO_FLOOR,
                     )
                     if seed_required:
-                        retry_seed = apply_seed_vc_audio(
-                            profile_references.get(speaker) or reference,
-                            retry_voice,
-                            directory / f"content-retry-{content_attempt + 1}.seed.wav",
-                            args.seed_vc_space,
-                        )
-                        retry_voice, _seed_actual, _seed_fitted = match_duration_bounded(
-                            retry_seed,
-                            directory / f"content-retry-{content_attempt + 1}.seed.synced.wav",
-                            speech_target,
-                            min_tempo=SLOW_TEMPO_FLOOR,
-                        )
+                        try:
+                            retry_seed = apply_seed_vc_audio(
+                                profile_references.get(speaker) or reference,
+                                retry_voice,
+                                directory / f"content-retry-{content_attempt + 1}.seed.wav",
+                                args.seed_vc_space,
+                            )
+                            retry_voice, _seed_actual, _seed_fitted = match_duration_bounded(
+                                retry_seed,
+                                directory / f"content-retry-{content_attempt + 1}.seed.synced.wav",
+                                speech_target,
+                                min_tempo=SLOW_TEMPO_FLOOR,
+                            )
+                        except Exception as seed_error:
+                            message = str(seed_error).lower()
+                            quota_exhausted = "quota" in message or "zerogpu" in message or "runs limit" in message
+                            if not (quota_exhausted and args.seed_quota_policy == "voxcpm"):
+                                raise
+                            # The selected profile explicitly authorizes VoxCPM
+                            # fallback. Keep the newly generated complete phrase
+                            # rather than failing after the primary Seed-VC pass.
+                            store.update_chunk(
+                                index,
+                                content_retry_seed_vc_skipped="quota_exhausted_explicit_voxcpm_policy",
+                                content_retry_seed_vc_error=str(seed_error),
+                            )
                     final_voice, _retry_delivery_original, retry_delivery_fitted = fit_without_cutting(
                         retry_voice,
                         directory / f"content-retry-{content_attempt + 1}.delivery.wav",
