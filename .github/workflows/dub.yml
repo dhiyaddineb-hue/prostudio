@@ -507,10 +507,13 @@ jobs:
         run: |
           set -euo pipefail
           chunk_max="${{ inputs.chunk_seconds }}"
-          python - <<PY
+          chunk_min=$(python - <<PY
           value=float("$chunk_max")
           assert 1.0 <= value <= 10.0, "chunk_seconds must be between 1 and 10"
+          print(max(1.0, min(3.5, value * 0.35)))
           PY
+          )
+          echo "Speech-aware chunk target: ${chunk_max}s; minimum: ${chunk_min}s"
           extra=()
           if [ "${{ inputs.separate_sources }}" = "true" ]; then extra+=(--separate-sources); fi
           if [ "${{ inputs.bg_music }}" = "true" ]; then extra+=(--preserve-background); fi
@@ -539,8 +542,8 @@ jobs:
               --gender "${{ inputs.gender }}" \
               --model "${{ inputs.model }}" \
               --max-seconds "$chunk_max" \
-              --target-seconds "8" \
-              --min-seconds "2.5" \
+              --target-seconds "$chunk_max" \
+              --min-seconds "$chunk_min" \
               "${profile_args[@]}" "${extra[@]}"
           }
           last_status=1
